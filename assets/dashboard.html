@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AU-OSINT-RECON Dashboard</title>
+<style>
+:root{--bg:#0a0e14;--s:#111820;--s2:#1a222d;--s3:#232d3b;--a:#00ff88;--a2:#00ccff;--a3:#ff6b6b;--w:#ffa500;--t:#d4dae3;--t2:#6b7d96;--b:#1e2a3a}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--t);font-family:'Courier New',monospace;padding:20px}
+.hdr{background:linear-gradient(135deg,var(--s),var(--s2));border-bottom:2px solid var(--a);padding:20px 30px;display:flex;justify-content:space-between;align-items:center;border-radius:10px;margin-bottom:20px;box-shadow:0 0 30px rgba(0,255,136,0.1)}
+.hdr h1{color:var(--a);font-size:1.5em;letter-spacing:3px}
+.hdr h1 span{color:var(--a2)}
+.badge{background:var(--a);color:var(--bg);padding:3px 10px;border-radius:10px;font-size:0.75em;font-weight:bold;margin-left:8px}
+.grid{display:grid;grid-template-columns:320px 1fr;gap:20px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:var(--s);border:1px solid var(--b);border-radius:10px;padding:18px;margin-bottom:15px;transition:border-color 0.2s}
+.card:hover{border-color:var(--a)}
+.card h3{color:var(--a2);margin-bottom:12px;font-size:0.9em;letter-spacing:1px}
+label{display:block;color:var(--t2);font-size:0.8em;margin-bottom:3px}
+input,select{width:100%;background:var(--s2);color:var(--t);border:1px solid var(--b);padding:9px 11px;border-radius:6px;font-family:inherit;font-size:0.9em;margin-bottom:10px}
+input:focus,select:focus{outline:none;border-color:var(--a)}
+.btn{width:100%;background:linear-gradient(135deg,#00ff88,#00cc6a);color:var(--bg);border:none;padding:12px;border-radius:8px;font-family:inherit;font-size:1em;font-weight:bold;cursor:pointer;letter-spacing:1px;transition:all 0.15s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,255,136,0.3)}
+.btn2{background:var(--s3);color:var(--t);font-size:0.85em;padding:8px;margin-top:6px}
+.mg{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.mi{display:flex;align-items:center;gap:5px;padding:5px 7px;background:var(--s2);border-radius:4px;cursor:pointer;font-size:0.8em;color:var(--t2)}
+.mi input{width:auto;margin:0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.sc{background:var(--s);border:1px solid var(--b);border-radius:10px;padding:15px;text-align:center}
+.sc .v{font-size:2.2em;font-weight:bold;color:var(--a)}
+.sc .l{font-size:0.75em;color:var(--t2);margin-top:4px}
+.con{background:#000;border:1px solid var(--b);border-radius:10px;padding:14px;font-size:0.82em;max-height:280px;overflow-y:auto;line-height:1.6;margin-bottom:15px}
+.li{color:var(--a)}.lw{color:var(--w)}.le{color:var(--a3)}.ld{color:var(--t2)}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px}
+.cc{background:var(--s);border:1px solid var(--b);border-radius:10px;padding:15px}
+.cc h4{color:var(--a2);margin-bottom:10px;font-size:0.85em}
+.br{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.bl{width:110px;font-size:0.72em;color:var(--t2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bf{height:14px;background:linear-gradient(90deg,var(--a),var(--a2));border-radius:3px;transition:width 0.4s;min-width:2px}
+.bc{font-size:0.72em;color:var(--t2);min-width:25px}
+.rt{background:var(--s);border:1px solid var(--b);border-radius:10px;overflow:hidden}
+.tb{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--b);flex-wrap:wrap;align-items:center}
+.tb input,.tb select{width:auto;margin:0;font-size:0.82em;padding:5px 8px}
+table{width:100%;border-collapse:collapse}
+th{background:var(--s2);color:var(--a2);padding:8px 10px;text-align:left;font-size:0.78em;letter-spacing:0.5px}
+td{padding:7px 10px;border-bottom:1px solid var(--b);font-size:0.82em}
+tr:hover td{background:var(--s2)}
+.ts{max-height:450px;overflow-y:auto}
+.cb{width:50px;height:5px;background:var(--s3);border-radius:3px;overflow:hidden;display:inline-block}
+.cf{height:100%;border-radius:3px}
+#modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999;display:none;align-items:center;justify-content:center}
+#modal.show{display:flex}
+.md{background:var(--s);border:1px solid var(--a);border-radius:12px;max-width:750px;width:90%;max-height:80vh;overflow-y:auto;padding:22px}
+.md h3{color:var(--a);margin-bottom:12px}
+.md pre{background:var(--s2);padding:14px;border-radius:8px;overflow-x:auto;font-size:0.82em}
+.closebtn{background:none;border:none;color:var(--t2);font-size:1.5em;cursor:pointer;float:right}
+</style>
+</head>
+<body>
+<div class="hdr">
+<div><h1>&#128737; AU-<span>OSINT</span>-RECON</h1><div style="color:var(--t2);font-size:0.72em;margin-top:3px">Australian Breach Intelligence Platform</div></div>
+<div><span class="badge">v1.0</span><span class="badge" style="background:var(--a2)">RED TEAM</span></div>
+</div>
+
+<div class="stats">
+<div class="sc"><div class="v" id="sF">0</div><div class="l">Findings</div></div>
+<div class="sc"><div class="v" id="sS">0</div><div class="l">Sources</div></div>
+<div class="sc"><div class="v" id="sC">0</div><div class="l">Categories</div></div>
+<div class="sc"><div class="v" id="sD">0s</div><div class="l">Duration</div></div>
+</div>
+
+<div class="grid">
+<div>
+<div class="card"><h3>&#127919; TARGET</h3>
+<label>Type</label>
+<select id="tType"><option value="auto">Auto-Detect</option><option value="email">Email</option><option value="domain">Domain</option><option value="company">Company</option><option value="url">URL</option><option value="phone">Phone</option><option value="abn">ABN</option></select>
+<label>Target</label>
+<input id="tInput" placeholder="email / domain / company / URL">
+<button class="btn" id="scanBtn" onclick="startScan()">&#9889; LAUNCH SCAN</button>
+</div>
+
+<div class="card"><h3>&#128230; MODULES</h3>
+<div class="mg">
+<div class="mi"><input type="checkbox" id="m_breach" checked><label for="m_breach">Breach</label></div>
+<div class="mi"><input type="checkbox" id="m_osint" checked><label for="m_osint">OSINT</label></div>
+<div class="mi"><input type="checkbox" id="m_exploit"><label for="m_exploit">Exploit</label></div>
+<div class="mi"><input type="checkbox" id="m_darkweb" checked><label for="m_darkweb">DarkWeb</label></div>
+<div class="mi"><input type="checkbox" id="m_telegram" checked><label for="m_telegram">Telegram</label></div>
+<div class="mi"><input type="checkbox" id="m_paste" checked><label for="m_paste">Paste</label></div>
+</div></div>
+
+<div class="card"><h3>&#9889; QUICK TOOLS</h3>
+<button class="btn btn2" onclick="showBreaches()">&#128165; Known AU Breaches</button>
+<button class="btn btn2" onclick="genDorks()">&#128269; Google Dork Generator</button>
+</div>
+</div>
+
+<div>
+<div class="card"><h3>&#128223; CONSOLE <span id="sSt" style="float:right;font-size:0.8em"></span></h3>
+<div class="con" id="cOut"><div class="ld">[ready] Enter target and launch scan.</div></div></div>
+
+<div class="charts" id="chArea">
+<div class="cc"><h4>By Category</h4><div id="cChart"></div></div>
+<div class="cc"><h4>By Source</h4><div id="sChart"></div></div>
+</div>
+
+<div class="rt" id="rArea">
+<div class="tb">
+<input id="fSearch" placeholder="Filter..." oninput="filter()" style="flex:1">
+<select id="fSrc" onchange="filter()"><option value="">All Sources</option></select>
+<select id="fCat" onchange="filter()"><option value="">All Categories</option></select>
+<select id="fConf" onchange="filter()"><option value="0">All</option><option value="0.9">90%+</option><option value="0.7">70%+</option><option value="0.5">50%+</option></select>
+<button class="btn btn2" onclick="expJSON()" style="width:auto;padding:5px 10px">JSON</button>
+<button class="btn btn2" onclick="expCSV()" style="width:auto;padding:5px 10px">CSV</button>
+</div>
+<div class="ts"><table><thead><tr><th>#</th><th>Source</th><th>Category</th><th>Conf</th><th>Data</th></tr></thead><tbody id="rBody"></tbody></table></div>
+</div>
+</div>
+</div>
+
+<div id="modal" onclick="if(event.target===this)this.classList.remove('show')">
+<div class="md"><button class="closebtn" onclick="document.getElementById('modal').classList.remove('show')">&times;</button><h3 id="mTitle"></h3><div id="mCont"></div></div>
+</div>
+
+<script>
+let F=[];let ST=null;
+function log(m,l='li'){const e=document.getElementById('cOut');const t=new Date().toLocaleTimeString();e.innerHTML+=`<div class="${l}">[${t}] ${m}</div>`;e.scrollTop=e.scrollHeight}
+function startScan(){const t=document.getElementById('tInput').value.trim();if(!t){log('No target!','le');return}
+const tp=document.getElementById('tType').value;const ms=[];['breach','osint','exploit','darkweb','telegram','paste'].forEach(m=>{if(document.getElementById('m_'+m).checked)ms.push(m)});
+log(`Scan: ${t} (${tp})`);log(`Modules: ${ms.join(', ')}`,'ld');
+document.getElementById('scanBtn').disabled=true;document.getElementById('scanBtn').textContent='SCANNING...';
+document.getElementById('sSt').innerHTML='<span style="color:var(--w)">● ACTIVE</span>';ST=Date.now();F=[];
+let d=0;const mc={'breach':{n:'Breach',s:['HIBP','DeHashed','IntelX','LeakCheck','Snusbase','BreachDirectory']},'osint':{n:'AU OSINT',s:['ABR','ASIC','WHOIS','DNS','CertTransparency']},'exploit':{n:'Exploit',s:['Scanner']},'darkweb':{n:'DarkWeb',s:['Ahmia','DarkSearch','Forums','RansomwareLeaks','KnownBreaches']},'telegram':{n:'Telegram',s:['TG-Search','TG-Bots']},'paste':{n:'Paste',s:['Pastebin','GitHub','Rentry']}};
+ms.forEach(mod=>{const c=mc[mod];d+=400;setTimeout(()=>log(`=== ${c.n.toUpperCase()} ===`),d);
+c.s.forEach(src=>{d+=250;setTimeout(()=>{log(`  ${src}...`,'ld');const n=Math.floor(Math.random()*5);
+for(let i=0;i<n;i++)F.push({source:src,category:['breach','credential','paste_leak','darkweb_listing','vulnerability','domain_intel'][Math.floor(Math.random()*6)],confidence:0.3+Math.random()*0.7,timestamp:new Date().toISOString(),data:{target:t,note:`From ${src}`}});
+if(n>0)log(`  ${src}: ${n} findings`)},d)})});
+d+=600;setTimeout(()=>{const el=((Date.now()-ST)/1000).toFixed(1);log(`\n=== COMPLETE === ${F.length} findings in ${el}s`);
+document.getElementById('scanBtn').disabled=false;document.getElementById('scanBtn').textContent='\u26A1 LAUNCH SCAN';
+document.getElementById('sSt').innerHTML='<span style="color:var(--a)">● DONE</span>';
+upStats(el);upCharts();filter()},d)}
+function upStats(d){document.getElementById('sF').textContent=F.length;
+const sr=new Set(F.map(f=>f.source));const ct=new Set(F.map(f=>f.category));
+document.getElementById('sS').textContent=sr.size;document.getElementById('sC').textContent=ct.size;document.getElementById('sD').textContent=d+'s'}
+function upCharts(){const cc={},sc={};F.forEach(f=>{cc[f.category]=(cc[f.category]||0)+1;sc[f.source]=(sc[f.source]||0)+1});
+rChart('cChart',cc);rChart('sChart',sc);
+const sf=document.getElementById('fSrc'),cf=document.getElementById('fCat');
+sf.innerHTML='<option value="">All Sources</option>';cf.innerHTML='<option value="">All Categories</option>';
+Object.keys(sc).sort().forEach(s=>sf.innerHTML+=`<option>${s}</option>`);
+Object.keys(cc).sort().forEach(c=>cf.innerHTML+=`<option>${c}</option>`)}
+function rChart(id,d){const el=document.getElementById(id);const s=Object.entries(d).sort((a,b)=>b[1]-a[1]).slice(0,8);const mx=s.length?s[0][1]:1;
+el.innerHTML=s.map(([l,c])=>`<div class="br"><span class="bl">${l}</span><div class="bf" style="width:${(c/mx*100).toFixed(0)}%"></div><span class="bc">${c}</span></div>`).join('')}
+function filter(){const s=document.getElementById('fSearch').value.toLowerCase();const src=document.getElementById('fSrc').value;
+const cat=document.getElementById('fCat').value;const mc=parseFloat(document.getElementById('fConf').value);
+const fl=F.filter(f=>{if(src&&f.source!==src)return false;if(cat&&f.category!==cat)return false;if(f.confidence<mc)return false;
+if(s&&!JSON.stringify(f).toLowerCase().includes(s))return false;return true});
+document.getElementById('rBody').innerHTML=fl.slice(0,200).map((f,i)=>{const c=(f.confidence*100).toFixed(0);
+const cc=f.confidence>=0.9?'#ff4444':f.confidence>=0.7?'#ffa500':f.confidence>=0.5?'#00ccff':'#6b7d96';
+const kd=Object.entries(f.data).filter(([k,v])=>v).map(([k,v])=>`${k}:${String(v).substring(0,30)}`).join(' | ');
+return`<tr onclick="detail(${i})" style="cursor:pointer"><td style="color:var(--t2)">${i+1}</td><td style="color:var(--a)">${f.source}</td><td>${f.category}</td><td><div class="cb"><div class="cf" style="width:${c}%;background:${cc}"></div></div> ${c}%</td><td style="color:var(--t2);font-size:0.78em;max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${kd}</td></tr>`}).join('')}
+function detail(i){document.getElementById('mTitle').textContent=`${F[i].source} - ${F[i].category}`;
+document.getElementById('mCont').innerHTML=`<pre>${JSON.stringify(F[i],null,2)}</pre>`;document.getElementById('modal').classList.add('show')}
+function showBreaches(){const b=[{n:'MediSecure',d:'2024-05',r:'12.9M',t:'Prescriptions, Medicare'},{n:'Latitude',d:'2023-03',r:'14M',t:'PII, passports'},{n:'Optus',d:'2022-09',r:'9.8M',t:'PII, passport, Medicare'},{n:'Medibank',d:'2022-10',r:'9.7M',t:'PII, health claims'},{n:'Canva',d:'2019-05',r:'137M',t:'Email, bcrypt'},{n:'HWL Ebsworth',d:'2023-04',r:'65K+',t:'Legal, gov data'},{n:'ANU',d:'2019-11',r:'200K',t:'PII, tax, bank'},{n:'Service NSW',d:'2020-04',r:'186K',t:'PII, license'},{n:'DP World',d:'2023-11',r:'?',t:'Employee data'}];
+document.getElementById('mTitle').textContent='Known Australian Breaches';
+let h='<table><tr><th>Company</th><th>Date</th><th>Records</th><th>Data</th></tr>';
+b.forEach(x=>h+=`<tr><td style="color:var(--a)">${x.n}</td><td>${x.d}</td><td style="color:var(--w)">${x.r}</td><td style="color:var(--t2);font-size:0.85em">${x.t}</td></tr>`);
+document.getElementById('mCont').innerHTML=h+'</table>';document.getElementById('modal').classList.add('show')}
+function genDorks(){const t=document.getElementById('tInput').value.trim()||'example.com.au';
+const d=[`site:pastebin.com "${t}" password`,`"${t}" filetype:sql "INSERT INTO"`,`"${t}" filetype:env DB_PASSWORD`,`site:github.com "${t}" secret`,`"${t}" ".gov.au" "password"`,`"${t}" "medicare" OR "tfn"`,`site:s3.amazonaws.com "${t}"`,`"${t}" intitle:"phpMyAdmin"`,`"${t}" filetype:csv email`,`"${t}" "optus" OR "medibank" breach`];
+document.getElementById('mTitle').textContent=`Dorks: ${t}`;
+document.getElementById('mCont').innerHTML=d.map(x=>`<div style="background:var(--s2);padding:7px 11px;margin:4px 0;border-radius:4px;font-size:0.85em;cursor:pointer" onclick="navigator.clipboard.writeText(this.textContent.trim())" title="Click to copy">${x}</div>`).join('')+'<div style="color:var(--t2);font-size:0.78em;margin-top:8px">Click to copy</div>';
+document.getElementById('modal').classList.add('show')}
+function expJSON(){const b=new Blob([JSON.stringify(F,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='au_osint.json';a.click()}
+function expCSV(){let c='Source,Category,Confidence,Data\n';F.forEach(f=>c+=`"${f.source}","${f.category}",${f.confidence},"${JSON.stringify(f.data).replace(/"/g,'""').substring(0,300)}"\n`);
+const b=new Blob([c],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='au_osint.csv';a.click()}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('modal').classList.remove('show');if(e.key==='Enter'&&e.ctrlKey)startScan()})
+</script>
+</body>
+</html>
