@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AU-OSINT-RECON — {{TARGET}}</title>
+<style>
+/* ── Reset & Variables ─────────────────────────────────────── */
+:root {
+  --bg:        #07070d;
+  --surface:   #0e0e18;
+  --surface2:  #13131f;
+  --border:    #1a1a2e;
+  --border2:   #252540;
+  --text:      #dcdce8;
+  --muted:     #5a5a70;
+  --accent:    #ff2d55;
+  --accent2:   #0a84ff;
+  --accent3:   #bf5af2;
+  --green:     #30d158;
+  --yellow:    #ffd60a;
+  --orange:    #ff6b35;
+  --red:       #ff2d55;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  min-height: 100vh;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── Header ────────────────────────────────────────────────── */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(7,7,13,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-icon {
+  width: 28px;
+  height: 28px;
+  background: var(--accent);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  flex-shrink: 0;
+}
+.logo-text { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: 2px; }
+.logo-sub  { font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+.header-meta {
+  margin-left: auto;
+  text-align: right;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.8;
+}
+.header-meta strong { color: var(--text); }
+.header-nav {
+  display: flex;
+  gap: 4px;
+  margin-left: 24px;
+}
+.nav-link {
+  padding: 5px 12px;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-link:hover { background: var(--border); color: var(--text); }
+
+/* ── Layout ────────────────────────────────────────────────── */
+.container { max-width: 1440px; margin: 0 auto; padding: 28px 32px 60px; }
+
+/* ── Risk Hero ─────────────────────────────────────────────── */
+.risk-hero {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 32px;
+  margin-bottom: 24px;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: 40px;
+  align-items: center;
+}
+.risk-score-block { text-align: center; }
+.risk-score-num {
+  font-size: 72px;
+  font-weight: 900;
+  line-height: 1;
+  color: {{SCORE_COLOR}};
+  text-shadow: 0 0 40px {{SCORE_COLOR}}44;
+}
+.risk-score-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin-top: 4px; }
+.risk-grade-block { text-align: center; }
+.risk-grade-num {
+  font-size: 48px;
+  font-weight: 900;
+  line-height: 1;
+  color: {{SCORE_COLOR}};
+  border: 3px solid {{SCORE_COLOR}};
+  border-radius: 10px;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.risk-grade-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin-top: 4px; }
+.risk-breakdown { }
+.breakdown-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 12px; }
+.risk-summary-block {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--text);
+  max-width: 340px;
+}
+
+/* ── Stat Cards ────────────────────────────────────────────── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  transition: border-color 0.2s;
+}
+.stat-card:hover { border-color: var(--border2); }
+.stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+.stat-value { font-size: 32px; font-weight: 800; margin-top: 6px; }
+.stat-card.total  .stat-value { color: var(--accent2); }
+.stat-card.crit   .stat-value { color: var(--red); }
+.stat-card.high   .stat-value { color: var(--orange); }
+.stat-card.medium .stat-value { color: var(--yellow); }
+.stat-card.low    .stat-value { color: var(--green); }
+
+/* ── Section ───────────────────────────────────────────────── */
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.section-header {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-header::before {
+  content: '';
+  display: block;
+  width: 3px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.section-body { padding: 20px; }
+
+/* ── Two Column ────────────────────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+/* ── Tabs ──────────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  background: var(--surface2);
+}
+.tab-btn {
+  padding: 10px 16px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+  font-family: var(--font-mono);
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+
+/* ── Table ─────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  text-align: left;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  font-weight: 600;
+}
+tbody td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.finding-row { cursor: pointer; transition: background 0.1s; }
+.finding-row:hover { background: rgba(255,255,255,0.025); }
+.finding-row:last-child td { border-bottom: none; }
+.detail-row { display: none; }
+.detail-row td { background: #0a0a14; padding: 0; }
+.detail-box { padding: 16px 20px; border-top: 1px solid var(--border); }
+.detail-box p { margin-bottom: 8px; color: var(--text); }
+.raw-pre {
+  background: #060610;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 10px;
+  color: var(--muted);
+  max-height: 180px;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+/* ── Badges ────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #000;
+}
+.badge-critical { background: #ff2d55; }
+.badge-high     { background: #ff6b35; }
+.badge-medium   { background: #ffd60a; }
+.badge-low      { background: #30d158; }
+.badge-info     { background: #636366; color: #fff; }
+
+.cat-tag {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.expand-btn {
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  border-radius: 4px;
+  padding: 3px 9px;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  transition: background 0.15s, color 0.15s;
+}
+.expand-btn:hover { background: var(--border); color: var(--text); }
+
+/* ── Timeline ──────────────────────────────────────────────── */
+.tl-list { list-style: none; }
+.tl-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.tl-item:last-child { border-bottom: none; }
+.tl-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 3px;
+  box-shadow: 0 0 8px currentColor;
+}
+.tl-content { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.tl-date   { color: var(--muted); font-size: 10px; }
+.tl-title  { font-weight: 600; font-size: 12px; }
+.tl-source { color: var(--muted); font-size: 10px; }
+
+/* ── Breakdown Bars ────────────────────────────────────────── */
+.bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 9px; }
+.bar-label { width: 200px; color: var(--muted); font-size: 10px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { flex: 1; background: var(--border); border-radius: 4px; height: 7px; overflow: hidden; }
+.bar-fill  { height: 100%; background: var(--accent2); border-radius: 4px; transition: width 0.6s cubic-bezier(.4,0,.2,1); }
+.bar-val   { width: 44px; text-align: right; color: var(--muted); font-size: 10px; }
+
+/* ── Summary ───────────────────────────────────────────────── */
+.summary-pre {
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.9;
+  color: var(--text);
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 20px 32px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+footer span { color: var(--accent); }
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .risk-hero { grid-template-columns: 1fr 1fr; }
+  .risk-summary-block { display: none; }
+  .stat-grid { grid-template-columns: repeat(3, 1fr); }
+  .two-col { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .container { padding: 16px; }
+  header { padding: 0 16px; }
+  .risk-hero { grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .risk-score-num { font-size: 52px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <div class="logo-text">AU-OSINT-RECON</div>
+      <div class="logo-sub">Australian Breach Intelligence</div>
+    </div>
+  </div>
+  <nav class="header-nav">
+    <a class="nav-link" href="#findings">Findings</a>
+    <a class="nav-link" href="#timeline">Timeline</a>
+    <a class="nav-link" href="#summary">Summary</a>
+  </nav>
+  <div class="header-meta">
+    <div>Target: <strong>{{TARGET}}</strong></div>
+    <div>{{GENERATED_AT}}</div>
+    <div>Modules: {{MODULES}}</div>
+  </div>
+</header>
+
+<!-- ── Main ───────────────────────────────────────────────── -->
+<div class="container">
+
+  <!-- Risk Hero -->
+  <div class="risk-hero">
+    <div class="risk-score-block">
+      <div class="risk-score-num">{{SCORE}}</div>
+      <div class="risk-score-label">Risk Score</div>
+    </div>
+    <div class="risk-grade-block">
+      <div class="risk-grade-num">{{GRADE}}</div>
+      <div class="risk-grade-label">Grade</div>
+    </div>
+    <div class="risk-breakdown">
+      <div class="breakdown-title">Category Breakdown</div>
+      {{BREAKDOWN_BARS}}
+    </div>
+    <div class="risk-summary-block">
+      {{SUMMARY}}
+    </div>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="stat-grid">
+    <div class="stat-card total">
+      <div class="stat-label">Total Findings</div>
+      <div class="stat-value">{{TOTAL}}</div>
+    </div>
+    <div class="stat-card crit">
+      <div class="stat-label">Critical</div>
+      <div class="stat-value">{{CRITICAL}}</div>
+    </div>
+    <div class="stat-card high">
+      <div class="stat-label">High</div>
+      <div class="stat-value">{{HIGH}}</div>
+    </div>
+    <div class="stat-card medium">
+      <div class="stat-label">Medium</div>
+      <div class="stat-value">{{MEDIUM}}</div>
+    </div>
+    <div class="stat-card low">
+      <div class="stat-label">Low</div>
+      <div class="stat-value">{{LOW}}</div>
+    </div>
+  </div>
+
+  <!-- Findings Table -->
+  <div class="section" id="findings">
+    <div class="section-header">Findings</div>
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="filterFindings('all', this)">All</button>
+      <button class="tab-btn" onclick="filterFindings('critical', this)">Critical</button>
+      <button class="tab-btn" onclick="filterFindings('high', this)">High</button>
+      <button class="tab-btn" onclick="filterFindings('medium', this)">Medium</button>
+      <button class="tab-btn" onclick="filterFindings('low', this)">Low</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Severity</th>
+            <th>Title</th>
+            <th>Category</th>
+            <th>Source</th>
+            <th>Date Found</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="findings-body">
+          {{FINDINGS_ROWS}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Timeline + Summary -->
+  <div class="two-col">
+    <div class="section" id="timeline">
+      <div class="section-header">Event Timeline</div>
+      <div class="section-body" style="max-height:420px;overflow-y:auto;">
+        <ul class="tl-list">
+          {{TIMELINE_ITEMS}}
+        </ul>
+      </div>
+    </div>
+
+    <div class="section" id="summary">
+      <div class="section-header">Executive Summary</div>
+      <div class="section-body" style="max-height:420px;overflow-y:auto;">
+        <pre class="summary-pre">{{SUMMARY}}</pre>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<footer>
+  Generated by <span>AU-OSINT-RECON</span> &nbsp;·&nbsp; {{GENERATED_AT}} &nbsp;·&nbsp; Target: <span>{{TARGET}}</span>
+</footer>
+
+<script>
+/* ── Finding row toggle ──────────────────────────────────── */
+function toggleDetail(id) {
+  const row = document.getElementById(id);
+  if (!row) return;
+  const visible = row.style.display !== 'none' && row.style.display !== '';
+  row.style.display = visible ? 'none' : 'table-row';
+}
+
+/* ── Tab filter ──────────────────────────────────────────── */
+function filterFindings(filter, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const rows = document.querySelectorAll('#findings-body .finding-row');
+  rows.forEach(row => {
+    const badge = row.querySelector('.badge');
+    const sev   = badge ? badge.textContent.toLowerCase().trim() : '';
+    const show  = filter === 'all' || sev === filter;
+    row.style.display = show ? '' : 'none';
+
+    // Also hide associated detail row
+    const onclick = row.getAttribute('onclick') || '';
+    const match   = onclick.match(/toggleDetail\('([^']+)'\)/);
+    if (match) {
+      const detail = document.getElementById(match[1]);
+      if (detail) detail.style.display = 'none';
+    }
+  });
+}
+
+/* ── Animate bars on load ────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.bar-fill').forEach(bar => {
+    const target = bar.style.width;
+    bar.style.width = '0%';
+    requestAnimationFrame(() => {
+      setTimeout(() => { bar.style.width = target; }, 80);
+    });
+  });
+});
+</script>
+</body>
+</html>
