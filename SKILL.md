@@ -24,6 +24,9 @@ au-osint-recon/
 │   ├── paste_scraper.py         # Pastebin/paste site scraper
 │   ├── credential_parser.py     # Parse & normalize leaked credentials
 │   ├── report_generator.py      # HTML/JSON/CSV report generation
+│   ├── pdf_extractor.py         # PDF data extraction & AU pattern scanning
+│   ├── infostealer_parser.py    # Infostealer log parsing with date filtering
+│   ├── leaked_db_hunter.py      # Multi-source breach API + combo market intel
 │   └── utils.py                 # Shared utilities, rate limiting, proxying
 ├── references/
 │   ├── australian_sources.md    # Known AU data sources & endpoints
@@ -103,6 +106,44 @@ au-osint-recon/
 - Executive summary generation
 - Risk scoring per finding
 - Timeline visualization of breaches
+
+
+### 9. PDF Extractor (`pdf_extractor.py`)
+- PyMuPDF-based text extraction (fallback: pypdf)
+- PDF metadata extraction (author, creation date, producer, SHA-256)
+- 30+ AU-specific regex patterns: TFN, ABN, BSB, Medicare, mobile, postcode
+- Credential line extraction (email:password pairs)
+- Financial data detection: credit cards, bank accounts, IBAN, SWIFT
+- Secret detection: AWS keys, JWT tokens, private keys, API keys, bcrypt/NTLM hashes
+- Severity-graded findings per finding type
+- Single file, directory, and batch scan modes
+- AU credential export (email:password format, AU-only filter)
+
+### 10. Infostealer Log Parser (`infostealer_parser.py`)
+- Supports Redline, Raccoon, Vidar, Aurora, Lumma, MetaStealer log formats
+- Auto-detection of stealer type from file signatures
+- Date inference from directory names, file names, system info files
+- **Date-range filtering**: `filter_by_date(logs, "2024-01-01", "2024-12-31")`
+- AU domain filtering: .com.au, .gov.au, .edu.au + major AU banks + gov portals
+- Bank credential extraction: Westpac, CommBank, ANZ, NAB, Macquarie, Bendigo, Suncorp
+- Government credential extraction: myGov, ATO, Centrelink, Medicare, ASIC
+- Crypto wallet detection: MetaMask, Exodus, Electrum, Coinbase, Binance
+- ZIP/TAR archive extraction and multi-bundle directory scanning
+- Date timeline builder: group logs by date with AU/bank/gov counts
+- AU credential export with source file and date annotations
+
+### 11. Leaked DB Hunter (`leaked_db_hunter.py`)
+- **Breach API integrations**: HIBP, DeHashed, LeakCheck, Snusbase, IntelX, BreachDirectory
+- **Free sources**: ProxyNova COMB, Hudson Rock Cavalier
+- Email and domain hunting with automatic rate limiting
+- Bulk email list hunting with configurable delay
+- **Combo Market Intelligence**: structured report on paid combo sources
+  - Telegram channels: @breachforums_official, @leakbase_io, @ausleaks, @ozleaks
+  - Forums: BreachForums, Cracked.io, Nulled.to, XSS.is, Exploit.in
+  - Dark web markets: Russian Market, 2easy Shop, Genesis Market, Stealc Market
+  - **Pricing intelligence**: AU banking ($100–$500/10k), AU gov ($200–$1000/1k), stealer logs ($1–$10/log)
+  - Step-by-step acquisition guide for AU combo lists
+- All results feed into report_generator findings
 
 ## Usage
 
