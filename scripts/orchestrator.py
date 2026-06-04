@@ -23,6 +23,9 @@ from darkweb_crawler import DarkWebCrawler
 from telegram_monitor import TelegramMonitor
 from paste_scraper import PasteScraper
 from credential_parser import CredentialParser
+from pdf_extractor import PDFExtractor
+from infostealer_parser import InfostealerParser
+from leaked_db_hunter import LeakedDBHunter
 
 
 class AUOSINTOrchestrator:
@@ -46,6 +49,9 @@ class AUOSINTOrchestrator:
         self.paste_scraper = PasteScraper(self.config)
         self.cred_parser = CredentialParser()
         self.classifier = DataClassifier()
+        self.pdf_extractor = PDFExtractor(target=self.config.get('target', 'unknown'))
+        self.infostealer   = InfostealerParser(target=self.config.get('target', 'unknown'))
+        self.leaked_db     = LeakedDBHunter(config=self.config)
 
     def _merge_results(self, module_results: ResultStore) -> int:
         """Merge module results into main store."""
