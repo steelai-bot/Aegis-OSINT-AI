@@ -169,6 +169,9 @@ CLASSIFICATION_PATTERNS = {
 
     # Credentials
     "email_au":         (re.compile(r"\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.(?:com\.au|gov\.au|edu\.au|org\.au|net\.au|id\.au))\b"), "high", "credential"),
+
+    # Bulgarian mail providers (separate category)
+    "email_bg":         (re.compile(r"\b([a-zA-Z0-9._%+\-]+@(?:abv\.bg|mail\.bg))\b"), "high", "bg_credential"),
     "email_generic":    (re.compile(r"\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b"), "medium", "credential"),
     "password_hash_md5":(re.compile(r"\b([a-fA-F0-9]{32})\b"), "medium", "credential"),
     "password_hash_sha1":(re.compile(r"\b([a-fA-F0-9]{40})\b"), "medium", "credential"),

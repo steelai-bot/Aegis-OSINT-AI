@@ -75,6 +75,12 @@ AU_DOMAIN_RE = re.compile(
     re.IGNORECASE
 )
 
+# Bulgarian mail providers — separate regex, not mixed with AU
+BG_DOMAIN_RE = re.compile(
+    r"(?:abv\.bg|mail\.bg)",
+    re.IGNORECASE
+)
+
 AU_BANK_RE = re.compile(
     r"(?:westpac|commbank|commonwealth|anz|nab|macquarie|bendigo|"
     r"suncorp|bankwest|ing\.com\.au|ubank|86400|up\.com\.au|"

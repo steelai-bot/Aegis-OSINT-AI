@@ -82,6 +82,10 @@ AU_EMAIL_DOMAINS = [
     '.id.au', '.asn.au', '.csiro.au', '.info.au',
 ]
 
+BG_EMAIL_DOMAINS = [
+    '@abv.bg', '@mail.bg',
+]
+
 AU_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT']
 
 AU_MAJOR_BANKS = [

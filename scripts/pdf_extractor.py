@@ -36,6 +36,9 @@ PATTERNS = {
     "email":            re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}"),
     "au_email":         re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.(?:com\.au|gov\.au|edu\.au|org\.au|net\.au|id\.au)"),
 
+    # Bulgarian mail providers (separate — not AU)
+    "bg_email":         re.compile(r"[a-zA-Z0-9._%+\-]+@(?:abv\.bg|mail\.bg)"),
+
     # Australian identifiers
     "tfn":              re.compile(r"\b\d{3}[\s\-]?\d{3}[\s\-]?\d{3}\b"),
     "abn":              re.compile(r"\b\d{2}[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{3}\b"),
@@ -89,6 +92,7 @@ SEVERITY_MAP = {
     "api_key":         "high",
     "password_field":  "high",
     "au_email":        "high",
+    "bg_email":        "high",
     "bank_account":    "high",
     "bsb":             "high",
     "abn":             "medium",

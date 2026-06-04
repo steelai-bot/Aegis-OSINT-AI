@@ -423,6 +423,9 @@ class BreachSearchEngine:
             # Database dumps
             f'"{target}" filetype:sql "INSERT INTO" "password"',
             f'"{target}" filetype:sql "VALUES" "@" ".com.au"',
+            # Bulgarian mail providers (separate search)
+            f'"{target}" "@abv.bg" OR "@mail.bg" password',
+            f'"{target}" filetype:txt "abv.bg" OR "mail.bg"',
             f'"{target}" filetype:csv email password',
             f'"{target}" filetype:txt "email" "pass"',
             f'"{target}" filetype:json "password" "email"',
@@ -487,7 +490,8 @@ class BreachSearchEngine:
                     if au_only and not classifier.is_australian(line):
                         # Check for AU email domains
                         has_au_domain = any(d in line.lower() for d in AU_EMAIL_DOMAINS)
-                        if not has_au_domain:
+                        has_bg_domain = any(d in line.lower() for d in ["@abv.bg", "@mail.bg"])
+                        if not has_au_domain and not has_bg_domain:
                             continue
 
                     # Classify format

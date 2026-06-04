@@ -123,6 +123,13 @@ AU_COMBO_KEYWORDS = [
     "australia stealer", "AU logs", "aussie logs",
 ]
 
+# Bulgarian mail providers — searched separately, not mixed with AU
+BG_COMBO_KEYWORDS = [
+    "abv.bg combo", "mail.bg combo", "abv.bg leak", "mail.bg leak",
+    "abv.bg database", "mail.bg database", "@abv.bg", "@mail.bg",
+    "bulgaria combo", "bg combo", "bulgarian leak",
+]
+
 # Typical pricing tiers observed in markets (for intelligence reporting)
 COMBO_PRICING_TIERS = {
     "generic_au":     {"price_usd": (5, 50),    "unit": "per 1M lines",  "quality": "low"},
@@ -131,6 +138,12 @@ COMBO_PRICING_TIERS = {
     "au_stealer_log": {"price_usd": (1, 10),     "unit": "per log",       "quality": "medium"},
     "au_full_db":     {"price_usd": (500, 5000), "unit": "per database",  "quality": "high"},
     "au_cc_fullz":    {"price_usd": (20, 80),    "unit": "per card",      "quality": "high"},
+}
+
+# Bulgarian mail provider combo pricing (separate from AU)
+BG_COMBO_PRICING = {
+    "bg_mail_combo":  {"price_usd": (2, 20),  "unit": "per 100k lines", "quality": "medium",
+                       "note": "abv.bg / mail.bg credential dumps. Common in EU breach markets."},
 }
 
 
