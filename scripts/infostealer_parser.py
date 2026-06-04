@@ -43,6 +43,19 @@ STEALER_SIGNATURES = {
         "files":    ["All Passwords.txt", "Cookies.txt", "CC.txt", "System Information.txt"],
         "password_re": re.compile(r"URL:\s*(.+)\nUsername:\s*(.+)\nPassword:\s*(.+)", re.MULTILINE),
     },
+
+    "stealc": {
+        "files":    ["Passwords.txt", "Cookies.txt", "CC.txt", "Wallets.txt", "System.txt"],
+        "password_re": re.compile(r"URL:\s*(.+)\nUser:\s*(.+)\nPass:\s*(.+)", re.MULTILINE),
+    },
+    "whitesnake": {
+        "files":    ["Passwords.txt", "Cookies.txt", "System Info.txt", "Telegram.txt"],
+        "password_re": re.compile(r"Url:\s*(.+)\nUsername:\s*(.+)\nPassword:\s*(.+)", re.MULTILINE),
+    },
+    "meduza": {
+        "files":    ["passwords.txt", "cookies.txt", "autofill.txt", "system.txt"],
+        "password_re": re.compile(r"URL:\s*(.+)\nLOGIN:\s*(.+)\nPASSWORD:\s*(.+)", re.MULTILINE),
+    },
     "generic": {
         "files":    ["passwords.txt", "Passwords.txt", "pass.txt", "creds.txt"],
         "password_re": re.compile(
@@ -478,6 +491,130 @@ class InfostealerParser:
         print(f"{'='*60}\n")
 
     # ── Build findings for report_generator ─────────────────
+
+
+    def deduplicate_global(self, logs: list) -> list:
+        """
+        Global deduplication across all logs.
+        Removes duplicate credentials seen in multiple log bundles.
+        """
+        seen = set()
+        for log in logs:
+            unique_creds = []
+            for cred in log.credentials:
+                key = f"{cred.username.lower()}:{cred.password}:{cred.url}"
+                if key not in seen:
+                    seen.add(key)
+                    unique_creds.append(cred)
+            log.credentials = unique_creds
+        return logs
+
+    def extract_crypto_wallets(self, logs: list) -> list[dict]:
+        """
+        Extract all cryptocurrency wallet seeds, private keys, and addresses
+        from parsed stealer logs.
+        """
+        import re
+        wallets = []
+        seed_re = re.compile(
+            r"\b(?:[a-z]+\s){11,23}[a-z]+\b",  # BIP39 mnemonic (12-24 words)
+            re.IGNORECASE
+        )
+        privkey_re = re.compile(r"\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\b")  # WIF private key
+        eth_re     = re.compile(r"\b0x[a-fA-F0-9]{64}\b")  # ETH private key
+
+        for log in logs:
+            for fname, content in log.raw_files.items():
+                if not any(kw in fname.lower() for kw in ["wallet", "crypto", "seed", "key", "exodus", "metamask"]):
+                    continue
+                for m in seed_re.finditer(content):
+                    words = m.group(0).split()
+                    if 12 <= len(words) <= 24:
+                        wallets.append({
+                            "type":       "seed_phrase",
+                            "value":      m.group(0),
+                            "word_count": len(words),
+                            "source":     log.path,
+                            "date":       log.log_date,
+                        })
+                for m in privkey_re.finditer(content):
+                    wallets.append({
+                        "type":   "btc_wif_private_key",
+                        "value":  m.group(0),
+                        "source": log.path,
+                        "date":   log.log_date,
+                    })
+                for m in eth_re.finditer(content):
+                    wallets.append({
+                        "type":   "eth_private_key",
+                        "value":  m.group(0),
+                        "source": log.path,
+                        "date":   log.log_date,
+                    })
+        return wallets
+
+    def extract_telegram_sessions(self, logs: list) -> list[dict]:
+        """
+        Extract Telegram session files from stealer logs.
+        These allow account takeover without password.
+        """
+        sessions = []
+        for log in logs:
+            for fname, content in log.raw_files.items():
+                if "telegram" in fname.lower() or "tdata" in fname.lower():
+                    sessions.append({
+                        "source":    log.path,
+                        "file":      fname,
+                        "date":      log.log_date,
+                        "size":      len(content),
+                        "note":      "Telegram session data — may allow account takeover",
+                        "severity":  "critical",
+                    })
+        return sessions
+
+    def score_log_value(self, log) -> dict:
+        """
+        Score a stealer log bundle by intelligence value.
+        Higher score = more valuable target.
+        """
+        score = 0
+        reasons = []
+
+        if log.bank_credentials:
+            score += len(log.bank_credentials) * 10
+            reasons.append(f"{len(log.bank_credentials)} bank creds")
+
+        if log.gov_credentials:
+            score += len(log.gov_credentials) * 8
+            reasons.append(f"{len(log.gov_credentials)} gov creds")
+
+        if log.crypto_credentials:
+            score += len(log.crypto_credentials) * 6
+            reasons.append(f"{len(log.crypto_credentials)} crypto creds")
+
+        if log.au_credentials:
+            score += len(log.au_credentials) * 3
+            reasons.append(f"{len(log.au_credentials)} AU creds")
+
+        if log.cc_data:
+            score += len(log.cc_data) * 15
+            reasons.append(f"{len(log.cc_data)} CC records")
+
+        if log.wallets:
+            score += len(log.wallets) * 20
+            reasons.append(f"{len(log.wallets)} crypto wallets")
+
+        return {
+            "path":    log.path,
+            "score":   score,
+            "reasons": reasons,
+            "tier":    "critical" if score >= 50 else "high" if score >= 20 else "medium" if score >= 5 else "low",
+        }
+
+    def rank_logs_by_value(self, logs: list) -> list[dict]:
+        """Rank all logs by intelligence value score."""
+        scored = [self.score_log_value(log) for log in logs]
+        return sorted(scored, key=lambda x: -x["score"])
 
     def build_findings(self, logs: list[StealerLog]) -> list[dict]:
         findings = []

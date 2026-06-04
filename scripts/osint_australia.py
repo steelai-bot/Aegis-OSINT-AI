@@ -525,6 +525,186 @@ class AustralianOSINT:
 
     # ── Full Australian Recon ────────────────────────────────────────────
 
+
+    def generate_email_patterns(self, first: str, last: str, domain: str) -> list[str]:
+        """
+        Generate all common email permutations for an AU employee.
+        """
+        f, l = first.lower(), last.lower()
+        fi = f[0] if f else ""
+        li = l[0] if l else ""
+        patterns = [
+            f"{f}.{l}@{domain}",
+            f"{f}{l}@{domain}",
+            f"{fi}{l}@{domain}",
+            f"{f}{li}@{domain}",
+            f"{f}_{l}@{domain}",
+            f"{l}.{f}@{domain}",
+            f"{l}{fi}@{domain}",
+            f"{fi}.{l}@{domain}",
+            f"{f}@{domain}",
+            f"{l}@{domain}",
+            f"{f}.{l[0]}@{domain}",
+            f"{f[0]}.{l}@{domain}",
+        ]
+        return list(dict.fromkeys(patterns))  # Deduplicate preserving order
+
+    def social_media_enum(self, name: str, domain: str) -> dict:
+        """
+        Enumerate social media presence for an AU target.
+        Checks LinkedIn, Twitter/X, Facebook, Instagram, GitHub.
+        """
+        import requests
+        results = {"name": name, "domain": domain, "profiles": []}
+        slug = name.lower().replace(" ", "")
+
+        checks = [
+            ("linkedin",   f"https://www.linkedin.com/in/{slug}"),
+            ("linkedin2",  f"https://www.linkedin.com/company/{slug}"),
+            ("twitter",    f"https://twitter.com/{slug}"),
+            ("github",     f"https://github.com/{slug}"),
+            ("facebook",   f"https://www.facebook.com/{slug}"),
+        ]
+
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        for platform, url in checks:
+            try:
+                r = requests.head(url, headers=headers, timeout=8, allow_redirects=True)
+                if r.status_code == 200:
+                    results["profiles"].append({"platform": platform, "url": url, "status": "found"})
+                elif r.status_code == 404:
+                    results["profiles"].append({"platform": platform, "url": url, "status": "not_found"})
+                import time; time.sleep(1)
+            except Exception as e:
+                results["profiles"].append({"platform": platform, "url": url, "status": "error", "error": str(e)})
+
+        return results
+
+    def scrape_linkedin_company(self, company_name: str) -> dict:
+        """
+        Scrape public LinkedIn company page for employee count, industry, HQ.
+        Uses Google dorking (no auth required).
+        """
+        import requests
+        from bs4 import BeautifulSoup
+
+        dork = f'site:linkedin.com/company "{company_name}" australia'
+        results = {"company": company_name, "employees": [], "info": {}}
+
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept-Language": "en-AU,en;q=0.9",
+            }
+            r = requests.get(
+                f"https://www.google.com/search?q={requests.utils.quote(dork)}&num=10",
+                headers=headers, timeout=12
+            )
+            soup = BeautifulSoup(r.text, "html.parser")
+            for a in soup.find_all("a", href=True):
+                href = a["href"]
+                if "linkedin.com/company/" in href:
+                    results["info"]["linkedin_url"] = href
+                    break
+        except Exception as e:
+            results["error"] = str(e)
+
+        return results
+
+    def enumerate_subdomains(self, domain: str) -> list[str]:
+        """
+        Enumerate subdomains using certificate transparency logs and DNS brute force.
+        Uses crt.sh (free, no auth).
+        """
+        import requests
+        subdomains = set()
+
+        # crt.sh certificate transparency
+        try:
+            r = requests.get(
+                f"https://crt.sh/?q=%.{domain}&output=json",
+                timeout=15
+            )
+            if r.status_code == 200:
+                for entry in r.json():
+                    name = entry.get("name_value", "")
+                    for sub in name.split("\n"):
+                        sub = sub.strip().lstrip("*.")
+                        if sub.endswith(f".{domain}") or sub == domain:
+                            subdomains.add(sub)
+        except Exception:
+            pass
+
+        # Common subdomain wordlist
+        common = ["www", "mail", "webmail", "vpn", "remote", "portal", "api",
+                  "admin", "dev", "staging", "test", "app", "mobile", "secure",
+                  "login", "auth", "sso", "owa", "exchange", "autodiscover",
+                  "ftp", "sftp", "cdn", "static", "assets", "media", "files",
+                  "intranet", "extranet", "support", "help", "kb", "wiki",
+                  "git", "gitlab", "jira", "confluence", "jenkins", "ci"]
+
+        import socket
+        for sub in common:
+            fqdn = f"{sub}.{domain}"
+            try:
+                socket.gethostbyname(fqdn)
+                subdomains.add(fqdn)
+            except socket.gaierror:
+                pass
+
+        return sorted(subdomains)
+
+    def check_data_breach_notifications(self, company_name: str, domain: str) -> list[dict]:
+        """
+        Check for public AU data breach notifications.
+        Searches OAIC (Office of the Australian Information Commissioner) reports
+        and news sources for breach disclosures.
+        """
+        import requests
+        from bs4 import BeautifulSoup
+
+        results = []
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+        # OAIC Notifiable Data Breaches
+        try:
+            r = requests.get(
+                f"https://www.oaic.gov.au/privacy/notifiable-data-breaches/notifiable-data-breaches-statistics",
+                headers=headers, timeout=12
+            )
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, "html.parser")
+                text = soup.get_text()
+                if company_name.lower() in text.lower():
+                    results.append({
+                        "source": "OAIC",
+                        "url": "https://www.oaic.gov.au/privacy/notifiable-data-breaches/",
+                        "note": f"{company_name} mentioned in OAIC breach statistics",
+                    })
+        except Exception:
+            pass
+
+        # Google news search
+        try:
+            query = f'"{company_name}" "data breach" OR "cyber attack" site:*.com.au OR site:abc.net.au'
+            r = requests.get(
+                f"https://news.google.com/rss/search?q={requests.utils.quote(query)}&hl=en-AU",
+                headers=headers, timeout=12
+            )
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, "xml")
+                for item in soup.find_all("item")[:5]:
+                    results.append({
+                        "source": "Google News",
+                        "title":  item.find("title").text if item.find("title") else "",
+                        "url":    item.find("link").text if item.find("link") else "",
+                        "date":   item.find("pubDate").text if item.find("pubDate") else "",
+                    })
+        except Exception:
+            pass
+
+        return results
+
     def full_recon(self, target: str, target_type: str = 'auto') -> ResultStore:
         """Full Australian OSINT recon on target."""
         logger.info(f'Starting Australian OSINT for: {target}')

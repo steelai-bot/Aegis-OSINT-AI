@@ -415,6 +415,223 @@ class CredentialParser:
 
     # ── Export ────────────────────────────────────────────────────────────
 
+
+    def generate_hashcat_rules(self, passwords: list[str], output_path: str) -> str:
+        """
+        Analyse plaintext passwords and generate custom hashcat rules
+        based on observed patterns in the credential set.
+        """
+        from pathlib import Path
+        from collections import Counter
+        import re
+
+        rules = set()
+        rules.add(":") # Passthrough
+
+        suffixes = Counter()
+        prefixes = Counter()
+        capitalisation = Counter()
+        leet_patterns = Counter()
+
+        for pwd in passwords:
+            if not pwd or len(pwd) < 4:
+                continue
+
+            # Trailing digits
+            m = re.search(r"(\d+)$", pwd)
+            if m:
+                suffixes[m.group(1)] += 1
+
+            # Leading digits
+            m = re.search(r"^(\d+)", pwd)
+            if m:
+                prefixes[m.group(1)] += 1
+
+            # Capitalisation
+            if pwd[0].isupper():
+                capitalisation["first_upper"] += 1
+            if pwd.isupper():
+                capitalisation["all_upper"] += 1
+
+            # Leet substitutions
+            if "3" in pwd:
+                leet_patterns["e->3"] += 1
+            if "0" in pwd:
+                leet_patterns["o->0"] += 1
+            if "@" in pwd:
+                leet_patterns["a->@"] += 1
+            if "1" in pwd:
+                leet_patterns["i->1"] += 1
+
+        # Generate rules from top patterns
+        for suffix, count in suffixes.most_common(10):
+            if count >= 3:
+                for c in suffix:
+                    rules.add(f"${c}")
+
+        for prefix, count in prefixes.most_common(5):
+            if count >= 3:
+                for c in reversed(prefix):
+                    rules.add(f"^{c}")
+
+        if capitalisation["first_upper"] > len(passwords) * 0.3:
+            rules.add("c")  # Capitalise first letter
+
+        if capitalisation["all_upper"] > len(passwords) * 0.1:
+            rules.add("u")  # Uppercase all
+
+        # Leet rules
+        if leet_patterns["e->3"] > 3:
+            rules.add("se3")
+        if leet_patterns["o->0"] > 3:
+            rules.add("so0")
+        if leet_patterns["a->@"] > 3:
+            rules.add("sa@")
+
+        # Common AU-specific appends
+        au_years = ["2023", "2024", "2025", "123", "1234", "!", "!1", "@1"]
+        for y in au_years:
+            for c in y:
+                rules.add(f"${c}")
+
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w") as f:
+            f.write("\n".join(sorted(rules)))
+
+        return output_path
+
+    def generate_spray_list(
+        self,
+        usernames: list[str],
+        common_passwords: list[str] | None = None,
+        au_focused: bool = True,
+    ) -> list[dict]:
+        """
+        Generate a credential spray list optimised for AU targets.
+        Uses common AU passwords and seasonal patterns.
+        """
+        if common_passwords is None:
+            common_passwords = [
+                "Password1", "Password1!", "Welcome1", "Welcome1!",
+                "Summer2024", "Winter2024", "Spring2024", "Autumn2024",
+                "Summer2024!", "Winter2024!", "January2024", "February2024",
+                "Australia1", "Australia1!", "Qantas123", "Cricket123",
+                "Footy2024", "Anzac2024", "Melbourne1", "Sydney2024",
+                "Brisbane1", "Perth2024", "Adelaide1", "Canberra1",
+                "Company123", "Welcome123", "Admin1234", "P@ssw0rd",
+                "Passw0rd1", "Changeme1", "Letmein1!", "Test1234!",
+            ]
+
+        spray_list = []
+        for username in usernames:
+            for password in common_passwords:
+                spray_list.append({
+                    "username": username,
+                    "password": password,
+                    "priority": "high" if any(s in password for s in ["2024", "2025", "!"]) else "medium",
+                })
+
+        # Sort by priority
+        spray_list.sort(key=lambda x: 0 if x["priority"] == "high" else 1)
+        return spray_list
+
+    def password_policy_audit(self, passwords: list[str]) -> dict:
+        """
+        Audit a password list against common AU corporate password policies.
+        Identifies compliance gaps and weak credential patterns.
+        """
+        import re
+        from collections import Counter
+
+        total = len(passwords)
+        if total == 0:
+            return {}
+
+        stats = {
+            "total": total,
+            "length_distribution": Counter(),
+            "complexity_failures": Counter(),
+            "common_patterns": Counter(),
+            "au_specific_patterns": Counter(),
+            "policy_compliance": {},
+        }
+
+        for pwd in passwords:
+            if not pwd:
+                continue
+
+            # Length
+            l = len(pwd)
+            if l < 8:
+                stats["length_distribution"]["< 8"] += 1
+            elif l < 12:
+                stats["length_distribution"]["8-11"] += 1
+            elif l < 16:
+                stats["length_distribution"]["12-15"] += 1
+            else:
+                stats["length_distribution"]["16+"] += 1
+
+            # Complexity
+            if not re.search(r"[A-Z]", pwd):
+                stats["complexity_failures"]["no_uppercase"] += 1
+            if not re.search(r"[a-z]", pwd):
+                stats["complexity_failures"]["no_lowercase"] += 1
+            if not re.search(r"\d", pwd):
+                stats["complexity_failures"]["no_digit"] += 1
+            if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':"\|,.<>/?]", pwd):
+                stats["complexity_failures"]["no_special"] += 1
+
+            # Common patterns
+            if re.match(r"^[Pp]assword", pwd):
+                stats["common_patterns"]["password_base"] += 1
+            if re.match(r"^[Ww]elcome", pwd):
+                stats["common_patterns"]["welcome_base"] += 1
+            if re.search(r"(123|1234|12345|123456)$", pwd):
+                stats["common_patterns"]["numeric_suffix"] += 1
+            if re.search(r"(2023|2024|2025)$", pwd):
+                stats["common_patterns"]["year_suffix"] += 1
+
+            # AU-specific
+            if re.search(r"(?:australia|sydney|melbourne|brisbane|perth|adelaide|canberra)", pwd, re.IGNORECASE):
+                stats["au_specific_patterns"]["au_city_or_country"] += 1
+            if re.search(r"(?:anzac|qantas|cricket|footy|afl|nrl)", pwd, re.IGNORECASE):
+                stats["au_specific_patterns"]["au_cultural"] += 1
+
+        # Policy compliance rates
+        stats["policy_compliance"] = {
+            "min_8_chars":     round((total - stats["length_distribution"]["< 8"]) / total * 100, 1),
+            "has_uppercase":   round((total - stats["complexity_failures"]["no_uppercase"]) / total * 100, 1),
+            "has_lowercase":   round((total - stats["complexity_failures"]["no_lowercase"]) / total * 100, 1),
+            "has_digit":       round((total - stats["complexity_failures"]["no_digit"]) / total * 100, 1),
+            "has_special":     round((total - stats["complexity_failures"]["no_special"]) / total * 100, 1),
+        }
+
+        # Convert Counters to dicts
+        for k in ["length_distribution", "complexity_failures", "common_patterns", "au_specific_patterns"]:
+            stats[k] = dict(stats[k])
+
+        return stats
+
+    def generate_wordlist(self, base_words: list[str], rules: list[str] | None = None) -> list[str]:
+        """
+        Generate a targeted wordlist from base words using mutation rules.
+        Useful for targeted dictionary attacks on AU accounts.
+        """
+        import re
+        mutations = []
+        default_rules = rules or [
+            "{w}", "{W}", "{w}1", "{w}!", "{w}1!", "{w}123", "{w}2024", "{w}2024!",
+            "{W}1", "{W}!", "{W}1!", "{W}123", "{W}2024",
+            "{w}@1", "{w}#1", "{w}$1",
+        ]
+
+        for word in base_words:
+            for rule in default_rules:
+                variant = rule.replace("{w}", word.lower()).replace("{W}", word.capitalize())
+                mutations.append(variant)
+
+        return list(dict.fromkeys(mutations))  # Deduplicate
+
     def export_json(self, filepath: str, creds: Optional[List[Dict]] = None) -> None:
         """Export credentials to JSON."""
         data = creds or self.credentials

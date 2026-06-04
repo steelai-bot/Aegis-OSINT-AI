@@ -522,6 +522,167 @@ class BreachSearchEngine:
 
     # ── Full Search ──────────────────────────────────────────────────────
 
+
+    def search_via_tor(self, query: str, query_type: str = "email") -> dict:
+        """
+        Route breach queries through Tor for anonymity.
+        Uses SOCKS5 proxy to reach .onion breach lookup services.
+        """
+        tor_proxy = self.config.get("TOR_PROXY", "socks5://127.0.0.1:9050")
+        proxies = {"http": tor_proxy, "https": tor_proxy}
+
+        results = {"source": "tor_breach_lookup", "query": query, "results": []}
+
+        # ProxyNova via Tor
+        try:
+            import requests
+            r = requests.get(
+                f"https://api.proxynova.com/comb?query={query}",
+                proxies=proxies, timeout=30
+            )
+            if r.status_code == 200:
+                data = r.json()
+                results["proxynova_count"] = data.get("count", 0)
+                results["results"].extend(data.get("lines", [])[:50])
+        except Exception as e:
+            results["proxynova_error"] = str(e)
+
+        return results
+
+    def async_bulk_search(self, targets: list[str], query_type: str = "email") -> list[dict]:
+        """
+        Async bulk search across all sources with rate limiting.
+        Processes up to 50 targets concurrently.
+        """
+        import asyncio, aiohttp
+
+        async def _fetch_one(session, target):
+            result = {"target": target, "found_in": [], "total": 0}
+            # ProxyNova (free, no auth)
+            try:
+                async with session.get(
+                    f"https://api.proxynova.com/comb?query={target}",
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as r:
+                    if r.status == 200:
+                        data = await r.json()
+                        if data.get("count", 0) > 0:
+                            result["found_in"].append("proxynova")
+                            result["total"] += data["count"]
+            except Exception:
+                pass
+            return result
+
+        async def _run_all(targets):
+            connector = aiohttp.TCPConnector(limit=10)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                tasks = [_fetch_one(session, t) for t in targets[:50]]
+                return await asyncio.gather(*tasks, return_exceptions=True)
+
+        try:
+            loop = asyncio.new_event_loop()
+            results = loop.run_until_complete(_run_all(targets))
+            loop.close()
+            return [r for r in results if isinstance(r, dict)]
+        except Exception as e:
+            return [{"error": str(e)}]
+
+    def dedup_cross_source(self, results: list[dict]) -> list[dict]:
+        """
+        Deduplicate credentials found across multiple sources.
+        Merges entries with same email, keeps richest data.
+        """
+        merged: dict[str, dict] = {}
+        for entry in results:
+            email = (entry.get("email") or entry.get("username") or "").lower().strip()
+            if not email:
+                continue
+            if email not in merged:
+                merged[email] = entry.copy()
+                merged[email]["sources"] = []
+            merged[email]["sources"].append(entry.get("source", "unknown"))
+            # Merge password if present
+            if entry.get("password") and not merged[email].get("password"):
+                merged[email]["password"] = entry["password"]
+        return list(merged.values())
+
+    def search_github_exposed(self, domain: str) -> list[dict]:
+        """
+        Search GitHub for accidentally committed credentials for a domain.
+        Uses GitHub Search API with AU-specific dorks.
+        """
+        dorks = [
+            f'"{domain}" password',
+            f'"{domain}" api_key',
+            f'"{domain}" secret',
+            f'"{domain}" credentials',
+            f'"{domain}" .env',
+            f'site:{domain} filetype:sql',
+        ]
+        results = []
+        try:
+            import requests
+            headers = {"Accept": "application/vnd.github.v3+json"}
+            if self.config.get("GITHUB_TOKEN"):
+                headers["Authorization"] = f"token {self.config['GITHUB_TOKEN']}"
+
+            for dork in dorks[:3]:  # Rate limit
+                r = requests.get(
+                    "https://api.github.com/search/code",
+                    params={"q": dork, "per_page": 10},
+                    headers=headers, timeout=10
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    for item in data.get("items", []):
+                        results.append({
+                            "dork":    dork,
+                            "repo":    item["repository"]["full_name"],
+                            "file":    item["path"],
+                            "url":     item["html_url"],
+                            "score":   item.get("score", 0),
+                        })
+                import time; time.sleep(2)
+        except Exception as e:
+            results.append({"error": str(e)})
+        return results
+
+    def estimate_breach_freshness(self, breach_name: str, breach_date: str) -> dict:
+        """
+        Estimate how fresh/dangerous a breach is based on age and known reuse patterns.
+        """
+        from datetime import datetime, timezone
+        try:
+            breach_dt = datetime.strptime(breach_date[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            age_days = (datetime.now(timezone.utc) - breach_dt).days
+        except Exception:
+            age_days = 9999
+
+        if age_days < 30:
+            freshness = "critical"
+            reuse_risk = "very_high"
+        elif age_days < 180:
+            freshness = "high"
+            reuse_risk = "high"
+        elif age_days < 365:
+            freshness = "medium"
+            reuse_risk = "medium"
+        elif age_days < 730:
+            freshness = "low"
+            reuse_risk = "low"
+        else:
+            freshness = "stale"
+            reuse_risk = "low"
+
+        return {
+            "breach_name":  breach_name,
+            "breach_date":  breach_date,
+            "age_days":     age_days,
+            "freshness":    freshness,
+            "reuse_risk":   reuse_risk,
+            "note":         f"Credentials from this breach are {age_days} days old.",
+        }
+
     def full_search(self, query: str, query_type: str = 'email') -> ResultStore:
         """Run search across all configured sources."""
         logger.info(f'Starting full breach search for: {query} (type: {query_type})')
