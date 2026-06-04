@@ -1,84 +1,153 @@
-# 🛡️ Aegis-OSINT-AI
+# AU-OSINT-RECON
+### Australian Breach Intelligence & OSINT Platform
 
-## Australian OSINT Reconnaissance & Breach Intelligence Platform
+> Multi-module red team toolkit for Australian data breach discovery, credential hunting,
+> infostealer log analysis, exploit scanning, and AI-assisted intelligence analysis.
+> Designed for offensive security research and corporate threat intelligence.
 
-Multi-module OSINT tool focused on Australian data breaches, leaked credentials, corporate intelligence, and vulnerability scanning. Designed for red team operations and security research.
+---
 
-### Modules
+## Table of Contents
+1. [Architecture](#architecture)
+2. [Module Reference](#module-reference)
+3. [Installation](#installation)
+4. [Configuration](#configuration)
+5. [Usage Examples](#usage-examples)
+6. [AI Module — HuggingFace Integration](#ai-module--huggingface-integration)
+7. [Hardware Auto-Detection & Model Recommender](#hardware-auto-detection--model-recommender)
+8. [API Keys Reference](#api-keys-reference)
+9. [Output Formats](#output-formats)
 
-| Module | Description |
-|--------|-------------|
-| **Breach Search** | HIBP, DeHashed, IntelX, LeakCheck, Snusbase, BreachDirectory |
-| **AU OSINT** | ABN/ASIC lookup, phone carrier detection, BSB mapping, gov directories |
-| **Exploit Scanner** | SQLi, XSS, SSRF, LFI, SSTI, CMDi, CRLF, Open Redirect |
-| **Dark Web Crawler** | Ahmia, DarkSearch, forum scraping, ransomware leak monitoring |
-| **Telegram Monitor** | MTProto search, channel discovery, bot interaction |
-| **Paste Scraper** | Pastebin, GitHub Gists/Secrets, Rentry, dpaste |
-| **Credential Parser** | Multi-format parsing (combo, SQL, CSV), hash ID, analysis |
+---
 
-### Quick Start
+## Architecture
 
-```bash
-# Terminal UI
-pip install rich
-cd scripts && python3 tui.py
-
-# CLI
-python3 scripts/orchestrator.py --target example.com.au --modules all
-
-# Web Dashboard
-open assets/dashboard.html
+```
+Aegis-OSINT-AI/
+├── scripts/
+│   ├── orchestrator.py          # Master engine — coordinates all modules
+│   ├── breach_search.py         # Breach DB & combo list search (HIBP, DeHashed, etc.)
+│   ├── osint_australia.py       # AU-specific OSINT: ABN, ASIC, ATO, BSB, Medicare
+│   ├── darkweb_crawler.py       # Tor-based .onion crawler & marketplace monitor
+│   ├── telegram_monitor.py      # Telegram leak channel monitor (MTProto)
+│   ├── exploit_scanner.py       # SQLi, XSS, SSRF, LFI, RCE, JWT, GraphQL scanner
+│   ├── paste_scraper.py         # Pastebin / GitHub Gist / paste site scraper
+│   ├── credential_parser.py     # Parse & normalize leaked credential dumps
+│   ├── report_generator.py      # HTML dashboard / JSON / CSV report engine
+│   ├── pdf_extractor.py         # PDF data extraction with 30+ AU regex patterns
+│   ├── infostealer_parser.py    # Infostealer log parser with date-range filtering
+│   ├── leaked_db_hunter.py      # Multi-source breach API + paid combo market intel
+│   ├── ai_modules.py            # HuggingFace AI analysis & intelligence synthesis
+│   ├── advanced_exploits.py     # Extended exploit techniques & novel attack vectors
+│   ├── pivot_chain.py           # Pivot chaining & lateral movement mapping
+│   ├── pre_exploit.py           # Pre-exploitation recon & fingerprinting
+│   ├── sneaky_recon.py          # Stealth recon with evasion techniques
+│   ├── eni_signature.py         # Session watermarking
+│   └── utils.py                 # Shared utilities, rate limiting, proxy management
+├── references/
+│   ├── australian_sources.md    # Known AU data sources, endpoints, registries
+│   └── exploit_payloads.md      # SQLi / XSS / SSRF payload reference library
+├── assets/
+│   └── dashboard_template.html  # Interactive dark-theme results dashboard
+├── requirements.txt
+└── README.md
 ```
 
-### Usage Examples
+---
+
+## Installation
 
 ```bash
-# Full recon on email
-python3 scripts/orchestrator.py --email user@company.com.au --modules all
+git clone https://github.com/steelai-bot/Aegis-OSINT-AI
+cd Aegis-OSINT-AI
+pip install -r requirements.txt
+
+# Detect hardware & select AI model
+python3 scripts/ai_modules.py --detect-hardware
+```
+
+---
+
+## Configuration
+
+```env
+HIBP_API_KEY=your_hibp_key
+DEHASHED_API_KEY=your_dehashed_key
+DEHASHED_EMAIL=your@email.com
+LEAKCHECK_API_KEY=your_leakcheck_key
+INTELX_API_KEY=your_intelx_key
+SNUSBASE_API_KEY=your_snusbase_key
+TELEGRAM_API_ID=your_api_id
+TELEGRAM_API_HASH=your_api_hash
+TOR_PROXY=socks5://127.0.0.1:9050
+HF_TOKEN=your_huggingface_token
+HF_CACHE_DIR=./models
+```
+
+---
+
+## Usage Examples
+
+```bash
+# Full domain recon
+python3 scripts/orchestrator.py --target company.com.au --modules all
+
+# Email breach hunt
+python3 scripts/orchestrator.py --email user@corp.com.au --modules breach,paste
+
+# PDF batch scan
+python3 scripts/pdf_extractor.py --dir /mnt/leaked_docs/ --au-only
+
+# Infostealer logs — date filtered
+python3 scripts/infostealer_parser.py --dir /logs/ --start 2024-01-01 --end 2024-12-31 --au-only --bank
 
 # Exploit scan
 python3 scripts/orchestrator.py --url https://target.com.au --modules exploit
 
-# Company intelligence
-python3 scripts/orchestrator.py --company "Optus" --modules osint,breach,darkweb
+# Combo market intel
+python3 scripts/leaked_db_hunter.py --market
 
-# Phone lookup
-python3 scripts/orchestrator.py --phone "+61412345678"
+# AI analysis
+python3 scripts/ai_modules.py --input reports/findings.json --task summarise --model auto
 
-# ABN lookup
-python3 scripts/orchestrator.py --abn "33051775556"
+# Hardware detection
+python3 scripts/ai_modules.py --detect-hardware
 ```
 
-### API Keys
+---
 
-Set as environment variables or via the TUI config menu:
+## AI Module — HuggingFace Integration
 
-- `HIBP_API_KEY` — Have I Been Pwned
-- `DEHASHED_API_KEY` + `DEHASHED_EMAIL` — DeHashed  
-- `INTELX_API_KEY` — Intelligence X
-- `LEAKCHECK_API_KEY` — LeakCheck
-- `SNUSBASE_API_KEY` — Snusbase
-- `TELEGRAM_API_ID` + `TELEGRAM_API_HASH` — Telegram MTProto
-- `GITHUB_TOKEN` — GitHub code search
+Runs fully local — no data leaves the machine. Prioritises uncensored models.
 
-### Architecture
-
+```bash
+python3 scripts/ai_modules.py --detect-hardware
 ```
-├── scripts/
-│   ├── orchestrator.py       # Main engine
-│   ├── tui.py                # Terminal UI (Rich)
-│   ├── breach_search.py      # 6 breach APIs
-│   ├── osint_australia.py    # AU-specific OSINT
-│   ├── exploit_scanner.py    # Multi-vector vuln scanner
-│   ├── darkweb_crawler.py    # Dark web intelligence
-│   ├── telegram_monitor.py   # Telegram monitoring
-│   ├── paste_scraper.py      # Paste site scraping
-│   ├── credential_parser.py  # Credential parsing & analysis
-│   └── utils.py              # Shared utilities
-├── assets/
-│   └── dashboard.html        # Web dashboard
-├── references/
-│   ├── australian_sources.md  # AU data sources
-│   └── exploit_payloads.md   # Payload reference
-└── SKILL.md                  # Skill documentation
-```
+
+### RAM Tiers
+| Available RAM | Tier | Recommended Models |
+|--------------|------|-------------------|
+| < 4 GB | MINIMAL | Phi-3-mini (Q4), TinyLlama |
+| 4–8 GB | LOW | Mistral-7B (Q4), OpenHermes-7B (Q4) |
+| 8–16 GB | MEDIUM | Mistral-7B (Q8), LLaMA-3-8B, Dolphin-7B |
+| 16–32 GB | HIGH | Mixtral-8x7B (Q4), WizardLM-13B |
+| 32–64 GB | VERY HIGH | LLaMA-3-70B (Q4), Dolphin-70B (Q4) |
+| 64 GB+ | EXTREME | Full precision 70B, Mixtral-8x22B |
+
+---
+
+## API Keys Reference
+
+| Variable | Service | Free Tier |
+|----------|---------|----------|
+| `HIBP_API_KEY` | Have I Been Pwned | No |
+| `DEHASHED_API_KEY` | DeHashed | No |
+| `LEAKCHECK_API_KEY` | LeakCheck | Limited |
+| `INTELX_API_KEY` | Intelligence X | Limited |
+| `SNUSBASE_API_KEY` | Snusbase | No |
+| `TELEGRAM_API_ID/HASH` | Telegram MTProto | Free |
+| `HF_TOKEN` | HuggingFace | Free |
+
+---
+
+*Aegis-OSINT-AI — Australian threat intelligence platform.*
