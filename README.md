@@ -281,30 +281,51 @@ HuggingFace-powered analysis layer. See [AI Module section](#ai-module--huggingf
 
 ## Installation
 
-### Requirements
-- Python 3.10+
-- Tor (for dark web modules): `apt install tor`
-- Optional: CUDA toolkit for GPU inference (not required — CPU/RAM priority)
+### Automated Setup Wizard (recommended)
 
 ```bash
-# Clone the repository
 git clone https://github.com/steelai-bot/Aegis-OSINT-AI.git
 cd Aegis-OSINT-AI/
-
-# Install all dependencies
-pip install -r requirements.txt
-
-# Install Tor (dark web modules)
-sudo apt install tor
-sudo systemctl start tor
-
-# Verify setup
-python3 scripts/orchestrator.py --check-config
+python3 setup_wizard.py
 ```
 
-### Quick Install (single command)
+The wizard automatically:
+- Detects your OS, CPU, RAM, disk, and GPU
+- Checks every Python dependency against minimum required versions
+- Offers to install missing packages and upgrade outdated ones
+- Checks system tools (Tor, Tesseract, Git)
+- Guides llama-cpp-python compilation (CPU-only, no CUDA needed)
+- Creates `.env` template with all API key slots
+- Creates `reports/`, `models/`, `logs/`, `exports/` directories
+- Saves an install log to `logs/setup_wizard.json`
+
+### Wizard flags
+
+| Flag | Description |
+|------|-------------|
+| `--silent` | Non-interactive — install everything automatically |
+| `--check-only` | Check deps without installing anything |
+| `--upgrade` | Upgrade all outdated packages to minimum versions |
+| `--full` | Include optional packages (Telegram, AI, llama-cpp) |
+| `--no-llama` | Skip llama-cpp-python compilation |
+
 ```bash
-pip install -r requirements.txt && python3 scripts/ai_modules.py --detect-hardware
+# Silent full install (CI / VPS)
+python3 setup_wizard.py --silent --full
+
+# Check only — no changes made
+python3 setup_wizard.py --check-only
+
+# Upgrade outdated packages
+python3 setup_wizard.py --upgrade
+```
+
+### Manual install (alternative)
+
+```bash
+git clone https://github.com/steelai-bot/Aegis-OSINT-AI.git
+cd Aegis-OSINT-AI/
+pip install -r requirements.txt
 ```
 
 ---
