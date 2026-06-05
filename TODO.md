@@ -30,7 +30,7 @@
 - [x] Implement target endpoints.
 - [x] Implement finding endpoints.
 - [x] Implement report endpoints.
-- [ ] Add API integration tests.
+- [x] Add API integration tests.
 
 ## Phase 3 — Agent System
 
