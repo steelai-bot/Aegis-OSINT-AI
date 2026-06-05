@@ -299,3 +299,15 @@ def test_initial_plugin_modules_exist() -> None:
     }
     for path, marker in plugin_files.items():
         assert marker in read(path)
+
+
+def test_plugin_configuration_tests_exist() -> None:
+    registry_text = read("backend/plugins/registry.py")
+    test_text = read("backend/tests/test_plugins_configuration.py")
+
+    assert "enabled_plugin_names" in registry_text
+    assert "disabled_plugin_names" in registry_text
+    assert "plugin_configs" in registry_text
+    assert "def is_enabled" in registry_text
+    assert "test_plugin_registry_filters_and_injects_plugin_config" in test_text
+    assert "test_api_backed_plugins_skip_without_required_api_keys" in test_text
