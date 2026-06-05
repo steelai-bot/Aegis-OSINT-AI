@@ -150,6 +150,7 @@ def test_v2_markdown_report_renderer_exists() -> None:
     route_text = read("backend/api/routes/reports.py")
     package_text = read("backend/reports/__init__.py")
     renderer_text = read("backend/reports/renderers.py")
+    template_text = read("backend/reports/templates.py")
 
     assert "ReportFormat" in schema_text
     assert "RenderableReportFormat" in schema_text
@@ -162,13 +163,18 @@ def test_v2_markdown_report_renderer_exists() -> None:
     assert "render_markdown_report" in package_text
     assert "render_json_report" in package_text
     assert "render_briefing_outline" in package_text
+    assert "get_report_template" in package_text
     assert "render_report" in package_text
+    assert "class ReportTemplate" in template_text
+    assert "INVESTIGATION_REPORT_TEMPLATE" in template_text
+    assert "DEFAULT_HANDLING_NOTES" in template_text
     assert "def render_markdown_report" in renderer_text
     assert "def render_json_report" in renderer_text
     assert "def render_briefing_outline" in renderer_text
     assert "def render_report" in renderer_text
+    assert "get_report_template(template_name)" in renderer_text
     assert "Unsupported v2 report renderer format" in renderer_text
-    assert "Do not use this output for exploitation" in renderer_text
+    assert "Do not use this output for exploitation" in template_text
 
 
 def test_readme_documents_v2_render_api_contract() -> None:

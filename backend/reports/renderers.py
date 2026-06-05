@@ -11,6 +11,8 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from backend.reports.templates import ReportTemplate, get_report_template
+
 SEVERITY_ORDER = {
     "critical": 5,
     "high": 4,
@@ -79,20 +81,31 @@ def _finding_payload(finding: Any) -> dict[str, Any]:
     }
 
 
+def _handling_notes(template: ReportTemplate) -> list[str]:
+    return list(template.handling_notes)
+
+
+def _handling_note_lines(template: ReportTemplate) -> str:
+    return "\n".join(f"- {note}" for note in template.handling_notes)
+
+
 def render_json_report(
     investigation: Any,
     findings: Sequence[Any],
     *,
     generated_at: datetime | None = None,
+    template_name: str = "investigation",
 ) -> str:
     """Render a structured JSON investigation report."""
 
     generated = generated_at or datetime.now(UTC)
+    template = get_report_template(template_name)
     payload = {
         "meta": {
             "generated_at": generated.isoformat(),
             "tool": "aegis-v2",
             "format": "json",
+            "template": template.name,
         },
         "investigation": {
             "title": _read_value(investigation, "title", "Untitled investigation"),
@@ -100,11 +113,7 @@ def render_json_report(
         },
         "severity_counts": _severity_counts(findings),
         "findings": [_finding_payload(finding) for finding in findings],
-        "handling_notes": [
-            "Generated from passive investigation records.",
-            "Verify all findings against primary sources before action.",
-            "Do not use this output for exploitation, credential replay, intrusive scanning, or unauthorized access.",
-        ],
+        "handling_notes": _handling_notes(template),
     }
     return json.dumps(payload, indent=2, default=str)
 
@@ -114,15 +123,17 @@ def render_markdown_report(
     findings: Sequence[Any],
     *,
     generated_at: datetime | None = None,
+    template_name: str = "investigation",
 ) -> str:
     """Render a document-ready Markdown investigation report."""
 
     generated = generated_at or datetime.now(UTC)
+    template = get_report_template(template_name)
     counts = _severity_counts(findings)
     title = _escape_markdown(_read_value(investigation, "title", "Untitled investigation"))
     status = _escape_markdown(_read_value(investigation, "status", "unknown"))
 
-    return f"""# Aegis Investigation Report
+    return f"""# {template.title}
 
 Generated: {generated.isoformat()}
 Investigation: {title}
@@ -130,7 +141,7 @@ Status: {status}
 
 ## Executive Summary
 
-This report summarizes locally persisted passive OSINT findings for analyst review.
+{template.executive_summary}
 
 ## Severity Overview
 
@@ -146,9 +157,7 @@ This report summarizes locally persisted passive OSINT findings for analyst revi
 
 ## Handling Notes
 
-- This report is generated from passive investigation records.
-- Verify all findings against primary sources before action.
-- Do not use this output for exploitation, credential replay, intrusive scanning, or unauthorized access.
+{_handling_note_lines(template)}
 """
 
 
@@ -157,53 +166,38 @@ def render_briefing_outline(
     findings: Sequence[Any],
     *,
     generated_at: datetime | None = None,
+    template_name: str = "investigation",
 ) -> str:
     """Render a presentation-ready Markdown briefing outline."""
 
     generated = generated_at or datetime.now(UTC)
+    template = get_report_template(template_name)
     title = _escape_markdown(_read_value(investigation, "title", "Untitled investigation"))
     sorted_findings = sorted(
         findings,
         key=lambda finding: SEVERITY_ORDER.get(str(_read_value(finding, "severity", "info")).lower(), 0),
         reverse=True,
     )
+    slide_sections: list[str] = []
+    for index, slide in enumerate(template.briefing_slides, start=1):
+        claim = slide.claim.format(title=title, finding_count=len(findings))
+        proof_object = slide.proof_object.format(title=title, finding_count=len(findings))
+        section = f"""## Slide {index} - {slide.title}
 
-    return f"""# Aegis Investigation Briefing Outline
+Claim: {claim}
+
+Proof object: {proof_object}
+"""
+        if slide.title == "Highest-Priority Findings":
+            section = f"{section}\n{_finding_lines(sorted_findings[:8])}\n"
+        slide_sections.append(section.rstrip())
+
+    return f"""# {template.briefing_title}
 
 Generated: {generated.isoformat()}
 Investigation: {title}
 
-## Slide 1 - Investigation Context
-
-Claim: {title} has a passive evidence set ready for analyst review.
-
-Proof object: Investigation metadata and finding count.
-
-## Slide 2 - Risk Posture
-
-Claim: Current severity mix defines the review queue.
-
-Proof object: Severity overview across {len(findings)} findings.
-
-## Slide 3 - Highest-Priority Findings
-
-Claim: The highest-severity findings should be verified first.
-
-Proof object: Findings sorted by severity.
-
-{_finding_lines(sorted_findings[:8])}
-
-## Slide 4 - Source And Confidence Review
-
-Claim: Sources and confidence values determine follow-up quality.
-
-Proof object: Finding source labels, confidence scores, and analyst notes.
-
-## Slide 5 - Passive Next Steps
-
-Claim: Follow-up should remain passive, documented, and authorized.
-
-Proof object: Source checks, evidence preservation, and collection gaps.
+{chr(10).join(slide_sections)}
 """
 
 
@@ -213,14 +207,15 @@ def render_report(
     findings: Sequence[Any],
     *,
     generated_at: datetime | None = None,
+    template_name: str = "investigation",
 ) -> str:
     """Render a report using the v2 in-memory renderer set."""
 
     normalized = report_format.lower()
     if normalized == "json":
-        return render_json_report(investigation, findings, generated_at=generated_at)
+        return render_json_report(investigation, findings, generated_at=generated_at, template_name=template_name)
     if normalized == "markdown":
-        return render_markdown_report(investigation, findings, generated_at=generated_at)
+        return render_markdown_report(investigation, findings, generated_at=generated_at, template_name=template_name)
     if normalized == "briefing":
-        return render_briefing_outline(investigation, findings, generated_at=generated_at)
+        return render_briefing_outline(investigation, findings, generated_at=generated_at, template_name=template_name)
     raise ValueError(f"Unsupported v2 report renderer format: {report_format}")
