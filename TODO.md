@@ -52,18 +52,19 @@
 
 ## Phase 5 — AI Layer
 
-- [ ] Add OpenAI provider.
-- [ ] Add Anthropic provider.
-- [ ] Add Gemini provider.
-- [ ] Add Ollama provider.
-- [ ] Add provider factory tests.
+- [x] Add OpenAI provider.
+- [x] Add Anthropic provider.
+- [x] Add Gemini provider.
+- [x] Add Hugging Face Inference Providers provider.
+- [x] Add Ollama provider.
+- [x] Add provider factory tests.
 
 ## Phase 6 — Reporting and Correlation
 
 - [ ] Add report templates.
-- [ ] Add Markdown renderer.
+- [x] Add Markdown renderer.
 - [ ] Add HTML renderer.
-- [ ] Add JSON renderer.
+- [x] Add JSON renderer.
 - [ ] Add PDF renderer.
 - [ ] Add finding correlation graph.
 

@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def read(path: str) -> str:
-    return (ROOT / path).read_text()
+    return (ROOT / path).read_text(encoding="utf-8")
 
 
 def test_required_planning_documents_exist() -> None:
@@ -60,16 +60,90 @@ def test_required_agent_classes_exist() -> None:
 
 def test_provider_specific_logic_stays_in_provider_package() -> None:
     allowed = {"backend/providers/factory.py", "backend/core/config.py"}
-    vendor_terms = ["OpenAI", "Anthropic", "Gemini", "Ollama"]
+    vendor_terms = ["OpenAI", "Anthropic", "Gemini", "HuggingFace", "Hugging Face", "Ollama"]
     violations: list[str] = []
     for path in (ROOT / "backend").rglob("*.py"):
         rel = path.relative_to(ROOT).as_posix()
         if rel.startswith("backend/providers/") or rel.startswith("backend/tests/") or rel in allowed:
             continue
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         if any(term in text for term in vendor_terms):
             violations.append(rel)
     assert not violations
+
+
+def test_huggingface_provider_is_registered() -> None:
+    config_text = read("backend/core/config.py")
+    factory_text = read("backend/providers/factory.py")
+    provider_text = read("backend/providers/huggingface.py")
+
+    assert '"huggingface"' in config_text
+    assert "huggingface_api_key" in config_text
+    assert 'settings.llm_provider == "huggingface"' in factory_text
+    assert "class HuggingFaceProvider" in provider_text
+    assert "https://router.huggingface.co/v1/chat/completions" in provider_text
+
+
+def test_llm_provider_factory_routes_all_configured_providers() -> None:
+    config_text = read("backend/core/config.py")
+    factory_text = read("backend/providers/factory.py")
+    providers = {
+        "openai": ("backend/providers/openai.py", "class OpenAIProvider"),
+        "anthropic": ("backend/providers/anthropic.py", "class AnthropicProvider"),
+        "gemini": ("backend/providers/gemini.py", "class GeminiProvider"),
+        "huggingface": ("backend/providers/huggingface.py", "class HuggingFaceProvider"),
+        "ollama": ("backend/providers/ollama.py", "class OllamaProvider"),
+    }
+
+    for provider, (path, class_marker) in providers.items():
+        assert f'"{provider}"' in config_text
+        assert f'settings.llm_provider == "{provider}"' in factory_text
+        assert class_marker in read(path)
+
+
+def test_report_generator_outputs_document_and_briefing_formats() -> None:
+    text = read("scripts/report_generator.py")
+    assert "def export_markdown" in text
+    assert "def export_briefing_outline" in text
+    assert '"markdown": markdown_path' in text
+    assert '"briefing": briefing_path' in text
+    assert "_briefing.md" in text
+
+
+def test_v2_markdown_report_renderer_exists() -> None:
+    schema_text = read("backend/api/schemas/reports.py")
+    route_text = read("backend/api/routes/reports.py")
+    package_text = read("backend/reports/__init__.py")
+    renderer_text = read("backend/reports/renderers.py")
+
+    assert "ReportFormat" in schema_text
+    assert "RenderableReportFormat" in schema_text
+    assert "ReportRenderRequest" in schema_text
+    assert "ReportRenderResponse" in schema_text
+    for report_format in ['"html"', '"json"', '"csv"', '"markdown"', '"briefing"', '"pdf"']:
+        assert report_format in schema_text
+    assert '"/investigations/{investigation_id}/reports/render"' in route_text
+    assert "render_report(payload.format, investigation, findings)" in route_text
+    assert "render_markdown_report" in package_text
+    assert "render_json_report" in package_text
+    assert "render_briefing_outline" in package_text
+    assert "render_report" in package_text
+    assert "def render_markdown_report" in renderer_text
+    assert "def render_json_report" in renderer_text
+    assert "def render_briefing_outline" in renderer_text
+    assert "def render_report" in renderer_text
+    assert "Unsupported v2 report renderer format" in renderer_text
+    assert "Do not use this output for exploitation" in renderer_text
+
+
+def test_readme_documents_v2_render_api_contract() -> None:
+    text = read("README.md")
+
+    assert "### v2 Render API" in text
+    assert "POST /investigations/{investigation_id}/reports/render" in text
+    assert '{ "format": "markdown" }' in text
+    assert "Supported render formats are `json`, `markdown`, and `briefing`." in text
+    assert "`html`, `csv`, and `pdf` remain report record formats" in text
 
 
 def test_phase_two_api_routes_exist() -> None:

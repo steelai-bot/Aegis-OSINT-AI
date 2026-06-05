@@ -29,6 +29,10 @@ def get_llm_provider(settings: Settings | None = None) -> BaseLLMProvider:
         from backend.providers.gemini import GeminiProvider
 
         return GeminiProvider(settings=settings)
+    if settings.llm_provider == "huggingface":
+        from backend.providers.huggingface import HuggingFaceProvider
+
+        return HuggingFaceProvider(settings=settings)
     if settings.llm_provider == "ollama":
         from backend.providers.ollama import OllamaProvider
 

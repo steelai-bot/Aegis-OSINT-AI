@@ -1,6 +1,6 @@
 """
 report_generator.py — AU-OSINT-RECON
-HTML/JSON/CSV report generation with interactive dashboard output.
+HTML/JSON/CSV/Markdown report generation with interactive dashboard and briefing outline output.
 Risk scoring, timeline visualization, executive summary.
 """
 
@@ -225,6 +225,171 @@ def export_csv(findings: list[dict], output_path: str) -> str:
             if isinstance(row.get("raw_data"), dict):
                 row["raw_data"] = json.dumps(row["raw_data"])
             writer.writerow(row)
+
+    return output_path
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Markdown / Briefing Outline Export
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _md_escape(value: Any) -> str:
+    text = "" if value is None else str(value)
+    return text.replace("```", "'''").strip()
+
+
+def _finding_bullets(findings: list[dict], limit: int | None = None) -> str:
+    items = findings[:limit] if limit else findings
+    if not items:
+        return "- No findings recorded."
+    lines = []
+    for finding in items:
+        title = _md_escape(finding.get("title", "Untitled finding"))
+        severity = _md_escape(finding.get("severity", "info")).upper()
+        source = _md_escape(finding.get("source", "unknown"))
+        summary = _md_escape(finding.get("summary", ""))
+        lines.append(f"- [{severity}] {title} ({source})")
+        if summary:
+            lines.append(f"  {summary}")
+    return "\n".join(lines)
+
+
+def export_markdown(
+    target: str,
+    findings: list[dict],
+    risk: dict,
+    timeline: list[dict],
+    summary: str,
+    modules_run: list[str],
+    output_path: str,
+) -> str:
+    """Write a document-oriented Markdown report. Returns path written."""
+
+    severity_counts = {
+        severity: sum(1 for finding in findings if finding.get("severity", "info").lower() == severity)
+        for severity in ["critical", "high", "medium", "low", "info"]
+    }
+    timeline_lines = [
+        f"- {_md_escape(item.get('date', 'unknown'))}: {_md_escape(item.get('title', 'Finding'))} ({_md_escape(item.get('severity', 'info'))})"
+        for item in timeline
+    ] or ["- No timeline data."]
+
+    content = f"""# Aegis OSINT Report
+
+Generated: {datetime.now(timezone.utc).isoformat()}
+Target: {_md_escape(target)}
+Modules: {', '.join(modules_run) if modules_run else 'N/A'}
+
+## Executive Summary
+
+{_md_escape(summary)}
+
+## Risk
+
+- Score: {risk.get('score', 0)} / 100
+- Grade: {risk.get('grade', 'A')}
+- Critical: {severity_counts['critical']}
+- High: {severity_counts['high']}
+- Medium: {severity_counts['medium']}
+- Low: {severity_counts['low']}
+- Info: {severity_counts['info']}
+
+## Findings
+
+{_finding_bullets(findings)}
+
+## Timeline
+
+{chr(10).join(timeline_lines)}
+
+## Handling Notes
+
+- This report is for lawful, defensive, passive OSINT review.
+- Verify findings against primary sources before action.
+- Do not use this output for exploitation, credential replay, intrusive scanning, or unauthorized access.
+"""
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as fh:
+        fh.write(content)
+
+    return output_path
+
+
+def export_briefing_outline(
+    target: str,
+    findings: list[dict],
+    risk: dict,
+    timeline: list[dict],
+    summary: str,
+    modules_run: list[str],
+    output_path: str,
+) -> str:
+    """Write a presentation-ready Markdown briefing outline. Returns path written."""
+
+    top_findings = sorted(
+        findings,
+        key=lambda finding: SEVERITY_WEIGHTS.get(finding.get("severity", "info").lower(), 0),
+        reverse=True,
+    )[:8]
+    timeline_focus = timeline[:8]
+    timeline_lines = [
+        f"- {_md_escape(item.get('date', 'unknown'))}: {_md_escape(item.get('title', 'Finding'))}"
+        for item in timeline_focus
+    ] or ["- No dated events available."]
+
+    content = f"""# Aegis OSINT Briefing Deck Outline
+
+Generated: {datetime.now(timezone.utc).isoformat()}
+Target: {_md_escape(target)}
+Modules: {', '.join(modules_run) if modules_run else 'N/A'}
+
+## Slide 1 - Investigation Context
+
+Claim: {_md_escape(target)} has a passive OSINT evidence set ready for analyst review.
+
+Proof object: Scope, modules run, and finding count.
+
+## Slide 2 - Risk Posture
+
+Claim: Current risk is graded {risk.get('grade', 'A')} with a score of {risk.get('score', 0)} / 100.
+
+Proof object: Severity counts and category breakdown.
+
+## Slide 3 - Highest-Priority Findings
+
+Claim: The most severe findings define the immediate review queue.
+
+Proof object: Top findings by severity.
+
+{_finding_bullets(top_findings)}
+
+## Slide 4 - Timeline
+
+Claim: Chronology shows how the evidence set developed.
+
+Proof object: Earliest dated findings and source trail.
+
+{chr(10).join(timeline_lines)}
+
+## Slide 5 - Analyst Caveats
+
+Claim: Findings require source verification before operational use.
+
+Proof object: Executive summary and handling notes.
+
+{_md_escape(summary)}
+
+## Slide 6 - Passive Next Steps
+
+Claim: Follow-up should remain passive, documented, and authorized.
+
+Proof object: Source checks, evidence preservation, and documented collection gaps.
+"""
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as fh:
+        fh.write(content)
 
     return output_path
 
@@ -655,7 +820,7 @@ class ReportGenerator:
 
     def run(self, modules_run: list[str] | None = None) -> dict[str, str]:
         """
-        Generate all three report formats. Returns dict of output paths.
+        Generate all report formats. Returns dict of output paths.
         """
         self.modules_run = modules_run or []
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -680,11 +845,21 @@ class ReportGenerator:
             self.modules_run, str(base) + ".html",
             template_path=self.template,
         )
+        markdown_path = export_markdown(
+            self.target, self.findings, risk, timeline, summary,
+            self.modules_run, str(base) + ".md",
+        )
+        briefing_path = export_briefing_outline(
+            self.target, self.findings, risk, timeline, summary,
+            self.modules_run, str(base) + "_briefing.md",
+        )
 
         return {
             "json": json_path,
             "csv":  csv_path,
             "html": html_path,
+            "markdown": markdown_path,
+            "briefing": briefing_path,
         }
 
 
