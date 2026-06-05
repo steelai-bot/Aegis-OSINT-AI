@@ -48,7 +48,7 @@
 - [x] Add VirusTotal plugin.
 - [x] Add SecurityTrails plugin.
 - [x] Add HaveIBeenPwned plugin.
-- [ ] Add plugin configuration tests.
+- [x] Add plugin configuration tests.
 
 ## Phase 5 — AI Layer
 
