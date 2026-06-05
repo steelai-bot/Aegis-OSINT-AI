@@ -40,6 +40,7 @@ frontend/
 
 docker/           # deployment manifests and container support
 docs/             # technical documentation and operator guides
+legacy/quarantine/ # pre-v2 modules retained only for extraction review
 ```
 
 ## Architectural Boundaries
@@ -124,4 +125,4 @@ require explicit human approval outside the normal OSINT pipeline.
 
 ## Legacy Isolation Policy
 
-Legacy offensive workflows are not part of Aegis v2. Session hijacking, credential replay, browser fingerprint cloning, exploit payload execution, banking-target-specific workflows, hardcoded targets, and offensive exploitation modules must be removed or isolated from the runnable v2 application. Passive OSINT parsing or normalization code may be extracted only after review.
+Legacy offensive workflows are not part of Aegis v2. Session hijacking, credential replay, browser fingerprint cloning, exploit payload execution, banking-target-specific workflows, hardcoded targets, and offensive exploitation modules must be removed or isolated from the runnable v2 application. Files under `legacy/quarantine/` are migration inventory only and must not be imported by `backend/`, exposed by API routes, or referenced by setup quick-start paths. Passive OSINT parsing or normalization code may be extracted only after review.

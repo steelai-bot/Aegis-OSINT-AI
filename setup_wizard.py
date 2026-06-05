@@ -88,8 +88,6 @@ REQUIRED = [
     # Crypto
     ("cryptography",    "cryptography>=42.0.0",       "42.0.0",  True),
     ("passlib",         "passlib>=1.7.4",             "1.7.4",   False),
-    # Telegram
-    ("telethon",        "telethon>=1.36.0",           "1.36.0",  False),
     # AI / HuggingFace
     ("transformers",    "transformers>=4.41.0",       "4.41.0",  False),
     ("huggingface_hub", "huggingface-hub>=0.23.0",    "0.23.0",  False),
@@ -101,7 +99,6 @@ REQUIRED = [
 ]
 
 SYSTEM_DEPS = {
-    "tor":       {"check": "tor --version", "install": {"apt": "tor", "brew": "tor", "yum": "tor"}},
     "tesseract": {"check": "tesseract --version", "install": {"apt": "tesseract-ocr", "brew": "tesseract", "yum": "tesseract"}},
     "git":       {"check": "git --version", "install": {"apt": "git", "brew": "git", "yum": "git"}},
 }
@@ -399,11 +396,8 @@ SNUSBASE_API_KEY=
 RAPIDAPI_KEY=
 
 # ── Telegram ─────────────────────────────────────────────────
-TELEGRAM_API_ID=
-TELEGRAM_API_HASH=
 
 # ── Network ──────────────────────────────────────────────────
-TOR_PROXY=socks5://127.0.0.1:9050
 HTTP_PROXY=
 
 # ── AI / HuggingFace ─────────────────────────────────────────
@@ -526,10 +520,10 @@ def show_ai_recommendations(sys_profile):
     print()
 
     models = [
-        (64,  "dolphin-2.9-llama3-70b-GGUF",    "38 GB", "Best uncensored, full capability"),
-        (32,  "dolphin-2.9-mixtral-8x7b-GGUF",  "26 GB", "Uncensored MoE, excellent quality"),
-        (16,  "dolphin-2.9-mistral-7b-v2-GGUF",  "5 GB", "Fast uncensored 7B"),
-        (8,   "openhermes-2.5-mistral-7b-GGUF",  "5 GB", "Uncensored, reliable"),
+        (64,  "llama-3.1-70b-instruct-GGUF",     "38 GB", "High quality local analysis"),
+        (32,  "mixtral-8x7b-instruct-GGUF",      "26 GB", "Large local analysis model"),
+        (16,  "mistral-7b-instruct-v0.3-GGUF",    "5 GB", "Fast local analysis"),
+        (8,   "openhermes-2.5-mistral-7b-GGUF",   "5 GB", "General local analysis"),
         (4,   "Phi-3-mini-4k-instruct-gguf",      "3 GB", "Minimal footprint"),
         (0,   "tinyllama-1.1b-chat-v1.0-GGUF",   "1 GB", "Last resort, very limited"),
     ]
@@ -566,18 +560,14 @@ def print_summary(missing, outdated, sys_deps, install_ok):
     if optional_missing:
         info(f"{len(optional_missing)} optional packages not installed (run with --full to include)")
 
-    tor_ok = sys_deps.get("tor", False)
-    if tor_ok:
-        ok("Tor available — dark web modules ready")
-    else:
-        warn("Tor not installed — dark web modules disabled")
-        info("Install: sudo apt install tor && sudo systemctl start tor")
+    info("Quarantined legacy network modules are not part of the v2 runtime")
 
     print()
     if install_ok and not critical_missing:
         print(f"  {c('✓ Setup complete!', GREEN)}")
         print(f"\n  {c('Quick start:', BOLD)}")
-        print(f"  python3 scripts/orchestrator.py --target example.com.au --modules all")
+        print(f"  uvicorn backend.api.app:create_app --factory --reload")
+        print(f"  python3 scripts/kali_compatibility.py --json")
         print(f"  python3 scripts/ai_modules.py --detect-hardware")
     else:
         print(f"  {c('⚠ Setup incomplete — fix errors above', YELLOW)}")
@@ -604,7 +594,7 @@ def main():
     parser.add_argument("--silent",     action="store_true", help="Non-interactive mode, install all")
     parser.add_argument("--check-only", action="store_true", help="Check deps without installing")
     parser.add_argument("--upgrade",    action="store_true", help="Upgrade all packages to min versions")
-    parser.add_argument("--full",       action="store_true", help="Include optional packages (Telegram, AI, etc.)")
+    parser.add_argument("--full",       action="store_true", help="Include optional packages (AI, archives, etc.)")
     parser.add_argument("--no-llama",   action="store_true", help="Skip llama-cpp-python compilation")
     args = parser.parse_args()
 
@@ -617,7 +607,7 @@ def main():
     sys_profile = SystemProfile()
     sys_profile.print()
 
-    # 3. System deps (tor, tesseract, git)
+    # 3. System deps (tesseract, git)
     sys_deps = check_system_deps(sys_profile)
 
     # 4. Python deps

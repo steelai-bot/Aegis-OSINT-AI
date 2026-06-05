@@ -5,8 +5,8 @@
 - [x] Create `ARCHITECTURE.md`.
 - [x] Create `MIGRATION_PLAN.md`.
 - [x] Create `TODO.md`.
-- [ ] Remove offensive claims from `README.md`.
-- [ ] Move prohibited legacy modules outside the runnable path or delete them after extraction review.
+- [x] Remove offensive claims from `README.md`.
+- [x] Move prohibited legacy modules outside the runnable path or delete them after extraction review.
 
 ## Phase 1 — Backend Foundation
 
