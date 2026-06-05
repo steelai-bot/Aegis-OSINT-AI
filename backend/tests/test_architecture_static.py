@@ -14,6 +14,41 @@ def test_required_planning_documents_exist() -> None:
         assert (ROOT / path).is_file(), f"{path} must exist before migration work"
 
 
+def test_phase_zero_guardrails_isolate_prohibited_legacy_runtime() -> None:
+    prohibited_scripts = [
+        "advanced_exploits.py",
+        "credential_parser.py",
+        "darkweb_crawler.py",
+        "eni_signature.py",
+        "exploit_scanner.py",
+        "infostealer_parser.py",
+        "leaked_db_hunter.py",
+        "orchestrator.py",
+        "pivot_chain.py",
+        "pre_exploit.py",
+        "session_hijacker.py",
+        "sneaky_recon.py",
+        "telegram_monitor.py",
+        "tui.py",
+    ]
+
+    for filename in prohibited_scripts:
+        assert not (ROOT / "scripts" / filename).exists()
+        assert (ROOT / "legacy" / "quarantine" / filename).is_file()
+
+    assert not (ROOT / "references" / "exploit_payloads.md").exists()
+    assert (ROOT / "legacy" / "quarantine" / "references" / "exploit_payloads.md").is_file()
+
+    readme_text = read("README.md").lower()
+    skill_text = read("SKILL.md").lower()
+    setup_text = read("setup_wizard.py").lower()
+    for text in [readme_text, skill_text, setup_text]:
+        assert "scripts/orchestrator.py" not in text
+        assert "--modules exploit" not in text
+        assert "red team operations" not in text
+        assert "credential replay" in text or "quarantine" in text
+
+
 def test_agent_contract_documents_no_direct_agent_calls() -> None:
     text = read("ARCHITECTURE.md")
     assert "Agents must never call other agents directly" in text

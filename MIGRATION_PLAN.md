@@ -11,13 +11,14 @@ This migration is incremental. Every phase must keep the application runnable an
 | Search APIs | `scripts/api_search_engine.py` | Preserve selectively | Convert API lookups to async plugins/providers with environment-backed keys. |
 | Australian public-source OSINT | `scripts/osint_australia.py`, `references/australian_sources.md` | Preserve selectively | Retain public registry lookup patterns where legally appropriate and configurable. |
 | PDF and data classification | `scripts/pdf_extractor.py`, `scripts/au_data_classifier.py` | Preserve selectively | Convert to passive evidence extraction services with redaction support. |
-| Dark web and Telegram collection | `scripts/darkweb_crawler.py`, `scripts/telegram_monitor.py` | Isolate pending review | Legal and policy boundaries must be documented before enabling. |
+| Dark web and Telegram collection | `legacy/quarantine/darkweb_crawler.py`, `legacy/quarantine/telegram_monitor.py` | Isolated pending review | Legal and policy boundaries must be documented before enabling. |
 | OAuth helper utilities | `scripts/oauth_manager.py` | Preserve selectively | Keep only generic token lifecycle helpers if needed; never store secrets in code. |
-| Offensive exploit scanners | `scripts/exploit_scanner.py`, `scripts/advanced_exploits.py`, `scripts/pre_exploit.py`, `scripts/sneaky_recon.py` | Remove from v2 runtime | Not compatible with OSINT-only framework scope. |
-| Session and fingerprint tooling | `scripts/session_hijacker.py`, `scripts/eni_signature.py` | Remove from v2 runtime | Explicitly prohibited by the v2 requirements. |
-| Credential dump tooling | `scripts/credential_parser.py`, `scripts/infostealer_parser.py`, `scripts/leaked_db_hunter.py` | Remove or heavily isolate | Do not process credentials for replay. Retain only high-level exposure metadata if legally approved. |
-| Pivot/lateral movement mapping | `scripts/pivot_chain.py` | Remove from v2 runtime | Offensive workflow semantics conflict with v2 goals. |
-| Exploit payload references | `references/exploit_payloads.md` | Remove from v2 runtime/docs | Not part of a defensive OSINT framework. |
+| Offensive exploit scanners | `legacy/quarantine/exploit_scanner.py`, `legacy/quarantine/advanced_exploits.py`, `legacy/quarantine/pre_exploit.py`, `legacy/quarantine/sneaky_recon.py` | Removed from v2 runtime | Not compatible with OSINT-only framework scope. |
+| Session and fingerprint tooling | `legacy/quarantine/session_hijacker.py`, `legacy/quarantine/eni_signature.py` | Removed from v2 runtime | Explicitly prohibited by the v2 requirements. |
+| Credential dump tooling | `legacy/quarantine/credential_parser.py`, `legacy/quarantine/infostealer_parser.py`, `legacy/quarantine/leaked_db_hunter.py` | Isolated pending review | Do not process credentials for replay. Retain only high-level exposure metadata if legally approved. |
+| Pivot/lateral movement mapping | `legacy/quarantine/pivot_chain.py` | Removed from v2 runtime | Offensive workflow semantics conflict with v2 goals. |
+| Legacy all-in-one entrypoints | `legacy/quarantine/orchestrator.py`, `legacy/quarantine/tui.py` | Removed from v2 runtime | These entrypoints enabled prohibited modules and must not be used as v2 quick starts. |
+| Exploit payload references | `legacy/quarantine/references/exploit_payloads.md` | Removed from v2 runtime/docs | Not part of a defensive OSINT framework. |
 
 ## Phase 0 — Planning and Guardrails
 
