@@ -5,6 +5,7 @@ Aegis v2 is a production-grade OSINT Investigation Framework built around clear 
 ## Target Runtime
 
 - Python 3.12+
+- Kali Linux 2026.1+ supported for operator workstations
 - FastAPI and Uvicorn
 - PostgreSQL with SQLAlchemy 2.x async sessions
 - Alembic migrations
@@ -111,6 +112,15 @@ The event bus publishes lifecycle and investigation events such as:
 - `report.created`
 
 The first implementation is in-process and async; it is intentionally replaceable with Redis, PostgreSQL LISTEN/NOTIFY, or a message broker later.
+
+### Kali Tool Compatibility
+
+Kali-specific tooling is described by `backend/core/kali_tools.py` and checked
+by `scripts/kali_compatibility.py`. The registry tracks the recent Kali 2026.1
+and 2025.4 additions requested for operator workstations, but it is not an
+autonomous execution layer. Tools with exploitation, post-exploitation,
+credential access, or autonomous MCP behavior remain disabled by default and
+require explicit human approval outside the normal OSINT pipeline.
 
 ## Legacy Isolation Policy
 

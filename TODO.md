@@ -85,6 +85,7 @@
 - [ ] Add backend Dockerfile.
 - [ ] Add frontend Dockerfile.
 - [ ] Add docker compose stack.
-- [ ] Add operator documentation.
+- [x] Add Kali Linux compatibility and recent-tool operator documentation.
+- [ ] Add remaining operator documentation.
 - [ ] Add legacy migration notes.
 - [ ] Add security model documentation.
