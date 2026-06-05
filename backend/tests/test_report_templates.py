@@ -40,6 +40,7 @@ def test_json_renderer_includes_template_metadata_and_notes() -> None:
     payload = json.loads(render_json_report(investigation, [], generated_at=generated_at))
 
     assert payload["meta"]["template"] == "investigation"
+    assert payload["correlation_graph"]["summary"] == {"node_count": 0, "edge_count": 0, "finding_count": 0}
     assert payload["handling_notes"] == list(get_report_template().handling_notes)
 
 
@@ -61,6 +62,8 @@ def test_markdown_and_briefing_renderers_use_template_content() -> None:
     assert "# Aegis Investigation Report" in markdown
     assert get_report_template().executive_summary in markdown
     assert "Do not use this output for exploitation" in markdown
+    assert "## Correlation Graph" in markdown
+    assert "- Findings: 1" in markdown
     assert "# Aegis Investigation Briefing Outline" in briefing
     assert "Slide 3 - Highest-Priority Findings" in briefing
     assert "Passive signal" in briefing
@@ -84,6 +87,7 @@ def test_html_renderer_escapes_persisted_finding_content() -> None:
     assert "&lt;Unsafe investigation&gt;" in html
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
     assert "Use &lt;b&gt;escaped&lt;/b&gt; content." in html
+    assert "Correlation Graph" in html
     assert "<script>alert(1)</script>" not in html
 
 
@@ -105,6 +109,7 @@ def test_pdf_renderer_returns_base64_encoded_pdf_bytes() -> None:
     assert pdf_bytes.startswith(b"%PDF-1.4")
     assert b"PDF investigation" in pdf_bytes
     assert b"PDF passive signal" in pdf_bytes
+    assert b"Correlation Graph" in pdf_bytes
     assert b"Do not use this output for exploitation" in pdf_bytes
 
 

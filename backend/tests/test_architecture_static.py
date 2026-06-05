@@ -151,6 +151,7 @@ def test_v2_markdown_report_renderer_exists() -> None:
     package_text = read("backend/reports/__init__.py")
     renderer_text = read("backend/reports/renderers.py")
     template_text = read("backend/reports/templates.py")
+    correlation_text = read("backend/reports/correlation.py")
 
     assert "ReportFormat" in schema_text
     assert "RenderableReportFormat" in schema_text
@@ -165,11 +166,14 @@ def test_v2_markdown_report_renderer_exists() -> None:
     assert "render_pdf_report" in package_text
     assert "render_json_report" in package_text
     assert "render_briefing_outline" in package_text
+    assert "build_finding_correlation_graph" in package_text
     assert "get_report_template" in package_text
     assert "render_report" in package_text
     assert "class ReportTemplate" in template_text
     assert "INVESTIGATION_REPORT_TEMPLATE" in template_text
     assert "DEFAULT_HANDLING_NOTES" in template_text
+    assert "def build_finding_correlation_graph" in correlation_text
+    assert "ENTITY_KEYS" in correlation_text
     assert "def render_markdown_report" in renderer_text
     assert "def render_html_report" in renderer_text
     assert "def render_json_report" in renderer_text
@@ -178,8 +182,16 @@ def test_v2_markdown_report_renderer_exists() -> None:
     assert "base64.b64encode" in renderer_text
     assert "def render_report" in renderer_text
     assert "get_report_template(template_name)" in renderer_text
+    assert "correlation_graph" in renderer_text
     assert "Unsupported v2 report renderer format" in renderer_text
     assert "Do not use this output for exploitation" in template_text
+
+
+def test_finding_correlation_graph_tests_exist() -> None:
+    test_text = read("backend/tests/test_correlation_graph.py")
+
+    assert "test_finding_correlation_graph_links_findings_sources_severity_types_and_entities" in test_text
+    assert "test_empty_finding_correlation_graph_is_stable" in test_text
 
 
 def test_readme_documents_v2_render_api_contract() -> None:

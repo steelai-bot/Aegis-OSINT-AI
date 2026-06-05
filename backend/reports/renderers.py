@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from html import escape
 from typing import Any
 
+from backend.reports.correlation import build_finding_correlation_graph
 from backend.reports.templates import ReportTemplate, get_report_template
 
 SEVERITY_ORDER = {
@@ -125,6 +126,28 @@ def _handling_note_items(template: ReportTemplate) -> str:
     return "\n".join(f"<li>{_escape_html(note)}</li>" for note in template.handling_notes)
 
 
+def _correlation_summary_lines(graph: Mapping[str, Any]) -> str:
+    summary = graph.get("summary", {})
+    return "\n".join(
+        [
+            f"- Findings: {summary.get('finding_count', 0)}",
+            f"- Nodes: {summary.get('node_count', 0)}",
+            f"- Edges: {summary.get('edge_count', 0)}",
+        ]
+    )
+
+
+def _correlation_summary_items(graph: Mapping[str, Any]) -> str:
+    summary = graph.get("summary", {})
+    return "\n".join(
+        [
+            f"<li><strong>{_escape_html(summary.get('finding_count', 0))}</strong> Findings</li>",
+            f"<li><strong>{_escape_html(summary.get('node_count', 0))}</strong> Nodes</li>",
+            f"<li><strong>{_escape_html(summary.get('edge_count', 0))}</strong> Edges</li>",
+        ]
+    )
+
+
 def _finding_items(findings: Sequence[Any]) -> str:
     if not findings:
         return '<li class="finding finding-info">No findings recorded.</li>'
@@ -151,6 +174,8 @@ def _finding_items(findings: Sequence[Any]) -> str:
 
 def _pdf_text_lines(investigation: Any, findings: Sequence[Any], generated: datetime, template: ReportTemplate) -> list[str]:
     counts = _severity_counts(findings)
+    graph = build_finding_correlation_graph(findings)
+    graph_summary = graph["summary"]
     title = _read_value(investigation, "title", "Untitled investigation")
     status = _read_value(investigation, "status", "unknown")
     lines = [
@@ -181,6 +206,13 @@ def _pdf_text_lines(investigation: Any, findings: Sequence[Any], generated: date
 
     lines.extend(["", "Handling Notes"])
     lines.extend(f"- {note}" for note in template.handling_notes)
+    lines.extend(
+        [
+            "",
+            "Correlation Graph",
+            f"Findings: {graph_summary['finding_count']}  Nodes: {graph_summary['node_count']}  Edges: {graph_summary['edge_count']}",
+        ]
+    )
     return lines
 
 
@@ -236,6 +268,7 @@ def render_json_report(
 
     generated = generated_at or datetime.now(UTC)
     template = get_report_template(template_name)
+    graph = build_finding_correlation_graph(findings)
     payload = {
         "meta": {
             "generated_at": generated.isoformat(),
@@ -249,6 +282,7 @@ def render_json_report(
         },
         "severity_counts": _severity_counts(findings),
         "findings": [_finding_payload(finding) for finding in findings],
+        "correlation_graph": graph,
         "handling_notes": _handling_notes(template),
     }
     return json.dumps(payload, indent=2, default=str)
@@ -266,6 +300,7 @@ def render_html_report(
     generated = generated_at or datetime.now(UTC)
     template = get_report_template(template_name)
     counts = _severity_counts(findings)
+    graph = build_finding_correlation_graph(findings)
     title = _escape_html(_read_value(investigation, "title", "Untitled investigation"))
     status = _escape_html(_read_value(investigation, "status", "unknown"))
 
@@ -382,6 +417,12 @@ def render_html_report(
       </ul>
     </section>
     <section>
+      <h2>Correlation Graph</h2>
+      <ul class="severity-grid">
+        {_correlation_summary_items(graph)}
+      </ul>
+    </section>
+    <section>
       <h2>Findings</h2>
       <ul class="findings">
         {_finding_items(findings)}
@@ -425,6 +466,7 @@ def render_markdown_report(
     generated = generated_at or datetime.now(UTC)
     template = get_report_template(template_name)
     counts = _severity_counts(findings)
+    graph = build_finding_correlation_graph(findings)
     title = _escape_markdown(_read_value(investigation, "title", "Untitled investigation"))
     status = _escape_markdown(_read_value(investigation, "status", "unknown"))
 
@@ -449,6 +491,10 @@ Status: {status}
 ## Findings
 
 {_finding_lines(findings)}
+
+## Correlation Graph
+
+{_correlation_summary_lines(graph)}
 
 ## Handling Notes
 
