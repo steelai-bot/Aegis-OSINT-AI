@@ -94,6 +94,7 @@ Initial providers:
 - OpenAI
 - Anthropic
 - Gemini
+- Hugging Face Inference Providers
 - Ollama
 
 ### Storage

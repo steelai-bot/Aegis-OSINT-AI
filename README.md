@@ -49,7 +49,7 @@ au-osint-recon/
 │   ├── exploit_scanner.py       # SQLi, XSS, SSRF, LFI, RCE, JWT, GraphQL scanner
 │   ├── paste_scraper.py         # Pastebin / GitHub Gist / paste site scraper
 │   ├── credential_parser.py     # Parse & normalize leaked credential dumps
-│   ├── report_generator.py      # HTML dashboard / JSON / CSV report engine
+│   ├── report_generator.py      # HTML / JSON / CSV / Markdown report engine
 │   ├── pdf_extractor.py         # PDF data extraction with 30+ AU regex patterns
 │   ├── infostealer_parser.py    # Infostealer log parser with date-range filtering
 │   ├── leaked_db_hunter.py      # Multi-source breach API + paid combo market intel
@@ -180,7 +180,7 @@ Processes raw credential dumps into structured, deduplicated output.
 ---
 
 ### 9. `report_generator.py` — Report Engine
-Produces three output formats from a unified findings payload.
+Produces five output formats from a unified findings payload.
 
 - **HTML** — Interactive dark-theme dashboard with severity tabs, timeline, risk score
 - **JSON** — Structured API-consumable report with metadata and risk breakdown
@@ -372,7 +372,24 @@ HTTP_PROXY=                        # optional upstream proxy
 HF_TOKEN=your_huggingface_token    # optional, for gated models
 HF_MODEL=                          # override auto-selected model
 HF_CACHE_DIR=./models              # local model cache directory
+AEGIS_LLM_PROVIDER=huggingface     # optional v2 provider selector
+AEGIS_HUGGINGFACE_API_KEY=hf_...   # optional v2 hosted inference provider key
 ```
+
+### Aegis v2 LLM provider settings
+
+The v2 backend selects one LLM provider with `AEGIS_LLM_PROVIDER`. Supported values are `disabled`, `openai`, `anthropic`, `gemini`, `huggingface`, and `ollama`.
+
+```env
+AEGIS_LLM_PROVIDER=openai
+AEGIS_OPENAI_API_KEY=sk-...
+AEGIS_ANTHROPIC_API_KEY=sk-ant-...
+AEGIS_GEMINI_API_KEY=...
+AEGIS_HUGGINGFACE_API_KEY=hf_...
+AEGIS_OLLAMA_BASE_URL=http://localhost:11434
+```
+
+Provider keys are read from environment variables only. Do not commit `.env` files or paste API keys into source code.
 
 ---
 
@@ -532,6 +549,11 @@ python3 scripts/ai_modules.py --detect-hardware
 | `TELEGRAM_API_ID` | Telegram MTProto | my.telegram.org | Free |
 | `TELEGRAM_API_HASH` | Telegram MTProto | my.telegram.org | Free |
 | `HF_TOKEN` | HuggingFace (gated models) | huggingface.co/settings/tokens | Free |
+| `AEGIS_OPENAI_API_KEY` | OpenAI API | platform.openai.com/api-keys | Paid |
+| `AEGIS_ANTHROPIC_API_KEY` | Anthropic API | console.anthropic.com | Paid |
+| `AEGIS_GEMINI_API_KEY` | Google Gemini API | aistudio.google.com/app/apikey | Free/Paid |
+| `AEGIS_HUGGINGFACE_API_KEY` | Hugging Face Inference Providers | huggingface.co/settings/tokens | Free/Paid |
+| `AEGIS_OLLAMA_BASE_URL` | Ollama local runtime | ollama.com | Local |
 
 ---
 
@@ -561,6 +583,27 @@ Interactive dark-theme dashboard with:
 
 ### CSV Export
 Flat spreadsheet with columns: `title, severity, category, source, date_found, summary, target, raw_data`
+
+### Markdown Report
+Document-ready report with executive summary, risk posture, findings, timeline, and handling notes.
+
+### Briefing Outline
+Presentation-ready Markdown outline with slide claims, proof objects, top findings, timeline focus, and passive next steps.
+
+### v2 Render API
+The v2 backend can render persisted investigation findings without writing a file:
+
+```http
+POST /investigations/{investigation_id}/reports/render
+```
+
+Request:
+
+```json
+{ "format": "markdown" }
+```
+
+Supported render formats are `json`, `markdown`, and `briefing`. `html`, `csv`, and `pdf` remain report record formats until their v2 renderers are implemented.
 
 ---
 

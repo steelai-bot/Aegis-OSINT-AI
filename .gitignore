@@ -22,6 +22,8 @@ models/
 
 # Reports output
 reports/
+!backend/reports/
+!backend/reports/*.py
 
 # Environment / secrets
 .env
