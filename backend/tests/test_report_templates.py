@@ -1,5 +1,6 @@
 """Report template contract tests."""
 
+import base64
 import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ from backend.reports import (
     render_html_report,
     render_json_report,
     render_markdown_report,
+    render_pdf_report,
 )
 
 
@@ -83,6 +85,27 @@ def test_html_renderer_escapes_persisted_finding_content() -> None:
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
     assert "Use &lt;b&gt;escaped&lt;/b&gt; content." in html
     assert "<script>alert(1)</script>" not in html
+
+
+def test_pdf_renderer_returns_base64_encoded_pdf_bytes() -> None:
+    generated_at = datetime(2026, 6, 5, tzinfo=UTC)
+    investigation = SimpleNamespace(title="PDF investigation", status="pending")
+    findings = [
+        {
+            "source": "unit-test",
+            "severity": "medium",
+            "confidence": 0.7,
+            "data": {"title": "PDF passive signal", "summary": "A safe PDF finding."},
+        }
+    ]
+
+    encoded_pdf = render_pdf_report(investigation, findings, generated_at=generated_at)
+    pdf_bytes = base64.b64decode(encoded_pdf)
+
+    assert pdf_bytes.startswith(b"%PDF-1.4")
+    assert b"PDF investigation" in pdf_bytes
+    assert b"PDF passive signal" in pdf_bytes
+    assert b"Do not use this output for exploitation" in pdf_bytes
 
 
 def test_unknown_report_template_raises_clear_error() -> None:

@@ -65,7 +65,7 @@
 - [x] Add Markdown renderer.
 - [x] Add HTML renderer.
 - [x] Add JSON renderer.
-- [ ] Add PDF renderer.
+- [x] Add PDF renderer.
 - [ ] Add finding correlation graph.
 
 ## Phase 7 — Frontend

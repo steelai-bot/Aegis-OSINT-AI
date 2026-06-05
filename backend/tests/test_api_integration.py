@@ -1,5 +1,6 @@
 """FastAPI integration tests with an isolated async SQLite database."""
 
+import base64
 from collections.abc import AsyncIterator
 
 import pytest
@@ -123,6 +124,15 @@ async def test_investigation_target_finding_and_report_flow(client: AsyncClient)
     assert html_rendered["format"] == "html"
     assert "<!doctype html>" in html_rendered["content"]
     assert "Passive DNS signal" in html_rendered["content"]
+
+    pdf_response = await client.post(
+        f"/investigations/{investigation['id']}/reports/render",
+        json={"format": "pdf"},
+    )
+    assert pdf_response.status_code == 200
+    pdf_rendered = pdf_response.json()
+    assert pdf_rendered["format"] == "pdf"
+    assert base64.b64decode(pdf_rendered["content"]).startswith(b"%PDF-1.4")
 
 
 async def test_target_creation_returns_404_for_missing_investigation(client: AsyncClient) -> None:
