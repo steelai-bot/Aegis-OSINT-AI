@@ -246,6 +246,31 @@ def test_phase_two_api_integration_tests_exist() -> None:
     assert "aiosqlite>=0.20.0" in requirements_text
 
 
+def test_agent_persistence_models_and_workflow_exist() -> None:
+    models_text = read("backend/models/__init__.py")
+    context_model_text = read("backend/models/agent_context.py")
+    task_model_text = read("backend/models/agent_task_result.py")
+    service_text = read("backend/services/agent_persistence.py")
+    engine_text = read("backend/services/investigation_engine.py")
+    route_text = read("backend/api/routes/agents.py")
+    migration_text = read("alembic/versions/0002_agent_persistence.py")
+    integration_test_text = read("backend/tests/test_api_integration.py")
+
+    assert "AgentContextSnapshot" in models_text
+    assert "AgentTaskResult" in models_text
+    assert "class AgentContextSnapshot" in context_model_text
+    assert "class AgentTaskResult" in task_model_text
+    assert "class AgentPersistenceService" in service_text
+    assert "create_context_snapshot" in service_text
+    assert "create_task_result" in service_text
+    assert "AgentPersistenceService(session)" in engine_text
+    assert "task_result_id" in engine_text
+    assert "InvestigationEngine(session=session)" in route_text
+    assert "agent_context_snapshots" in migration_text
+    assert "agent_task_results" in migration_text
+    assert "test_agent_run_persists_task_result_metadata" in integration_test_text
+
+
 def test_initial_plugin_modules_exist() -> None:
     plugin_files = {
         "backend/plugins/whois.py": "class WhoisPlugin",

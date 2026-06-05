@@ -16,6 +16,8 @@ env/
 
 # Models (large GGUF files)
 models/
+!backend/models/
+!backend/models/*.py
 *.gguf
 *.bin
 *.safetensors

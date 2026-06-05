@@ -34,8 +34,8 @@
 
 ## Phase 3 — Agent System
 
-- [ ] Implement investigation context persistence.
-- [ ] Implement task result storage.
+- [x] Implement investigation context persistence.
+- [x] Implement task result storage.
 - [ ] Implement event-driven agent workflow.
 - [ ] Add agent unit tests.
 

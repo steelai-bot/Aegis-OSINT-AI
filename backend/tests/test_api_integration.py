@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 from backend.api.app import create_app
-from backend.models import Finding, Investigation, Report, Target
+from backend.models import AgentContextSnapshot, AgentTaskResult, Finding, Investigation, Report, Target
 from backend.models.base import Base
 from backend.storage.database import get_db_session
 
@@ -28,7 +28,14 @@ async def client() -> AsyncIterator[AsyncClient]:
     async with engine.begin() as connection:
         await connection.run_sync(
             Base.metadata.create_all,
-            tables=[Investigation.__table__, Target.__table__, Finding.__table__, Report.__table__],
+            tables=[
+                Investigation.__table__,
+                Target.__table__,
+                Finding.__table__,
+                Report.__table__,
+                AgentContextSnapshot.__table__,
+                AgentTaskResult.__table__,
+            ],
         )
 
     async def override_db_session() -> AsyncIterator[AsyncSession]:
@@ -120,3 +127,25 @@ async def test_target_creation_returns_404_for_missing_investigation(client: Asy
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Investigation not found"
+
+
+async def test_agent_run_persists_task_result_metadata(client: AsyncClient) -> None:
+    investigation_response = await client.post("/investigations", json={"title": "Agent persistence"})
+    investigation_id = investigation_response.json()["id"]
+
+    response = await client.post(
+        "/agents/run",
+        json={
+            "investigation_id": investigation_id,
+            "target": "example.com",
+            "target_type": "domain",
+            "metadata": {"source": "integration-test"},
+        },
+    )
+
+    assert response.status_code == 200
+    results = response.json()
+    assert [item["agent_name"] for item in results] == ["recon", "domain", "threat_intel", "report"]
+    assert all(item["status"] == "completed" for item in results)
+    assert all(item["metadata"]["task_result_id"] for item in results)
+    assert results[-1]["metadata"]["finding_count"] == 2
