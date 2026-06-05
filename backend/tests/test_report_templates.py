@@ -6,7 +6,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.reports import get_report_template, render_briefing_outline, render_json_report, render_markdown_report
+from backend.reports import (
+    get_report_template,
+    render_briefing_outline,
+    render_html_report,
+    render_json_report,
+    render_markdown_report,
+)
 
 
 def test_default_report_template_defines_handling_notes_and_briefing_slides() -> None:
@@ -56,6 +62,27 @@ def test_markdown_and_briefing_renderers_use_template_content() -> None:
     assert "# Aegis Investigation Briefing Outline" in briefing
     assert "Slide 3 - Highest-Priority Findings" in briefing
     assert "Passive signal" in briefing
+
+
+def test_html_renderer_escapes_persisted_finding_content() -> None:
+    generated_at = datetime(2026, 6, 5, tzinfo=UTC)
+    investigation = SimpleNamespace(title="<Unsafe investigation>", status="pending")
+    findings = [
+        {
+            "source": "unit-test",
+            "severity": "high",
+            "confidence": 0.9,
+            "data": {"title": "<script>alert(1)</script>", "summary": "Use <b>escaped</b> content."},
+        }
+    ]
+
+    html = render_html_report(investigation, findings, generated_at=generated_at)
+
+    assert "<!doctype html>" in html
+    assert "&lt;Unsafe investigation&gt;" in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert "Use &lt;b&gt;escaped&lt;/b&gt; content." in html
+    assert "<script>alert(1)</script>" not in html
 
 
 def test_unknown_report_template_raises_clear_error() -> None:

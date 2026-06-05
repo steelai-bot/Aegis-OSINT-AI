@@ -65,7 +65,7 @@ Request:
 { "format": "markdown" }
 ```
 
-Supported render formats are `json`, `markdown`, and `briefing`. `html`, `csv`, and `pdf` remain report record formats until their v2 renderers are implemented.
+Supported render formats are `html`, `json`, `markdown`, and `briefing`. `csv` and `pdf` remain report record formats until their v2 renderers are implemented.
 
 ## Kali Linux Compatibility
 
