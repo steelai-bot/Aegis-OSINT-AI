@@ -271,6 +271,22 @@ def test_agent_persistence_models_and_workflow_exist() -> None:
     assert "test_agent_run_persists_task_result_metadata" in integration_test_text
 
 
+def test_event_driven_agent_workflow_and_unit_tests_exist() -> None:
+    engine_text = read("backend/services/investigation_engine.py")
+    architecture_text = read("ARCHITECTURE.md")
+    unit_test_text = read("backend/tests/test_agents_unit.py")
+
+    assert "class WorkflowStep" in engine_text
+    assert "workflow.started" in engine_text
+    assert "workflow.step.ready" in engine_text
+    assert "workflow.step.completed" in engine_text
+    assert "workflow.completed" in engine_text
+    assert "missing_dependencies" in engine_text
+    assert "workflow.step.ready" in architecture_text
+    assert "test_base_agent_publishes_lifecycle_events" in unit_test_text
+    assert "test_investigation_engine_emits_workflow_events_in_agent_order" in unit_test_text
+
+
 def test_initial_plugin_modules_exist() -> None:
     plugin_files = {
         "backend/plugins/whois.py": "class WhoisPlugin",
