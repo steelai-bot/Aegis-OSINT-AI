@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
-from sqlalchemy import Float, ForeignKey, String
+from sqlalchemy import JSON, Float, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,7 +20,7 @@ class Finding(TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     confidence: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     severity: Mapped[str] = mapped_column(String(50), default="info", nullable=False, index=True)
-    data: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    data: Mapped[dict] = mapped_column(JSON().with_variant(JSONB(), "postgresql"), default=dict, nullable=False)
 
     investigation = relationship("Investigation", back_populates="findings")
     target = relationship("Target", back_populates="findings")

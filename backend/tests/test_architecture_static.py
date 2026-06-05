@@ -235,6 +235,17 @@ def test_phase_two_api_routes_exist() -> None:
             assert marker in content
 
 
+def test_phase_two_api_integration_tests_exist() -> None:
+    test_text = read("backend/tests/test_api_integration.py")
+    requirements_text = read("requirements.txt")
+
+    assert "ASGITransport" in test_text
+    assert "sqlite+aiosqlite://" in test_text
+    assert "app.dependency_overrides[get_db_session]" in test_text
+    assert "test_investigation_target_finding_and_report_flow" in test_text
+    assert "aiosqlite>=0.20.0" in requirements_text
+
+
 def test_initial_plugin_modules_exist() -> None:
     plugin_files = {
         "backend/plugins/whois.py": "class WhoisPlugin",

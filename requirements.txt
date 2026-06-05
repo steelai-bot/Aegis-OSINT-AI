@@ -113,5 +113,6 @@ GPUtil>=1.4.0                   # GPU detection (optional, graceful fallback)
 loguru>=0.7.2                   # Structured logging
 
 # ── Testing ───────────────────────────────────────────────────
+aiosqlite>=0.20.0
 pytest>=8.2.0
 pytest-asyncio>=0.23.0
