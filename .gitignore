@@ -32,6 +32,9 @@ reports/
 *.env
 config.local.py
 
+# Aegis local runtime state
+.aegis/
+
 # Tor
 *.pid
 

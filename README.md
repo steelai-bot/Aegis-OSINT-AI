@@ -68,6 +68,29 @@ npm run dev
 Set `NEXT_PUBLIC_AEGIS_API_URL=http://localhost:8000` to connect server-rendered
 pages to the backend. Without it, the console renders deterministic sample data.
 
+## Local Lifecycle CLI
+
+Use the lifecycle helper for local setup and dev server management:
+
+```bash
+python scripts/dev_lifecycle.py setup
+python scripts/dev_lifecycle.py start
+python scripts/dev_lifecycle.py status
+python scripts/dev_lifecycle.py stop
+```
+
+The helper creates `.venv`, installs backend runtime dependencies, installs
+frontend dependencies, writes safe local defaults to `.env` and
+`frontend/.env.local`, and stores dev server process state in `.aegis/`.
+`stop` only terminates the backend and frontend processes that were started by
+this helper. It does not kill unrelated localhost processes.
+
+Run diagnostics without starting servers:
+
+```bash
+python scripts/dev_lifecycle.py doctor
+```
+
 ## Docker Compose
 
 Run the local stack:
@@ -145,7 +168,13 @@ Supported `AEGIS_LLM_PROVIDER` values are `disabled`, `openai`, `anthropic`,
 
 ## Setup
 
-Install dependencies and run local checks:
+Install dependencies with the lifecycle helper:
+
+```bash
+python scripts/dev_lifecycle.py setup
+```
+
+Or install dependencies manually and run local checks:
 
 ```bash
 pip install -r requirements.txt

@@ -5,6 +5,26 @@ defensive OSINT work only.
 
 ## Local Backend
 
+Recommended local setup:
+
+```bash
+python scripts/dev_lifecycle.py setup
+python scripts/dev_lifecycle.py start
+python scripts/dev_lifecycle.py status
+```
+
+Stop only the lifecycle-managed backend and frontend processes:
+
+```bash
+python scripts/dev_lifecycle.py stop
+```
+
+The lifecycle helper creates `.venv`, installs backend runtime dependencies,
+installs frontend dependencies, creates safe local env defaults, and stores
+process state in `.aegis/devserver.json`.
+
+Manual backend setup remains available:
+
 1. Create a Python 3.12 virtual environment.
 2. Install dependencies:
 
@@ -40,6 +60,8 @@ curl http://localhost:8000/api/v1/metrics
 ```
 
 ## Local Frontend
+
+The lifecycle helper starts the frontend automatically. Manual frontend setup:
 
 ```bash
 cd frontend
