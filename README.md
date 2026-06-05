@@ -1,9 +1,25 @@
-# AU-OSINT-RECON
-### Australian Breach Intelligence & OSINT Platform
+# Aegis v2 — OSINT Investigation Framework
 
-> Multi-module red team toolkit for Australian data breach discovery, credential hunting,
-> infostealer log analysis, exploit scanning, and AI-assisted intelligence analysis.
-> Designed for offensive security research and corporate threat intelligence.
+> Aegis is being migrated from the legacy AU-OSINT-RECON scripts into a
+> production-grade, defensive OSINT investigation framework. The v2 runtime is
+> focused on reconnaissance, threat intelligence, investigation workflows,
+> evidence persistence, and reporting. Offensive exploitation workflows, session
+> hijacking, credential replay, browser fingerprint cloning, hardcoded targets,
+> and banking-target-specific code are excluded from the v2 architecture.
+
+## Migration Status
+
+The first migration phase adds planning documents and a new backend foundation
+while keeping legacy scripts untouched for review and selective extraction. See
+`ARCHITECTURE.md`, `MIGRATION_PLAN.md`, and `TODO.md` for the incremental plan.
+
+---
+
+## Legacy Documentation
+
+The content below describes the pre-v2 script toolkit and is retained only as
+migration inventory until safe OSINT logic is extracted. It is not the target
+architecture for Aegis v2.
 
 ---
 
