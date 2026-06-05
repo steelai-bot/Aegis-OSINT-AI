@@ -61,7 +61,7 @@
 
 ## Phase 6 — Reporting and Correlation
 
-- [ ] Add report templates.
+- [x] Add report templates.
 - [x] Add Markdown renderer.
 - [ ] Add HTML renderer.
 - [x] Add JSON renderer.
