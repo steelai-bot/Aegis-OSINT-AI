@@ -70,15 +70,15 @@
 
 ## Phase 7 — Frontend
 
-- [ ] Initialize Next.js 16 frontend.
-- [ ] Add dashboard page.
-- [ ] Add investigations page.
-- [ ] Add targets page.
-- [ ] Add findings page.
-- [ ] Add reports page.
-- [ ] Add settings page.
-- [ ] Add plugins page.
-- [ ] Add websocket live timeline.
+- [x] Initialize Next.js 16 frontend.
+- [x] Add dashboard page.
+- [x] Add investigations page.
+- [x] Add targets page.
+- [x] Add findings page.
+- [x] Add reports page.
+- [x] Add settings page.
+- [x] Add plugins page.
+- [x] Add websocket live timeline.
 
 ## Phase 8 — Docker and Docs
 
