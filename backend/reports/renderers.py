@@ -6,10 +6,11 @@ They do not enrich, scan, scrape, or contact targets.
 
 from __future__ import annotations
 
+import base64
 import json
-from html import escape
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from html import escape
 from typing import Any
 
 from backend.reports.templates import ReportTemplate, get_report_template
@@ -49,6 +50,32 @@ def _escape_markdown(value: Any) -> str:
 
 def _escape_html(value: Any) -> str:
     return escape(str(value or "").strip(), quote=True)
+
+
+def _escape_pdf_text(value: Any) -> str:
+    return str(value or "").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)").strip()
+
+
+def _wrap_text(value: str, width: int = 92) -> list[str]:
+    words = value.split()
+    if not words:
+        return [""]
+
+    lines: list[str] = []
+    current: list[str] = []
+    current_length = 0
+    for word in words:
+        next_length = current_length + len(word) + (1 if current else 0)
+        if current and next_length > width:
+            lines.append(" ".join(current))
+            current = [word]
+            current_length = len(word)
+        else:
+            current.append(word)
+            current_length = next_length
+    if current:
+        lines.append(" ".join(current))
+    return lines
 
 
 def _finding_lines(findings: Sequence[Any]) -> str:
@@ -120,6 +147,82 @@ def _finding_items(findings: Sequence[Any]) -> str:
 </li>"""
         )
     return "\n".join(items)
+
+
+def _pdf_text_lines(investigation: Any, findings: Sequence[Any], generated: datetime, template: ReportTemplate) -> list[str]:
+    counts = _severity_counts(findings)
+    title = _read_value(investigation, "title", "Untitled investigation")
+    status = _read_value(investigation, "status", "unknown")
+    lines = [
+        template.title,
+        f"Generated: {generated.isoformat()}",
+        f"Investigation: {title}",
+        f"Status: {status}",
+        "",
+        "Executive Summary",
+        template.executive_summary,
+        "",
+        "Severity Overview",
+        f"Critical: {counts['critical']}  High: {counts['high']}  Medium: {counts['medium']}  Low: {counts['low']}  Info: {counts['info']}",
+        "",
+        "Findings",
+    ]
+    if findings:
+        for finding in findings[:24]:
+            severity = str(_read_value(finding, "severity", "info")).upper()
+            source = _read_value(finding, "source", "unknown")
+            confidence = _read_value(finding, "confidence", 0.0)
+            lines.append(f"- [{severity}] {_finding_title(finding)} ({source}, confidence {confidence})")
+            summary = _finding_summary(finding)
+            if summary:
+                lines.append(f"  {summary}")
+    else:
+        lines.append("- No findings recorded.")
+
+    lines.extend(["", "Handling Notes"])
+    lines.extend(f"- {note}" for note in template.handling_notes)
+    return lines
+
+
+def _build_pdf(lines: Sequence[str]) -> bytes:
+    text_operations = ["BT", "/F1 10 Tf", "50 760 Td", "14 TL"]
+    first_line = True
+    for raw_line in lines:
+        wrapped_lines = _wrap_text(str(raw_line)) if raw_line else [""]
+        for line in wrapped_lines:
+            if first_line:
+                first_line = False
+            else:
+                text_operations.append("T*")
+            text_operations.append(f"({_escape_pdf_text(line)}) Tj")
+    text_operations.append("ET")
+    stream = "\n".join(text_operations).encode("latin-1", errors="replace")
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{index} 0 obj\n".encode("ascii"))
+        pdf.extend(obj)
+        pdf.extend(b"\nendobj\n")
+
+    xref_offset = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    pdf.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode("ascii")
+    )
+    return bytes(pdf)
 
 
 def render_json_report(
@@ -295,6 +398,21 @@ def render_html_report(
 </html>"""
 
 
+def render_pdf_report(
+    investigation: Any,
+    findings: Sequence[Any],
+    *,
+    generated_at: datetime | None = None,
+    template_name: str = "investigation",
+) -> str:
+    """Render a base64-encoded PDF investigation report."""
+
+    generated = generated_at or datetime.now(UTC)
+    template = get_report_template(template_name)
+    lines = _pdf_text_lines(investigation, findings, generated, template)
+    return base64.b64encode(_build_pdf(lines)).decode("ascii")
+
+
 def render_markdown_report(
     investigation: Any,
     findings: Sequence[Any],
@@ -397,4 +515,6 @@ def render_report(
         return render_markdown_report(investigation, findings, generated_at=generated_at, template_name=template_name)
     if normalized == "briefing":
         return render_briefing_outline(investigation, findings, generated_at=generated_at, template_name=template_name)
+    if normalized == "pdf":
+        return render_pdf_report(investigation, findings, generated_at=generated_at, template_name=template_name)
     raise ValueError(f"Unsupported v2 report renderer format: {report_format}")

@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 ReportFormat = Literal["html", "json", "csv", "markdown", "briefing", "pdf"]
-RenderableReportFormat = Literal["html", "json", "markdown", "briefing"]
+RenderableReportFormat = Literal["html", "json", "markdown", "briefing", "pdf"]
 
 
 class ReportCreate(BaseModel):

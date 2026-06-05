@@ -162,6 +162,7 @@ def test_v2_markdown_report_renderer_exists() -> None:
     assert "render_report(payload.format, investigation, findings)" in route_text
     assert "render_html_report" in package_text
     assert "render_markdown_report" in package_text
+    assert "render_pdf_report" in package_text
     assert "render_json_report" in package_text
     assert "render_briefing_outline" in package_text
     assert "get_report_template" in package_text
@@ -173,6 +174,8 @@ def test_v2_markdown_report_renderer_exists() -> None:
     assert "def render_html_report" in renderer_text
     assert "def render_json_report" in renderer_text
     assert "def render_briefing_outline" in renderer_text
+    assert "def render_pdf_report" in renderer_text
+    assert "base64.b64encode" in renderer_text
     assert "def render_report" in renderer_text
     assert "get_report_template(template_name)" in renderer_text
     assert "Unsupported v2 report renderer format" in renderer_text
@@ -185,8 +188,9 @@ def test_readme_documents_v2_render_api_contract() -> None:
     assert "### v2 Render API" in text
     assert "POST /investigations/{investigation_id}/reports/render" in text
     assert '{ "format": "markdown" }' in text
-    assert "Supported render formats are `html`, `json`, `markdown`, and `briefing`." in text
-    assert "`csv` and `pdf` remain report record formats" in text
+    assert "Supported render formats are `html`, `json`, `markdown`, `briefing`, and `pdf`." in text
+    assert "PDF render responses return base64-encoded PDF bytes" in text
+    assert "`csv` remains a report record format" in text
 
 
 def test_kali_compatibility_registry_exists() -> None:
