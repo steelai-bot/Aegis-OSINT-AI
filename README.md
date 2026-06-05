@@ -11,9 +11,10 @@ automation are excluded from the runnable v2 application.
 ## Migration Status
 
 The current branch contains the v2 backend foundation, API skeleton,
-provider abstraction, initial OSINT plugins, report renderers, and Kali
-operator compatibility checks. See `ARCHITECTURE.md`, `MIGRATION_PLAN.md`,
-and `TODO.md` for the phased migration plan.
+provider abstraction, initial OSINT plugins, report renderers, Next.js
+frontend console, Docker stack, and Kali operator compatibility checks. See
+`ARCHITECTURE.md`, `MIGRATION_PLAN.md`, and `TODO.md` for the phased migration
+plan.
 
 Legacy modules that conflict with the v2 scope have been moved to
 `legacy/quarantine/` for extraction review. They are not imported by the
@@ -28,6 +29,8 @@ backend and are not part of the supported runtime.
 - Pydantic v2 settings and schemas
 - httpx for async integrations
 - Configurable LLM providers: OpenAI, Anthropic, Gemini, Hugging Face, Ollama
+- Next.js 16 frontend console
+- Docker Compose stack for local API, frontend, and PostgreSQL pgvector
 - Kali Linux 2026.1+ supported for operator workstations
 
 ## Backend API
@@ -47,6 +50,46 @@ Implemented route groups:
 - `/findings`
 - `/reports`
 - `/agents/run`
+
+When the API is run with `AEGIS_API_PREFIX=/api/v1`, these routes are exposed
+under `/api/v1`.
+
+## Frontend
+
+The frontend lives in `frontend/` and uses Next.js 16, TypeScript, Tailwind,
+and `lucide-react`.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Set `NEXT_PUBLIC_AEGIS_API_URL=http://localhost:8000` to connect server-rendered
+pages to the backend. Without it, the console renders deterministic sample data.
+
+## Docker Compose
+
+Run the local stack:
+
+```bash
+docker compose up --build
+```
+
+Run migrations:
+
+```bash
+docker compose run --rm backend alembic upgrade head
+```
+
+Local service URLs:
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8000/api/v1`
+- PostgreSQL: `localhost:5432`
+
+See `docs/operator_guide.md`, `docs/security_model.md`, and
+`docs/legacy_migration_notes.md` before shared deployments.
 
 ## Reporting
 
@@ -108,6 +151,14 @@ Install dependencies and run local checks:
 pip install -r requirements.txt
 python3 scripts/kali_compatibility.py --json
 python3 -m pytest backend/tests
+```
+
+Frontend checks:
+
+```bash
+cd frontend
+npm run lint
+npm run build
 ```
 
 If pytest is not installed, the static architecture tests can be imported

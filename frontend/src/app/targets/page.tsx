@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/page-header";
 import { formatDate } from "@/lib/format";
 import { getInvestigations, getTargets } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 export default async function TargetsPage() {
   const [investigations, targets] = await Promise.all([getInvestigations(), getTargets()]);
   const investigationTitles = new Map(investigations.map((investigation) => [investigation.id, investigation.title]));

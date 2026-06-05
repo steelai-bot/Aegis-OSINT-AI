@@ -2,6 +2,8 @@ import { Settings } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 
+export const dynamic = "force-dynamic";
+
 const settings = [
   { label: "Backend API URL", value: process.env.NEXT_PUBLIC_AEGIS_API_URL ?? "sample data mode" },
   { label: "Timeline websocket", value: process.env.NEXT_PUBLIC_AEGIS_WS_URL ?? "fallback local stream" },

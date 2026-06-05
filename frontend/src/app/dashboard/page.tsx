@@ -7,6 +7,8 @@ import { StatusPill } from "@/components/status-pill";
 import { formatDate, formatPercent } from "@/lib/format";
 import { getFindings, getInvestigations, getReports, getTargets, getTimelineEvents } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const [investigations, targets, findings, reports] = await Promise.all([
     getInvestigations(),

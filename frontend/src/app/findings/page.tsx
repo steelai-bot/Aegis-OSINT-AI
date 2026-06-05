@@ -5,6 +5,8 @@ import { StatusPill } from "@/components/status-pill";
 import { formatDate, formatPercent } from "@/lib/format";
 import { getFindings, getTargets } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 export default async function FindingsPage() {
   const [findings, targets] = await Promise.all([getFindings(), getTargets()]);
   const targetValues = new Map(targets.map((target) => [target.id, target.value]));
