@@ -63,7 +63,7 @@
 
 - [x] Add report templates.
 - [x] Add Markdown renderer.
-- [ ] Add HTML renderer.
+- [x] Add HTML renderer.
 - [x] Add JSON renderer.
 - [ ] Add PDF renderer.
 - [ ] Add finding correlation graph.

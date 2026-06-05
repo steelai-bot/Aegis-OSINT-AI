@@ -114,6 +114,16 @@ async def test_investigation_target_finding_and_report_flow(client: AsyncClient)
     assert "Example investigation" in rendered["content"]
     assert "Passive DNS signal" in rendered["content"]
 
+    html_response = await client.post(
+        f"/investigations/{investigation['id']}/reports/render",
+        json={"format": "html"},
+    )
+    assert html_response.status_code == 200
+    html_rendered = html_response.json()
+    assert html_rendered["format"] == "html"
+    assert "<!doctype html>" in html_rendered["content"]
+    assert "Passive DNS signal" in html_rendered["content"]
+
 
 async def test_target_creation_returns_404_for_missing_investigation(client: AsyncClient) -> None:
     response = await client.post(
