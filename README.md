@@ -13,6 +13,24 @@ The first migration phase adds planning documents and a new backend foundation
 while keeping legacy scripts untouched for review and selective extraction. See
 `ARCHITECTURE.md`, `MIGRATION_PLAN.md`, and `TODO.md` for the incremental plan.
 
+## Kali Linux Compatibility
+
+Aegis v2 is compatible with Kali Linux 2026.1+ for the backend runtime and
+operator-guided tool discovery. Run the compatibility check on Kali before an
+engagement:
+
+```bash
+python3 scripts/kali_compatibility.py
+python3 scripts/kali_compatibility.py --json
+```
+
+The check covers the 11 new tools from the latest Kali 2026.1 and 2025.4
+release notes: AdaptixC2, Atomic-Operator, Fluxion, GEF, MetasploitMCP,
+SSTImap, WPProbe, XSStrike, bpf-linker, evil-winrm-py, and hexstrike-ai.
+See `docs/kali_compatibility.md` for the package registry, install command,
+and safety policies. Offensive or autonomous tools are detected only and remain
+disabled by default in the Aegis OSINT pipeline.
+
 ---
 
 ## Legacy Documentation
@@ -310,6 +328,8 @@ The wizard automatically:
 - Checks every Python dependency against minimum required versions
 - Offers to install missing packages and upgrade outdated ones
 - Checks system tools (Tor, Tesseract, Git)
+- Supports a Kali-specific compatibility check for Kali 2026.1+ and recent Kali
+  tool packages via `scripts/kali_compatibility.py`
 - Guides llama-cpp-python compilation (CPU-only, no CUDA needed)
 - Creates `.env` template with all API key slots
 - Creates `reports/`, `models/`, `logs/`, `exports/` directories

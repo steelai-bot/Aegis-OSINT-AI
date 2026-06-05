@@ -146,6 +146,42 @@ def test_readme_documents_v2_render_api_contract() -> None:
     assert "`html`, `csv`, and `pdf` remain report record formats" in text
 
 
+def test_kali_compatibility_registry_exists() -> None:
+    registry_text = read("backend/core/kali_tools.py")
+    cli_text = read("scripts/kali_compatibility.py")
+    docs_text = read("docs/kali_compatibility.md")
+    readme_text = read("README.md")
+    architecture_text = read("ARCHITECTURE.md")
+
+    assert 'KALI_MIN_VERSION = "2026.1"' in registry_text
+    assert "KALI_RECENT_TOOLS" in registry_text
+    assert "detect_kali" in registry_text
+    assert "inspect_recent_kali_tools" in registry_text
+    assert "apt_install_command" in registry_text
+    assert "https://www.kali.org/blog/kali-linux-2026-1-release/" in registry_text
+    assert "https://www.kali.org/blog/kali-linux-2025-4-release/" in registry_text
+    for package in [
+        "adaptixc2",
+        "atomic-operator",
+        "fluxion",
+        "gef",
+        "metasploit-mcp",
+        "sstimap",
+        "wpprobe",
+        "xsstrike",
+        "bpf-linker",
+        "evil-winrm-py",
+        "hexstrike-ai",
+    ]:
+        assert package in registry_text
+        assert package in docs_text
+
+    assert "build_report" in cli_text
+    assert "python3 scripts/kali_compatibility.py --json" in docs_text
+    assert "Kali Linux 2026.1+" in readme_text
+    assert "Kali Tool Compatibility" in architecture_text
+
+
 def test_phase_two_api_routes_exist() -> None:
     app_text = read("backend/api/app.py")
     for module_name in ["investigations", "targets", "findings", "reports", "agents"]:
