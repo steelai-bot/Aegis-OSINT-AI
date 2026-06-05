@@ -107,12 +107,16 @@ PostgreSQL is the production database. SQLAlchemy async sessions are used by ser
 
 The event bus publishes lifecycle and investigation events such as:
 
+- `workflow.started`
+- `workflow.step.ready`
+- `workflow.step.completed`
+- `workflow.completed`
 - `agent.started`
 - `agent.completed`
 - `finding.created`
 - `report.created`
 
-The first implementation is in-process and async; it is intentionally replaceable with Redis, PostgreSQL LISTEN/NOTIFY, or a message broker later.
+The investigation engine dispatches agents through ordered workflow steps and publishes step events before and after each agent run. Agents still communicate only through persisted context, findings, and events; direct agent-to-agent calls remain prohibited. The first implementation is in-process and async; it is intentionally replaceable with Redis, PostgreSQL LISTEN/NOTIFY, or a message broker later.
 
 ### Kali Tool Compatibility
 

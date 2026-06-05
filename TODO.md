@@ -36,8 +36,8 @@
 
 - [x] Implement investigation context persistence.
 - [x] Implement task result storage.
-- [ ] Implement event-driven agent workflow.
-- [ ] Add agent unit tests.
+- [x] Implement event-driven agent workflow.
+- [x] Add agent unit tests.
 
 ## Phase 4 — Plugin System
 
