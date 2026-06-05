@@ -1,0 +1,16 @@
+.git
+.pytest_cache
+.mypy_cache
+.ruff_cache
+__pycache__
+*.pyc
+.env
+.venv
+venv
+node_modules
+.next
+frontend/node_modules
+frontend/.next
+frontend/.next-dev.log
+frontend/.next-dev.err.log
+legacy/quarantine

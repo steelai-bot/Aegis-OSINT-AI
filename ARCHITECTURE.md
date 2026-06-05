@@ -33,12 +33,11 @@ backend/
 └── tests/        # unit, integration, and API tests
 
 frontend/
-├── app/          # Next.js routes and pages
-├── components/   # reusable UI components
-├── lib/          # API clients, utilities, websocket clients
-└── types/        # shared TypeScript contracts
+├── src/app/        # Next.js App Router pages
+├── src/components/ # reusable UI components
+└── src/lib/        # API clients, sample data, utilities, TypeScript contracts
 
-docker/           # deployment manifests and container support
+Dockerfile and compose support live in `backend/`, `frontend/`, and `docker-compose.yml`
 docs/             # technical documentation and operator guides
 legacy/quarantine/ # pre-v2 modules retained only for extraction review
 ```

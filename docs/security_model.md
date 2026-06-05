@@ -1,0 +1,81 @@
+# Security Model
+
+Aegis v2 is designed for authorized, passive OSINT investigations. The current
+implementation is an MVP security baseline, not a complete multi-tenant SaaS
+security boundary.
+
+## Trust Boundaries
+
+- Frontend: operator console, no secrets stored in browser code.
+- Backend API: validates input, owns workflow execution and persistence.
+- Database: stores investigations, targets, findings, reports, embeddings, and
+  agent task results.
+- External providers: optional OSINT and LLM APIs configured by environment.
+- Legacy quarantine: not trusted and not part of the runtime.
+
+## Secrets
+
+Secrets must be supplied through environment variables or a local `.env` file
+that is never committed.
+
+Required practices:
+
+- Use separate keys per environment.
+- Scope provider keys to the minimum permissions available.
+- Rotate keys after suspected exposure.
+- Do not log request headers, provider tokens, rendered secrets, or `.env`
+  values.
+- Do not bake secrets into Docker images. Pass them at runtime.
+
+## Authentication And RBAC Roadmap
+
+The current API has no user authentication layer. Before shared deployment,
+add:
+
+- authenticated operator identities,
+- role-based access for viewer, analyst, admin, and auditor roles,
+- per-investigation authorization checks,
+- audit logs for target creation, agent runs, report rendering, and settings
+  changes,
+- session timeout and secure cookie policies if browser login is added.
+
+Middleware or proxy checks must not be the only authorization layer. Re-check
+authorization in API dependencies or service methods.
+
+## Abuse Vectors
+
+| Vector | Risk | MVP mitigation |
+| --- | --- | --- |
+| Unauthorized targets | Legal and safety risk | Operator guide requires authorization before target creation |
+| Secret leakage | Provider account compromise | Env-only settings and `.dockerignore` for `.env` files |
+| Unsafe legacy execution | Offensive behavior in runtime | Quarantine boundary and architecture tests |
+| SSRF through target values | Internal network exposure | Keep plugins passive and add allow/deny policy before active fetch expansion |
+| Report data leakage | Sensitive findings exported | Operator review before report handoff |
+| Dependency drift | Vulnerable runtime packages | Run `npm audit`, Python dependency checks, and image scans in CI |
+| Scraping or API abuse | Provider bans or legal risk | Rate limits, timeouts, retries, and source-specific API terms |
+
+## Network Policy
+
+The backend should use outbound network access only for configured passive
+providers and public-source lookups. Do not allow arbitrary operator-supplied
+URLs to trigger internal network requests without SSRF protections.
+
+Recommended controls before production:
+
+- egress allowlist per plugin,
+- deny private and link-local IP ranges for external fetches,
+- request timeout and response size limits,
+- source-specific rate limits,
+- structured audit events for every external provider call.
+
+## Docker Deployment Notes
+
+The compose stack is for local development. Before production:
+
+- replace default PostgreSQL credentials,
+- enable TLS at the ingress layer,
+- run database migrations as a controlled release step,
+- scan backend and frontend images,
+- configure persistent encrypted database storage,
+- avoid exposing PostgreSQL directly to public networks,
+- set `AEGIS_DEBUG=false`.

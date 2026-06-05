@@ -82,10 +82,10 @@
 
 ## Phase 8 — Docker and Docs
 
-- [ ] Add backend Dockerfile.
-- [ ] Add frontend Dockerfile.
-- [ ] Add docker compose stack.
+- [x] Add backend Dockerfile.
+- [x] Add frontend Dockerfile.
+- [x] Add docker compose stack.
 - [x] Add Kali Linux compatibility and recent-tool operator documentation.
-- [ ] Add remaining operator documentation.
-- [ ] Add legacy migration notes.
-- [ ] Add security model documentation.
+- [x] Add remaining operator documentation.
+- [x] Add legacy migration notes.
+- [x] Add security model documentation.

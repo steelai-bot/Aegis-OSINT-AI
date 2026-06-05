@@ -5,6 +5,8 @@ import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format";
 import { getFindings, getInvestigations, getTargets } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 export default async function InvestigationsPage() {
   const [investigations, targets, findings] = await Promise.all([getInvestigations(), getTargets(), getFindings()]);
 
