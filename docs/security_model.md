@@ -8,8 +8,8 @@ security boundary.
 
 - Frontend: operator console, no secrets stored in browser code.
 - Backend API: validates input, owns workflow execution and persistence.
-- Database: stores investigations, targets, findings, reports, embeddings, and
-  agent task results.
+- Database: stores investigations, targets, findings, reports, embeddings,
+  agent task results, and audit events after the Phase 3A migration is applied.
 - Passive collection plugins: operator-approved OSINT integrations that collect
   defensive intelligence for authorized targets.
 - External providers: optional OSINT and LLM APIs configured by environment.
@@ -48,7 +48,9 @@ Current limitations before shared production deployment:
 
 - no persistent user, account, service-account, or session model,
 - no per-investigation membership or object-level authorization boundary yet,
-- no persistent audit event table yet,
+- Phase 3A audit event persistence exists in code and migration form, but the
+  migration has not been run and route-level audit emissions are not integrated
+  yet,
 - no browser login flow or secure cookie session policy yet.
 
 Future hardening should add authenticated operator identities, scoped service

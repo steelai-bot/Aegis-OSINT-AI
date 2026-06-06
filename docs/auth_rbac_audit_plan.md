@@ -29,7 +29,10 @@ implementation phase explicitly changes it.
 - `GET /health` remains public by default, but can be protected with
   `AEGIS_AUTH_ALLOW_UNAUTHENTICATED_HEALTH=false`.
 - `GET /metrics` is protected when backend auth is enabled.
-- There are no user/account/role models and no audit event table.
+- There are no user/account/role models yet.
+- Phase 3A audit persistence foundation is implemented with an `AuditEvent`
+  model, write-only audit service, and Alembic migration, but the migration has
+  not been run and route-level audit emissions are still pending.
 - Frontend calls the backend directly when `NEXT_PUBLIC_AEGIS_API_URL` is set.
 
 ## Endpoint Protection Matrix
@@ -132,18 +135,21 @@ Implemented initial design:
 This keeps the first implementation minimal while avoiding a later route rewrite
 when real users or service accounts are introduced.
 
-## Phase 3: Audit Event Persistence
+## Phase 3: Audit Event Persistence — Phase 3A Implemented
 
-Add audit logging as a separate, explicitly approved schema change.
+Audit logging is being added as separate, explicitly approved schema and route
+integration steps.
 
-Likely new files:
+Phase 3A implemented the persistence foundation:
 
 - `backend/models/audit_event.py`
 - `backend/services/audit.py`
-- `backend/api/schemas/audit.py` if an audit read endpoint is exposed
-- Alembic migration, likely `0005_audit_events.py`
+- Alembic migration `0005_audit_events.py`
 
-Recommended columns:
+The migration file exists but has not been run. No route integrations, audit read
+schemas, or audit read endpoints have been added yet.
+
+Implemented columns:
 
 | Column | Purpose |
 | --- | --- |
@@ -160,7 +166,7 @@ Recommended columns:
 | `metadata_json` | Bounded structured metadata with no secrets. |
 | timestamps | Created/updated timestamps using existing model conventions. |
 
-Initial audit taxonomy:
+Initial audit taxonomy for pending route/service integrations:
 
 - `auth.denied`
 - `investigation.created`
@@ -209,7 +215,8 @@ Defer until the previous phases are stable:
 1. Add opt-in auth dependency with default-off behavior. **Implemented.**
 2. Apply route-level protection to privileged endpoint families. **Implemented.**
 3. Introduce principal and permission abstractions. **Implemented.**
-4. Add audit event model, migration, and write-only audit service.
+4. Add audit event model, migration, and write-only audit service. **Implemented
+   as Phase 3A; migration not run.**
 5. Add audit reads for admins only, if needed.
 6. Design frontend auth separately; do not expose secrets in browser env.
 
