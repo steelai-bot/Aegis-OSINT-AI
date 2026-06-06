@@ -120,6 +120,57 @@ Rollback removes the `0003` metadata columns and their indexes. Do not roll back
 after persisted collection findings rely on these fields unless the data loss has
 been reviewed and approved by the operator.
 
+### Phase 2.y — Migration `0004` Passive Collection Run Tracking
+
+Migration `alembic/versions/0004_collection_runs.py` adds the `collection_runs`
+table required by `async_mode` collection endpoints and the
+`GET /collections/runs/{run_id}` status endpoint.
+
+#### Operational notes
+
+1. Apply migration `0003` before `0004`; `0004` depends on
+   `0003_finding_threat_intel_metadata`.
+2. Apply in staging before production and verify queued collection runs can be
+   created and queried by run ID.
+3. Treat `async_mode` as process-local MVP background execution. It records run
+   status, but it is not a durable distributed queue and does not survive API
+   process termination while work is still running.
+4. Before shared deployment, pair collection run tracking with authentication,
+   per-investigation authorization, audit logging, and egress policy controls.
+
+#### Apply and verify
+
+```bash
+alembic upgrade head
+alembic current
+```
+
+Verify the tracking table exists:
+
+```sql
+select column_name
+from information_schema.columns
+where table_name = 'collection_runs'
+  and column_name in (
+    'id',
+    'run_scope',
+    'status',
+    'investigation_id',
+    'target_id',
+    'result_json',
+    'error_json',
+    'started_at',
+    'completed_at'
+  )
+order by column_name;
+```
+
+Rollback removes run tracking history:
+
+```bash
+alembic downgrade -1
+```
+
 ## Phase 3 — Agent Framework
 
 1. Implement `BaseAgent` and independent agent classes.

@@ -1,5 +1,6 @@
 """Collection orchestration API schemas."""
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -37,6 +38,7 @@ class CollectionRunRequest(BaseModel):
     priority: int = Field(default=100, ge=0, le=1000)
     config: dict[str, Any] = Field(default_factory=dict)
     enrich: bool = False
+    async_mode: bool = False
 
 
 class CollectionWorkflowRunRequest(BaseModel):
@@ -59,6 +61,7 @@ class CollectionWorkflowRunRequest(BaseModel):
     priority: int = Field(default=100, ge=0, le=1000)
     config: dict[str, Any] = Field(default_factory=dict)
     enrich: bool = False
+    async_mode: bool = False
 
 
 class CollectionPluginResultRead(BaseModel):
@@ -89,3 +92,33 @@ class CollectionInvestigationRunResponse(BaseModel):
     target_results: list[CollectionRunResponse] = Field(default_factory=list)
     persisted_count: int = 0
     errors: dict[str, str] = Field(default_factory=dict)
+
+
+class CollectionRunQueuedResponse(BaseModel):
+    """Queued background collection run response."""
+
+    run_id: UUID
+    status: str = "queued"
+    status_url: str
+
+
+class CollectionRunStatusResponse(BaseModel):
+    """Persisted collection run status and optional final result."""
+
+    run_id: UUID
+    run_scope: str
+    status: str
+    target: str | None = None
+    target_type: str | None = None
+    target_id: UUID | None = None
+    investigation_id: UUID | None = None
+    plugin_name: str | None = None
+    priority: int
+    enrich: bool
+    persisted_count: int = 0
+    result: dict[str, Any] = Field(default_factory=dict)
+    errors: dict[str, Any] = Field(default_factory=dict)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime

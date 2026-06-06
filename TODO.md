@@ -99,11 +99,12 @@
 - [x] Add ad-hoc collection endpoint.
 - [x] Add existing-target and investigation-wide collection endpoints.
 - [x] Add operator examples for passive collection workflows.
+- [x] Add process-local async collection run tracking with persisted run status.
 - [x] Add migration `0003` operational apply, verification, and rollback guidance.
+- [x] Add migration `0004` operational apply, verification, and rollback guidance.
 
 ## Next Candidate Work — Requires Explicit Scope Approval
 
-- [ ] Add asynchronous/background execution for long-running investigation-wide collection.
+- [ ] Add durable distributed worker/queue support for long-running investigation-wide collection.
 - [ ] Add frontend controls for target and investigation collection workflows.
-- [ ] Add collection run IDs and status tracking if operators need async job visibility.
 - [ ] Add production authentication, RBAC, and audit logging before shared deployment.

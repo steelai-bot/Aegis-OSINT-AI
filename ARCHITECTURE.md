@@ -64,6 +64,12 @@ persists findings when an investigation context is provided. Collection workflow
 can run ad hoc without persistence or against existing targets/investigations
 with persistence after the required finding metadata migration is applied.
 
+Collection endpoints also support `async_mode` using FastAPI background tasks and
+a persisted `collection_runs` status table. This is an in-process MVP execution
+model for operator visibility, not a durable distributed queue. The architecture
+keeps this replaceable with the existing `workers/` boundary, Redis, PostgreSQL
+LISTEN/NOTIFY, or another message broker when explicitly approved.
+
 ### Agents
 
 Agents are independent task processors. Agents must communicate only through:

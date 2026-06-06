@@ -52,6 +52,7 @@ Implemented route groups:
 - `/reports`
 - `/agents/run`
 - `/collections/run`
+- `/collections/runs/{run_id}`
 - `/targets/{target_id}/collect`
 - `/investigations/{investigation_id}/collect`
 
@@ -63,6 +64,10 @@ threat-intelligence finding metadata columns from migration
 `0003_finding_threat_intel_metadata`. See `MIGRATION_PLAN.md` for apply,
 verification, and rollback guidance before enabling collection persistence in an
 environment.
+
+Collection endpoints support `async_mode=true` for process-local background
+execution with persisted run status. This requires migration `0004_collection_runs`
+and is an MVP in-process queue, not a durable distributed worker.
 
 ## Frontend
 

@@ -138,13 +138,28 @@ curl -X POST http://localhost:8000/api/v1/collections/run \
   -d "{\"target\":\"example.com\",\"target_type\":\"domain\",\"plugin_name\":\"crtsh\"}"
 ```
 
+Queue the same collection workflow in the current API process and poll run
+status:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/collections/run \
+  -H "Content-Type: application/json" \
+  -d "{\"target\":\"example.com\",\"target_type\":\"domain\",\"plugin_name\":\"crtsh\",\"async_mode\":true}"
+
+curl http://localhost:8000/api/v1/collections/runs/RUN_ID
+```
+
+`async_mode` uses FastAPI background tasks as an in-process MVP queue. It is not
+a durable distributed worker; if the API process restarts, queued or running work
+may stop. The persisted run status remains available for operator review.
+
 Run passive collection for an existing target and persist findings to its
 investigation:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/targets/TARGET_ID/collect \
   -H "Content-Type: application/json" \
-  -d "{\"plugin_name\":\"crtsh\",\"enrich\":false}"
+  -d "{\"plugin_name\":\"crtsh\",\"enrich\":false,\"async_mode\":true}"
 ```
 
 Run passive collection for every target in an investigation:
@@ -152,7 +167,7 @@ Run passive collection for every target in an investigation:
 ```bash
 curl -X POST http://localhost:8000/api/v1/investigations/INVESTIGATION_ID/collect \
   -H "Content-Type: application/json" \
-  -d "{\"plugin_name\":\"certstream_monitor\",\"enrich\":false}"
+  -d "{\"plugin_name\":\"certstream_monitor\",\"enrich\":false,\"async_mode\":true}"
 ```
 
 When `plugin_name` is omitted, collection runs all enabled passive plugins that
@@ -189,7 +204,8 @@ curl -X POST http://localhost:8000/api/v1/collections/run \
 
 Do not commit provider keys or paste real secrets into tickets, source files, or
 shared logs. Runtime collection persistence requires the current database schema
-to include the threat-intelligence finding metadata columns.
+to include the threat-intelligence finding metadata columns. Background run
+tracking also requires the `collection_runs` table from migration `0004`.
 
 Render a report:
 
