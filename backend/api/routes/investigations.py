@@ -5,13 +5,13 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.routes.collections import queue_investigation_collection_run, run_investigation_collection_job
 from backend.api.schemas.collections import (
     CollectionInvestigationRunResponse,
     CollectionRunQueuedResponse,
     CollectionWorkflowRunRequest,
 )
 from backend.api.schemas.investigations import InvestigationCreate, InvestigationRead
+from backend.services.collection_workflows import queue_investigation_collection_run, run_investigation_collection_job
 from backend.services.crud import InvestigationService
 from backend.storage.database import get_db_session
 
