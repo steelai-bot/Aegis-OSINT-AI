@@ -59,6 +59,47 @@ curl http://localhost:8000/api/v1/health
 curl http://localhost:8000/api/v1/metrics
 ```
 
+## Optional Backend API Authentication
+
+Backend API authentication is disabled by default for local MVP development and
+single-operator demos. To require bearer-token authentication for protected API
+endpoints, set runtime environment variables before starting the backend:
+
+```bash
+AEGIS_AUTH_ENABLED=true
+AEGIS_API_AUTH_TOKEN=<set-a-long-random-token-outside-source-control>
+```
+
+When authentication is enabled, direct API clients must send the token in the
+`Authorization` header:
+
+```bash
+curl http://localhost:8000/api/v1/investigations \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+`<TOKEN>` is a placeholder. Do not paste real bearer tokens into source files,
+commits, screenshots, tickets, or shared logs.
+
+Health checks remain public by default so local and deployment probes continue to
+work. To require authentication for `/health` as well, set:
+
+```bash
+AEGIS_AUTH_ALLOW_UNAUTHENTICATED_HEALTH=false
+```
+
+`/metrics` is protected when backend authentication is enabled:
+
+```bash
+curl http://localhost:8000/api/v1/metrics \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+Do not expose the backend bearer token through `NEXT_PUBLIC_*` frontend
+variables. Values with that prefix are visible in browser-delivered JavaScript.
+If the frontend must access an authenticated backend later, add a server-side
+proxy or a real browser login flow first.
+
 ## Local Frontend
 
 The lifecycle helper starts the frontend automatically. Manual frontend setup:
@@ -110,9 +151,14 @@ Create an investigation:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/investigations \
+  -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d "{\"title\":\"Authorized domain review\"}"
 ```
+
+Omit the `Authorization` header only when backend API authentication is disabled.
+When auth is enabled, include `-H "Authorization: Bearer <TOKEN>"` on protected
+investigation, target, finding, report, collection, and agent requests.
 
 Create a target:
 
@@ -221,6 +267,8 @@ curl -X POST http://localhost:8000/api/v1/investigations/INVESTIGATION_ID/report
 - Prefer passive sources and API-backed enrichment.
 - Do not run quarantined legacy modules.
 - Do not paste secrets into source files, reports, screenshots, or tickets.
+- Keep backend bearer tokens environment-backed and out of browser-visible
+  frontend configuration.
 - Treat findings as unverified until an operator reviews source, timestamp,
   confidence, and legal handling restrictions.
 - Keep provider keys scoped to the minimum permissions required.
