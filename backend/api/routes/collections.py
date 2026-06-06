@@ -15,6 +15,12 @@ router = APIRouter(tags=["collections"])
 async def run_collection(payload: CollectionRunRequest, session: AsyncSession = Depends(get_db_session)):
     """Run approved passive collectors for a single target and optionally persist findings."""
 
+    return await run_collection_job(payload, session=session)
+
+
+async def run_collection_job(payload: CollectionRunRequest, *, session: AsyncSession) -> CollectionRunResponse:
+    """Run a collection job and return the normalized API response."""
+
     job = CollectionJob(
         target=payload.target,
         target_type=payload.target_type,
@@ -31,6 +37,8 @@ async def run_collection(payload: CollectionRunRequest, session: AsyncSession = 
     ).run_job(job)
     return CollectionRunResponse(
         target=result.target,
+        target_type=payload.target_type,
+        target_id=payload.target_id,
         plugin_results=[
             CollectionPluginResultRead(
                 plugin_name=plugin_result.plugin_name,

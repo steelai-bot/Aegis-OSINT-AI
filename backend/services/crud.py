@@ -54,6 +54,9 @@ class TargetService:
         )
         return list(result.scalars().all())
 
+    async def get_target(self, target_id: UUID) -> Target | None:
+        return await self.session.get(Target, target_id)
+
 
 class FindingService:
     """Persistence operations for normalized findings."""

@@ -130,6 +130,67 @@ curl -X POST http://localhost:8000/api/v1/agents/run \
   -d "{\"investigation_id\":\"INVESTIGATION_ID\",\"target\":\"example.com\",\"target_type\":\"domain\"}"
 ```
 
+Run passive collection for one ad-hoc target without persistence:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/collections/run \
+  -H "Content-Type: application/json" \
+  -d "{\"target\":\"example.com\",\"target_type\":\"domain\",\"plugin_name\":\"crtsh\"}"
+```
+
+Run passive collection for an existing target and persist findings to its
+investigation:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/targets/TARGET_ID/collect \
+  -H "Content-Type: application/json" \
+  -d "{\"plugin_name\":\"crtsh\",\"enrich\":false}"
+```
+
+Run passive collection for every target in an investigation:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/investigations/INVESTIGATION_ID/collect \
+  -H "Content-Type: application/json" \
+  -d "{\"plugin_name\":\"certstream_monitor\",\"enrich\":false}"
+```
+
+When `plugin_name` is omitted, collection runs all enabled passive plugins that
+support the target type. If `plugin_name` is set, `config` is passed only to that
+plugin. If `plugin_name` is omitted, `config` should be a mapping of plugin name
+to plugin-specific config object.
+
+Example request-scoped plugin configuration for configured public sources:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/collections/run \
+  -H "Content-Type: application/json" \
+  -d "{\"target\":\"Example Brand\",\"target_type\":\"keyword\",\"plugin_name\":\"ransomware_blog_scraper\",\"config\":{\"sources\":[\"https://authorized-public-source.example/leaks\"]}}"
+```
+
+Example request-scoped S3 bucket candidates:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/collections/run \
+  -H "Content-Type: application/json" \
+  -d "{\"target\":\"example.com\",\"target_type\":\"domain\",\"plugin_name\":\"s3_scanner\",\"config\":{\"bucket_names\":[\"example-assets\",\"example-logs\"]}}"
+```
+
+Example request-scoped Telegram public-channel metadata check. Prefer setting
+the bot token through runtime environment/configuration rather than placing it
+in request logs; `config.channels` should only include authorized public
+channels:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/collections/run \
+  -H "Content-Type: application/json" \
+  -d "{\"target\":\"Example Brand\",\"target_type\":\"keyword\",\"plugin_name\":\"telegram_channel_monitor\",\"config\":{\"channels\":[\"@authorized_public_channel\"]}}"
+```
+
+Do not commit provider keys or paste real secrets into tickets, source files, or
+shared logs. Runtime collection persistence requires the current database schema
+to include the threat-intelligence finding metadata columns.
+
 Render a report:
 
 ```bash
