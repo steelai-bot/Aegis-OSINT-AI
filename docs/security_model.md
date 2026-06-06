@@ -10,6 +10,8 @@ security boundary.
 - Backend API: validates input, owns workflow execution and persistence.
 - Database: stores investigations, targets, findings, reports, embeddings, and
   agent task results.
+- Passive collection plugins: operator-approved OSINT integrations that collect
+  defensive intelligence for authorized targets.
 - External providers: optional OSINT and LLM APIs configured by environment.
 - Legacy quarantine: not trusted and not part of the runtime.
 
@@ -53,12 +55,18 @@ authorization in API dependencies or service methods.
 | Report data leakage | Sensitive findings exported | Operator review before report handoff |
 | Dependency drift | Vulnerable runtime packages | Run `npm audit`, Python dependency checks, and image scans in CI |
 | Scraping or API abuse | Provider bans or legal risk | Rate limits, timeouts, retries, and source-specific API terms |
+| Collection configuration abuse | Unauthorized source monitoring or SSRF-like behavior | Restrict request-scoped plugin config to authorized public sources and add egress controls before production |
 
 ## Network Policy
 
 The backend should use outbound network access only for configured passive
 providers and public-source lookups. Do not allow arbitrary operator-supplied
 URLs to trigger internal network requests without SSRF protections.
+
+Passive collection endpoints must be treated as privileged operator workflows.
+Before shared deployment, require authentication, per-investigation authorization,
+and audit logging for ad-hoc collection, target collection, and investigation-wide
+collection runs.
 
 Recommended controls before production:
 
@@ -67,6 +75,10 @@ Recommended controls before production:
 - request timeout and response size limits,
 - source-specific rate limits,
 - structured audit events for every external provider call.
+
+Request-scoped plugin configuration should be limited to authorized public sources
+or explicit target-owned assets. Provider credentials must remain environment-backed
+and must not be supplied through request payloads, browser code, reports, or logs.
 
 ## Docker Deployment Notes
 
