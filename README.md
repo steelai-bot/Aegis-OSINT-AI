@@ -11,10 +11,10 @@ automation are excluded from the runnable v2 application.
 ## Migration Status
 
 The current branch contains the v2 backend foundation, API skeleton,
-provider abstraction, initial OSINT plugins, report renderers, Next.js
-frontend console, Docker stack, and Kali operator compatibility checks. See
-`ARCHITECTURE.md`, `MIGRATION_PLAN.md`, and `TODO.md` for the phased migration
-plan.
+provider abstraction, initial OSINT plugins, passive collection orchestration,
+report renderers, Next.js frontend console, Docker stack, and Kali operator
+compatibility checks. See `ARCHITECTURE.md`, `MIGRATION_PLAN.md`, and `TODO.md`
+for the phased migration plan.
 
 Legacy modules that conflict with the v2 scope have been moved to
 `legacy/quarantine/` for extraction review. They are not imported by the
@@ -29,6 +29,7 @@ backend and are not part of the supported runtime.
 - Pydantic v2 settings and schemas
 - httpx for async integrations
 - Configurable LLM providers: OpenAI, Anthropic, Gemini, Hugging Face, Ollama
+- Passive threat-intelligence collection for authorized targets and investigations
 - Next.js 16 frontend console
 - Docker Compose stack for local API, frontend, and PostgreSQL pgvector
 - Kali Linux 2026.1+ supported for operator workstations
@@ -50,9 +51,18 @@ Implemented route groups:
 - `/findings`
 - `/reports`
 - `/agents/run`
+- `/collections/run`
+- `/targets/{target_id}/collect`
+- `/investigations/{investigation_id}/collect`
 
 When the API is run with `AEGIS_API_PREFIX=/api/v1`, these routes are exposed
 under `/api/v1`.
+
+Persisted passive collection workflows require the database schema to include the
+threat-intelligence finding metadata columns from migration
+`0003_finding_threat_intel_metadata`. See `MIGRATION_PLAN.md` for apply,
+verification, and rollback guidance before enabling collection persistence in an
+environment.
 
 ## Frontend
 
