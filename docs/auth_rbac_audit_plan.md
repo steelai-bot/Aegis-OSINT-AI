@@ -1,9 +1,9 @@
 # Auth, RBAC, and Audit Plan
 
 Aegis v2 is currently an MVP for authorized, passive OSINT investigations. This
-plan defines the next security-hardening phases for authentication, role-based
-access control, and audit logging without changing runtime behavior until each
-implementation phase is explicitly approved.
+plan tracks security-hardening phases for authentication, role-based access
+control, and audit logging while preserving local development behavior unless an
+implementation phase explicitly changes it.
 
 ## Goals
 
@@ -17,11 +17,18 @@ implementation phase is explicitly approved.
 
 ## Current State
 
-- Backend route modules currently depend on `get_db_session`; there is no user,
-  principal, permission, or token dependency.
-- `GET /health` and `GET /metrics` are unauthenticated system endpoints.
-- Investigation, target, finding, report, collection, and agent endpoints are
-  reachable if the API is reachable.
+- Backend authentication is opt-in and default-off. Protected routes preserve
+  current MVP behavior unless `AEGIS_AUTH_ENABLED=true` is configured.
+- When backend auth is enabled, protected route families require
+  `Authorization: Bearer <token>` matching the environment-backed
+  `AEGIS_API_AUTH_TOKEN` setting.
+- The first valid-token principal is `Principal(id="local-api-token", role="admin")`.
+- Route modules use `require_permission(...)` dependencies with a central
+  permission map for investigation, target, finding, collection, agent, report,
+  audit, and auth-management permissions.
+- `GET /health` remains public by default, but can be protected with
+  `AEGIS_AUTH_ALLOW_UNAUTHENTICATED_HEALTH=false`.
+- `GET /metrics` is protected when backend auth is enabled.
 - There are no user/account/role models and no audit event table.
 - Frontend calls the backend directly when `NEXT_PUBLIC_AEGIS_API_URL` is set.
 
@@ -71,11 +78,11 @@ not be mixed into the first auth hardening pass.
 | `audit:read` | Yes | No by default | No | No |
 | `auth:manage` | Yes | No | No | No |
 
-## Phase 1: Minimal Backend Auth Dependency
+## Phase 1: Minimal Backend Auth Dependency — Implemented
 
-Add an opt-in bearer token dependency without database schema changes.
+An opt-in bearer token dependency has been added without database schema changes.
 
-Recommended settings additions:
+Implemented settings:
 
 ```python
 auth_enabled: bool = False
@@ -83,16 +90,16 @@ api_auth_token: str | None = None
 auth_allow_unauthenticated_health: bool = True
 ```
 
-Recommended implementation shape:
+Implemented behavior:
 
-- Add `backend/api/security.py` or `backend/core/security.py`.
-- Use FastAPI security utilities to parse `Authorization: Bearer <token>`.
+- `backend/api/security.py` contains the auth dependency.
+- FastAPI security utilities parse `Authorization: Bearer <token>`.
 - When `auth_enabled=False`, preserve current behavior.
 - When enabled, require a valid token for protected endpoint families.
 - Keep `GET /health` public unless explicitly configured otherwise.
-- Treat `GET /metrics` as protected or internal-only outside local development.
+- Protect `GET /metrics` when backend auth is enabled.
 
-Affected route files when implemented:
+Affected route files:
 
 - `backend/api/routes/investigations.py`
 - `backend/api/routes/targets.py`
@@ -108,17 +115,19 @@ Risk controls:
 - Never hardcode tokens or modify `.env` in source changes.
 - Do not expose backend bearer tokens through `NEXT_PUBLIC_*` variables.
 
-## Phase 2: RBAC Abstractions
+## Phase 2: RBAC Abstractions — Implemented
 
-Introduce principal and permission abstractions before adding real user models.
+Principal and permission abstractions have been introduced before adding real
+user models.
 
-Recommended initial design:
+Implemented initial design:
 
 - `Principal(id="local-api-token", role="admin")` for the first bearer-token
   implementation.
-- `require_principal` dependency to resolve an authenticated identity.
 - `require_permission("collection:run")` style dependencies on protected routes.
 - Central permission mapping so route modules do not duplicate RBAC logic.
+- Default-off behavior is preserved because permission dependencies allow
+  `principal is None` when auth is disabled.
 
 This keeps the first implementation minimal while avoiding a later route rewrite
 when real users or service accounts are introduced.
@@ -197,9 +206,9 @@ Defer until the previous phases are stable:
 
 ## Recommended Implementation Order
 
-1. Add opt-in auth dependency with default-off behavior.
-2. Apply route-level protection to privileged endpoint families.
-3. Introduce principal and permission abstractions.
+1. Add opt-in auth dependency with default-off behavior. **Implemented.**
+2. Apply route-level protection to privileged endpoint families. **Implemented.**
+3. Introduce principal and permission abstractions. **Implemented.**
 4. Add audit event model, migration, and write-only audit service.
 5. Add audit reads for admins only, if needed.
 6. Design frontend auth separately; do not expose secrets in browser env.

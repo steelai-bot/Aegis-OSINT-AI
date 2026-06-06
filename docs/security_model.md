@@ -29,17 +29,31 @@ Required practices:
   values.
 - Do not bake secrets into Docker images. Pass them at runtime.
 
-## Authentication And RBAC Roadmap
+## Authentication And RBAC
 
-The current API has no user authentication layer. Before shared deployment,
-add:
+The backend API has an opt-in bearer-token authentication layer for direct API
+clients and controlled deployments. It is disabled by default for local MVP demos
+and existing development workflows. When `AEGIS_AUTH_ENABLED=true`, protected
+endpoint families require `Authorization: Bearer <token>` backed by the
+environment-supplied `AEGIS_API_AUTH_TOKEN` value.
 
-- authenticated operator identities,
-- role-based access for viewer, analyst, admin, and auditor roles,
-- per-investigation authorization checks,
-- audit logs for target creation, agent runs, report rendering, and settings
-  changes,
-- session timeout and secure cookie policies if browser login is added.
+The current RBAC foundation uses FastAPI dependencies and a central permission
+map for investigation, target, finding, collection, agent, report, audit, and
+auth-management permissions. The initial bearer-token principal is treated as an
+`admin`, preserving full operator access for valid configured tokens while
+keeping route-level authorization checks in place for future real users or
+service accounts.
+
+Current limitations before shared production deployment:
+
+- no persistent user, account, service-account, or session model,
+- no per-investigation membership or object-level authorization boundary yet,
+- no persistent audit event table yet,
+- no browser login flow or secure cookie session policy yet.
+
+Future hardening should add authenticated operator identities, scoped service
+accounts, per-investigation authorization checks, audit logs for sensitive
+actions, and secure session handling if browser login is introduced.
 
 Middleware or proxy checks must not be the only authorization layer. Re-check
 authorization in API dependencies or service methods.
@@ -63,10 +77,10 @@ The backend should use outbound network access only for configured passive
 providers and public-source lookups. Do not allow arbitrary operator-supplied
 URLs to trigger internal network requests without SSRF protections.
 
-Passive collection endpoints must be treated as privileged operator workflows.
-Before shared deployment, require authentication, per-investigation authorization,
-and audit logging for ad-hoc collection, target collection, and investigation-wide
-collection runs.
+Passive collection endpoints are privileged operator workflows. They now have
+route-level permission dependencies for opt-in backend auth. Before shared
+production deployment, add per-investigation authorization and audit logging for
+ad-hoc collection, target collection, and investigation-wide collection runs.
 
 Recommended controls before production:
 
