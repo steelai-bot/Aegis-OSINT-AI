@@ -11,6 +11,7 @@ from backend.api.schemas.collections import (
     CollectionWorkflowRunRequest,
 )
 from backend.api.schemas.investigations import InvestigationCreate, InvestigationRead
+from backend.api.security import require_permission
 from backend.services.collection_workflows import queue_investigation_collection_run, run_investigation_collection_job
 from backend.services.crud import InvestigationService
 from backend.storage.database import get_db_session
@@ -18,7 +19,12 @@ from backend.storage.database import get_db_session
 router = APIRouter(tags=["investigations"])
 
 
-@router.post("/investigations", response_model=InvestigationRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/investigations",
+    response_model=InvestigationRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("investigation:create"))],
+)
 async def create_investigation(
     payload: InvestigationCreate,
     session: AsyncSession = Depends(get_db_session),
@@ -26,12 +32,20 @@ async def create_investigation(
     return await InvestigationService(session).create_investigation(payload.title)
 
 
-@router.get("/investigations", response_model=list[InvestigationRead])
+@router.get(
+    "/investigations",
+    response_model=list[InvestigationRead],
+    dependencies=[Depends(require_permission("investigation:read"))],
+)
 async def list_investigations(session: AsyncSession = Depends(get_db_session)):
     return await InvestigationService(session).list_investigations()
 
 
-@router.get("/investigations/{investigation_id}", response_model=InvestigationRead)
+@router.get(
+    "/investigations/{investigation_id}",
+    response_model=InvestigationRead,
+    dependencies=[Depends(require_permission("investigation:read"))],
+)
 async def get_investigation(
     investigation_id: UUID,
     session: AsyncSession = Depends(get_db_session),
@@ -46,6 +60,7 @@ async def get_investigation(
     "/investigations/{investigation_id}/collect",
     response_model=CollectionInvestigationRunResponse | CollectionRunQueuedResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permission("collection:run"))],
 )
 async def collect_investigation_targets(
     investigation_id: UUID,

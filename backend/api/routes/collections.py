@@ -11,6 +11,7 @@ from backend.api.schemas.collections import (
     CollectionRunResponse,
     CollectionRunStatusResponse,
 )
+from backend.api.security import require_permission
 from backend.services.collection_runs import CollectionRunService
 from backend.services.collection_workflows import collection_run_status_response, queue_collection_run, run_collection_job
 from backend.storage.database import get_db_session
@@ -22,6 +23,7 @@ router = APIRouter(tags=["collections"])
     "/collections/run",
     response_model=CollectionRunResponse | CollectionRunQueuedResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permission("collection:run"))],
 )
 async def run_collection(
     payload: CollectionRunRequest,
@@ -43,7 +45,11 @@ async def run_collection(
     return await run_collection_job(payload, session=session)
 
 
-@router.get("/collections/runs/{run_id}", response_model=CollectionRunStatusResponse)
+@router.get(
+    "/collections/runs/{run_id}",
+    response_model=CollectionRunStatusResponse,
+    dependencies=[Depends(require_permission("collection:status"))],
+)
 async def get_collection_run(run_id: UUID, session: AsyncSession = Depends(get_db_session)):
     """Return persisted status for an in-process background collection run."""
 

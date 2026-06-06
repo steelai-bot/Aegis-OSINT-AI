@@ -1,9 +1,8 @@
 """FastAPI application factory for Aegis v2."""
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 
 from backend.api.routes import agents, collections, findings, health, investigations, reports, targets
-from backend.api.security import require_api_auth
 from backend.core.config import get_settings
 
 
@@ -24,7 +23,7 @@ def create_app() -> FastAPI:
         reports.router,
         agents.router,
     ):
-        app.include_router(router, prefix=settings.api_prefix, dependencies=[Depends(require_api_auth)])
+        app.include_router(router, prefix=settings.api_prefix)
     return app
 
 

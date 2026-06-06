@@ -6,13 +6,19 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.schemas.findings import FindingCreate, FindingRead
+from backend.api.security import require_permission
 from backend.services.crud import FindingService
 from backend.storage.database import get_db_session
 
 router = APIRouter(tags=["findings"])
 
 
-@router.post("/findings", response_model=FindingRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/findings",
+    response_model=FindingRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("finding:create"))],
+)
 async def create_finding(payload: FindingCreate, session: AsyncSession = Depends(get_db_session)):
     return await FindingService(session).create_finding(
         investigation_id=payload.investigation_id,
@@ -40,7 +46,11 @@ async def create_finding(payload: FindingCreate, session: AsyncSession = Depends
     )
 
 
-@router.get("/findings", response_model=list[FindingRead])
+@router.get(
+    "/findings",
+    response_model=list[FindingRead],
+    dependencies=[Depends(require_permission("finding:read"))],
+)
 async def list_findings(
     investigation_id: UUID | None = None,
     threat_category: str | None = None,
@@ -58,6 +68,10 @@ async def list_findings(
     )
 
 
-@router.get("/investigations/{investigation_id}/findings", response_model=list[FindingRead])
+@router.get(
+    "/investigations/{investigation_id}/findings",
+    response_model=list[FindingRead],
+    dependencies=[Depends(require_permission("finding:read"))],
+)
 async def list_investigation_findings(investigation_id: UUID, session: AsyncSession = Depends(get_db_session)):
     return await FindingService(session).list_findings(investigation_id=investigation_id)
