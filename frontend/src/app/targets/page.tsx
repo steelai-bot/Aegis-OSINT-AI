@@ -3,13 +3,15 @@ import { Plus, Target as TargetIcon } from "lucide-react";
 import { CollectionRunControl } from "@/components/collection-run-control";
 import { PageHeader } from "@/components/page-header";
 import { formatDate } from "@/lib/format";
-import { getInvestigations, getTargets } from "@/lib/api";
+import { getInvestigationsWithSource, getTargetsWithSource } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export default async function TargetsPage() {
-  const [investigations, targets] = await Promise.all([getInvestigations(), getTargets()]);
-  const investigationTitles = new Map(investigations.map((investigation) => [investigation.id, investigation.title]));
+  const investigations = await getInvestigationsWithSource();
+  const targets = await getTargetsWithSource(investigations);
+  const investigationTitles = new Map(investigations.data.map((investigation) => [investigation.id, investigation.title]));
+  const collectionDisabledReason = targets.source === "live" ? undefined : "Sample data: live collection disabled";
 
   return (
     <>
@@ -38,14 +40,14 @@ export default async function TargetsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
-              {targets.map((target) => (
+              {targets.data.map((target) => (
                 <tr key={target.id}>
                   <td className="px-4 py-3 font-mono text-zinc-100">{target.value}</td>
                   <td className="px-4 py-3 text-zinc-300">{target.type}</td>
                   <td className="px-4 py-3 text-zinc-400">{investigationTitles.get(target.investigation_id) ?? "Unknown"}</td>
                   <td className="px-4 py-3 text-zinc-500">{formatDate(target.created_at)}</td>
                   <td className="px-4 py-3 align-top">
-                    <CollectionRunControl scope="target" entityId={target.id} />
+                    <CollectionRunControl scope="target" entityId={target.id} disabledReason={collectionDisabledReason} />
                   </td>
                 </tr>
               ))}

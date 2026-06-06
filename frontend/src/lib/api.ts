@@ -12,6 +12,13 @@ import type {
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_AEGIS_API_URL;
 
+export type ApiDataSource = "live" | "sample";
+
+export type ApiDataResult<T> = {
+  data: T;
+  source: ApiDataSource;
+};
+
 type CollectionWorkflowPayload = {
   plugin_name?: string;
   priority?: number;
@@ -25,8 +32,12 @@ export function isApiConfigured(): boolean {
 }
 
 async function fetchJson<T>(path: string, fallback: T): Promise<T> {
+  return (await fetchJsonWithSource(path, fallback)).data;
+}
+
+async function fetchJsonWithSource<T>(path: string, fallback: T): Promise<ApiDataResult<T>> {
   if (!apiBaseUrl) {
-    return fallback;
+    return { data: fallback, source: "sample" };
   }
 
   try {
@@ -35,12 +46,12 @@ async function fetchJson<T>(path: string, fallback: T): Promise<T> {
     });
 
     if (!response.ok) {
-      return fallback;
+      return { data: fallback, source: "sample" };
     }
 
-    return (await response.json()) as T;
+    return { data: (await response.json()) as T, source: "live" };
   } catch {
-    return fallback;
+    return { data: fallback, source: "sample" };
   }
 }
 
@@ -66,19 +77,37 @@ export async function getInvestigations(): Promise<Investigation[]> {
   return fetchJson("/api/v1/investigations", sample.investigations);
 }
 
+export async function getInvestigationsWithSource(): Promise<ApiDataResult<Investigation[]>> {
+  return fetchJsonWithSource("/api/v1/investigations", sample.investigations);
+}
+
 export async function getTargets(): Promise<Target[]> {
-  const investigations = await getInvestigations();
+  return (await getTargetsWithSource()).data;
+}
+
+export async function getTargetsWithSource(
+  investigationResult?: ApiDataResult<Investigation[]>,
+): Promise<ApiDataResult<Target[]>> {
+  const investigations = investigationResult ?? (await getInvestigationsWithSource());
   if (!apiBaseUrl) {
-    return sample.targets;
+    return { data: sample.targets, source: "sample" };
+  }
+
+  if (investigations.source !== "live") {
+    return { data: sample.targets, source: "sample" };
   }
 
   const targetGroups = await Promise.all(
-    investigations.map((investigation) =>
-      fetchJson(`/api/v1/investigations/${investigation.id}/targets`, [] as Target[]),
+    investigations.data.map((investigation) =>
+      fetchJsonWithSource(`/api/v1/investigations/${investigation.id}/targets`, [] as Target[]),
     ),
   );
 
-  return targetGroups.flat();
+  if (targetGroups.some((group) => group.source !== "live")) {
+    return { data: sample.targets, source: "sample" };
+  }
+
+  return { data: targetGroups.flatMap((group) => group.data), source: "live" };
 }
 
 export async function getFindings(): Promise<Finding[]> {

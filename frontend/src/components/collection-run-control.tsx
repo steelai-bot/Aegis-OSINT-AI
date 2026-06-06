@@ -16,11 +16,12 @@ import type { CollectionRunStatus, CollectionRunStatusValue } from "@/lib/types"
 type CollectionRunControlProps = {
   scope: "target" | "investigation";
   entityId: string;
+  disabledReason?: string;
 };
 
 const terminalStatuses: CollectionRunStatusValue[] = ["completed", "failed"];
 
-export function CollectionRunControl({ scope, entityId }: CollectionRunControlProps) {
+export function CollectionRunControl({ scope, entityId, disabledReason }: CollectionRunControlProps) {
   const apiReady = isApiConfigured();
   const [runId, setRunId] = useState<string | null>(null);
   const [status, setStatus] = useState<CollectionRunStatusValue | null>(null);
@@ -98,7 +99,7 @@ export function CollectionRunControl({ scope, entityId }: CollectionRunControlPr
       <button
         type="button"
         onClick={queueRun}
-        disabled={isQueueing || !apiReady}
+        disabled={isQueueing || !apiReady || Boolean(disabledReason)}
         className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-cyan-400/30 bg-cyan-400/10 px-3 text-xs font-semibold text-cyan-100 transition-colors hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-800/60 disabled:text-zinc-500"
       >
         {isQueueing ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Play className="size-3.5" aria-hidden="true" />}
@@ -106,7 +107,8 @@ export function CollectionRunControl({ scope, entityId }: CollectionRunControlPr
       </button>
 
       <div className="min-h-6 text-xs text-zinc-500">
-        {!apiReady ? <span>Offline: configure API URL</span> : null}
+        {disabledReason ? <span>{disabledReason}</span> : null}
+        {!disabledReason && !apiReady ? <span>Offline: configure API URL</span> : null}
         {status ? (
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill value={status} />

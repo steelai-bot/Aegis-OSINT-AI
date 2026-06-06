@@ -4,12 +4,14 @@ import { CollectionRunControl } from "@/components/collection-run-control";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format";
-import { getFindings, getInvestigations, getTargets } from "@/lib/api";
+import { getFindings, getInvestigationsWithSource, getTargetsWithSource } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export default async function InvestigationsPage() {
-  const [investigations, targets, findings] = await Promise.all([getInvestigations(), getTargets(), getFindings()]);
+  const investigations = await getInvestigationsWithSource();
+  const [targets, findings] = await Promise.all([getTargetsWithSource(investigations), getFindings()]);
+  const collectionDisabledReason = investigations.source === "live" ? undefined : "Sample data: live collection disabled";
 
   return (
     <>
@@ -39,7 +41,7 @@ export default async function InvestigationsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
-              {investigations.map((investigation) => (
+              {investigations.data.map((investigation) => (
                 <tr key={investigation.id}>
                   <td className="px-4 py-3">
                     <p className="font-medium text-zinc-100">{investigation.title}</p>
@@ -47,14 +49,14 @@ export default async function InvestigationsPage() {
                   </td>
                   <td className="px-4 py-3"><StatusPill value={investigation.status} /></td>
                   <td className="px-4 py-3 text-zinc-300">
-                    {targets.filter((target) => target.investigation_id === investigation.id).length}
+                    {targets.data.filter((target) => target.investigation_id === investigation.id).length}
                   </td>
                   <td className="px-4 py-3 text-zinc-300">
                     {findings.filter((finding) => finding.investigation_id === investigation.id).length}
                   </td>
                   <td className="px-4 py-3 text-zinc-500">{formatDate(investigation.updated_at)}</td>
                   <td className="px-4 py-3 align-top">
-                    <CollectionRunControl scope="investigation" entityId={investigation.id} />
+                    <CollectionRunControl scope="investigation" entityId={investigation.id} disabledReason={collectionDisabledReason} />
                   </td>
                 </tr>
               ))}
