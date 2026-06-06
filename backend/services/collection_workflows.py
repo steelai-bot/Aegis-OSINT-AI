@@ -8,7 +8,7 @@ instead of importing from each other.
 from typing import Any
 from uuid import UUID
 
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.schemas.collections import (
@@ -24,12 +24,14 @@ from backend.core.config import get_settings
 from backend.plugins.registry import PluginRegistry
 from backend.services.collection_runs import CollectionRunService
 from backend.services.collection_orchestrator import CollectionJob, CollectionOrchestrator
-from backend.services.crud import TargetService
+from backend.services.crud import InvestigationService, TargetService
 from backend.storage.database import AsyncSessionLocal
 
 
 async def run_collection_job(payload: CollectionRunRequest, *, session: AsyncSession) -> CollectionRunResponse:
     """Run a collection job and return the normalized API response."""
+
+    await validate_collection_scope(payload, session=session)
 
     job = CollectionJob(
         target=payload.target,
@@ -73,6 +75,8 @@ async def queue_collection_run(
 ) -> CollectionRunQueuedResponse:
     """Persist a queued collection run and schedule process-local execution."""
 
+    await validate_collection_scope(payload, session=session)
+
     run = await CollectionRunService(session).create_run(
         run_scope=run_scope,
         target=payload.target,
@@ -100,6 +104,8 @@ async def queue_investigation_collection_run(
     session: AsyncSession,
 ) -> CollectionRunQueuedResponse:
     """Persist a queued investigation-wide run and schedule process-local execution."""
+
+    await validate_investigation_scope(investigation_id, session=session)
 
     run = await CollectionRunService(session).create_run(
         run_scope="investigation",
@@ -167,6 +173,8 @@ async def run_investigation_collection_job(
 ) -> CollectionInvestigationRunResponse:
     """Run approved passive collectors for every target in an investigation."""
 
+    await validate_investigation_scope(investigation_id, session=session)
+
     target_results = []
     for target in await TargetService(session).list_targets(investigation_id):
         target_results.append(
@@ -195,6 +203,40 @@ async def run_investigation_collection_job(
             for plugin_name, error in result.errors.items()
         },
     )
+
+
+async def validate_collection_scope(payload: CollectionRunRequest, *, session: AsyncSession) -> None:
+    """Validate optional persistence scope before collection can create linked findings."""
+
+    if payload.investigation_id is not None:
+        await validate_investigation_scope(payload.investigation_id, session=session)
+
+    if payload.target_id is None:
+        return
+
+    target = await TargetService(session).get_target(payload.target_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target not found")
+
+    if payload.investigation_id is not None and target.investigation_id != payload.investigation_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Target does not belong to the requested investigation",
+        )
+
+    if target.value != payload.target or target.type != payload.target_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Collection target does not match the requested target_id",
+        )
+
+
+async def validate_investigation_scope(investigation_id: UUID, *, session: AsyncSession) -> None:
+    """Validate that an investigation exists before collection uses it as persistence scope."""
+
+    investigation = await InvestigationService(session).get_investigation(investigation_id)
+    if investigation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation not found")
 
 
 def collection_run_status_response(run: Any) -> CollectionRunStatusResponse:
