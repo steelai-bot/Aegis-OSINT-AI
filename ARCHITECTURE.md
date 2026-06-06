@@ -46,11 +46,23 @@ legacy/quarantine/ # pre-v2 modules retained only for extraction review
 
 ### API Layer
 
-The API layer exposes investigation, target, finding, report, agent-run, health, and metrics endpoints. It validates requests with Pydantic schemas and delegates business workflows to services. It does not call plugins or LLM providers directly.
+The API layer exposes investigation, target, finding, report, agent-run, passive
+collection, health, and metrics endpoints. It validates requests with Pydantic
+schemas and delegates business workflows to services. It does not call plugins or
+LLM providers directly; passive collection endpoints delegate through the
+collection orchestration service boundary.
 
 ### Services
 
-Services coordinate persistence, agent execution, report generation, and graph correlation. Services own transaction boundaries and application workflows.
+Services coordinate persistence, agent execution, passive collection, report
+generation, and graph correlation. Services own transaction boundaries and
+application workflows.
+
+`CollectionOrchestrator` runs approved passive collectors, normalizes plugin
+results, optionally enriches and scores findings, deduplicates evidence, and
+persists findings when an investigation context is provided. Collection workflows
+can run ad hoc without persistence or against existing targets/investigations
+with persistence after the required finding metadata migration is applied.
 
 ### Agents
 
@@ -74,7 +86,9 @@ Initial agents:
 
 ### Plugins
 
-Plugins encapsulate external OSINT integrations. They are auto-discovered from `backend/plugins/`, enabled or disabled by configuration, and return normalized findings. Provider API keys are read from environment variables only.
+Plugins encapsulate external OSINT integrations. They are auto-discovered from
+`backend/plugins/`, enabled or disabled by configuration, and return normalized
+findings. Provider API keys are read from environment variables only.
 
 Initial plugins:
 
@@ -85,6 +99,19 @@ Initial plugins:
 - VirusTotal
 - SecurityTrails
 - HaveIBeenPwned
+
+Additional passive collection plugins support defensive threat-intelligence,
+brand/domain monitoring, phishing infrastructure detection, and authorized public
+source monitoring:
+
+- `certstream_monitor`
+- `s3_scanner`
+- `ransomware_blog_scraper`
+- `telegram_channel_monitor`
+
+Plugins must remain passive and must not perform exploitation, credential replay,
+payload execution, phishing operations, browser fingerprint cloning, or session
+hijacking.
 
 ### Providers
 
@@ -112,6 +139,8 @@ The event bus publishes lifecycle and investigation events such as:
 - `workflow.completed`
 - `agent.started`
 - `agent.completed`
+- `collection.started`
+- `collection.completed`
 - `finding.created`
 - `report.created`
 

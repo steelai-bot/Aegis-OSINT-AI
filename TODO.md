@@ -89,3 +89,21 @@
 - [x] Add remaining operator documentation.
 - [x] Add legacy migration notes.
 - [x] Add security model documentation.
+
+## Recent Sprint — Passive Threat-Intelligence Collection
+
+- [x] Add threat-intelligence finding metadata model fields.
+- [x] Add Alembic migration `0003_finding_threat_intel_metadata`.
+- [x] Add passive collection orchestration service.
+- [x] Add defensive passive collection plugins for phishing, cloud exposure, and public-source monitoring.
+- [x] Add ad-hoc collection endpoint.
+- [x] Add existing-target and investigation-wide collection endpoints.
+- [x] Add operator examples for passive collection workflows.
+- [x] Add migration `0003` operational apply, verification, and rollback guidance.
+
+## Next Candidate Work — Requires Explicit Scope Approval
+
+- [ ] Add asynchronous/background execution for long-running investigation-wide collection.
+- [ ] Add frontend controls for target and investigation collection workflows.
+- [ ] Add collection run IDs and status tracking if operators need async job visibility.
+- [ ] Add production authentication, RBAC, and audit logging before shared deployment.

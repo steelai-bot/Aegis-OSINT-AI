@@ -43,6 +43,83 @@ This migration is incremental. Every phase must keep the application runnable an
 3. Add CRUD services and API schemas.
 4. Add API tests for investigations and findings.
 
+### Phase 2.x — Migration `0003` Threat-Intelligence Finding Metadata
+
+Migration `alembic/versions/0003_finding_threat_intel_metadata.py` adds the finding
+metadata fields required by passive threat-intelligence collection persistence. The
+runtime `Finding` model and collection orchestration code expect these columns to
+exist before persisted collection workflows are used.
+
+#### Pre-apply checklist
+
+1. Confirm the target environment is authorized for Aegis v2 defensive OSINT usage.
+2. Confirm the database is already at revision `0002_agent_persistence` or another
+   compatible revision in the same Alembic lineage.
+3. Take a current database backup or snapshot before applying the migration.
+4. Review expected write downtime and lock impact for the `findings` table.
+5. Apply in staging first and validate collection persistence before production.
+
+#### Apply procedure
+
+Run the normal Alembic upgrade from the deployed application environment:
+
+```bash
+alembic upgrade head
+```
+
+For Docker-based local operations, run the upgrade through the backend service as
+documented in the operator guide:
+
+```bash
+docker compose run --rm backend alembic upgrade head
+```
+
+Do not place provider secrets, API keys, database passwords, or access tokens in
+migration commands, tickets, screenshots, or logs.
+
+#### Post-apply verification
+
+Verify that Alembic reports the expected head revision:
+
+```bash
+alembic current
+```
+
+Verify that the `findings` table includes the threat-intelligence metadata columns
+before running collection workflows that persist findings:
+
+```sql
+select column_name
+from information_schema.columns
+where table_name = 'findings'
+  and column_name in (
+    'threat_category',
+    'indicator_type',
+    'first_seen',
+    'last_seen',
+    'collector_plugin',
+    'raw_evidence',
+    'enriched',
+    'enrichment_data',
+    'risk_score',
+    'remediation_status'
+  )
+order by column_name;
+```
+
+#### Rollback procedure
+
+If validation fails before production collection data depends on the new columns,
+roll back one revision:
+
+```bash
+alembic downgrade -1
+```
+
+Rollback removes the `0003` metadata columns and their indexes. Do not roll back
+after persisted collection findings rely on these fields unless the data loss has
+been reviewed and approved by the operator.
+
 ## Phase 3 — Agent Framework
 
 1. Implement `BaseAgent` and independent agent classes.
