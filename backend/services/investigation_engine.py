@@ -14,6 +14,7 @@ from backend.agents import (
     InvestigationContext,
     ReconAgent,
     ReportAgent,
+    SocialAgent,
     ThreatIntelAgent,
 )
 from backend.core.events import EventBus, event_bus
@@ -43,6 +44,7 @@ class InvestigationEngine:
             or [
                 ReconAgent(bus=self.event_bus),
                 DomainAgent(bus=self.event_bus),
+                SocialAgent(bus=self.event_bus),
                 ThreatIntelAgent(bus=self.event_bus),
                 ReportAgent(bus=self.event_bus),
             ]

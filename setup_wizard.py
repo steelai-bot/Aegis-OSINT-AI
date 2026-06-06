@@ -433,6 +433,7 @@ GOOGLE_CSE_CX=
 BING_API_KEY=
 BRAVE_API_KEY=
 SHODAN_API_KEY=
+SERUS_AI_API_KEY=
 CENSYS_API_ID=
 CENSYS_API_SECRET=
 VIRUSTOTAL_API_KEY=
@@ -662,6 +663,22 @@ def main():
 
     # 8. Directories
     setup_directories()
+
+    # 8.5 Frontend Setup
+    section("Frontend Setup (Node.js)")
+    if shutil.which("npm"):
+        info("Installing frontend dependencies...")
+        npm_cmd = "npm install"
+        if sys.platform == "win32":
+            npm_cmd = "npm.cmd install"
+        result = subprocess.run(npm_cmd, cwd="frontend", shell=True)
+        if result.returncode == 0:
+            ok("Frontend dependencies installed.")
+        else:
+            err("Frontend installation failed.")
+    else:
+        warn("npm not found. Please install Node.js to run the frontend.")
+
 
     # 9. Re-check after install
     if critical_missing or outdated:

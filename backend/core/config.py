@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     http_max_retries: int = 3
     http_backoff_seconds: float = 0.5
     http_user_agent: str = "Aegis-v2-OSINT/0.1"
+    serus_ai_api_key: str | None = None
 
 
 @lru_cache
