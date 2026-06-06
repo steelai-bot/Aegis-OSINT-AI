@@ -2,16 +2,17 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes._audit import record_route_audit_event
 from backend.api.schemas.collections import (
     CollectionInvestigationRunResponse,
     CollectionRunQueuedResponse,
     CollectionWorkflowRunRequest,
 )
 from backend.api.schemas.investigations import InvestigationCreate, InvestigationRead
-from backend.api.security import require_permission
+from backend.api.security import Principal, require_permission
 from backend.services.collection_workflows import queue_investigation_collection_run, run_investigation_collection_job
 from backend.services.crud import InvestigationService
 from backend.storage.database import get_db_session
@@ -23,13 +24,24 @@ router = APIRouter(tags=["investigations"])
     "/investigations",
     response_model=InvestigationRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("investigation:create"))],
 )
 async def create_investigation(
     payload: InvestigationCreate,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
+    principal: Principal | None = Depends(require_permission("investigation:create")),
 ):
-    return await InvestigationService(session).create_investigation(payload.title)
+    investigation = await InvestigationService(session).create_investigation(payload.title)
+    await record_route_audit_event(
+        request=request,
+        principal=principal,
+        event_type="investigation.created",
+        status="success",
+        resource_type="investigation",
+        resource_id=str(investigation.id),
+        metadata={"title_length": len(payload.title)},
+    )
+    return investigation
 
 
 @router.get(

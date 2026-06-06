@@ -2,9 +2,10 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes._audit import record_route_audit_event
 from backend.api.schemas.collections import (
     CollectionRunQueuedResponse,
     CollectionRunRequest,
@@ -12,7 +13,7 @@ from backend.api.schemas.collections import (
     CollectionWorkflowRunRequest,
 )
 from backend.api.schemas.targets import TargetCreate, TargetRead
-from backend.api.security import require_permission
+from backend.api.security import Principal, require_permission
 from backend.services.collection_workflows import queue_collection_run, run_collection_job
 from backend.services.crud import InvestigationService, TargetService
 from backend.storage.database import get_db_session
@@ -24,13 +25,31 @@ router = APIRouter(tags=["targets"])
     "/targets",
     response_model=TargetRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("target:create"))],
 )
-async def create_target(payload: TargetCreate, session: AsyncSession = Depends(get_db_session)):
+async def create_target(
+    payload: TargetCreate,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    principal: Principal | None = Depends(require_permission("target:create")),
+):
     investigation = await InvestigationService(session).get_investigation(payload.investigation_id)
     if investigation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation not found")
-    return await TargetService(session).create_target(payload.investigation_id, payload.type, payload.value)
+    target = await TargetService(session).create_target(payload.investigation_id, payload.type, payload.value)
+    await record_route_audit_event(
+        request=request,
+        principal=principal,
+        event_type="target.created",
+        status="success",
+        resource_type="target",
+        resource_id=str(target.id),
+        metadata={
+            "investigation_id": str(payload.investigation_id),
+            "target_type": payload.type,
+            "target_value_length": len(payload.value),
+        },
+    )
+    return target
 
 
 @router.get(
