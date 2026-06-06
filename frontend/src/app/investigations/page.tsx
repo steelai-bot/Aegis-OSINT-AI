@@ -1,5 +1,6 @@
 import { Plus, Search } from "lucide-react";
 
+import { CollectionRunControl } from "@/components/collection-run-control";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format";
@@ -26,7 +27,7 @@ export default async function InvestigationsPage() {
 
       <section className="rounded-md border border-zinc-800 bg-zinc-900/70">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[780px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="text-xs uppercase text-zinc-500">
               <tr className="border-b border-zinc-800">
                 <th className="px-4 py-3 font-medium">Title</th>
@@ -34,6 +35,7 @@ export default async function InvestigationsPage() {
                 <th className="px-4 py-3 font-medium">Targets</th>
                 <th className="px-4 py-3 font-medium">Findings</th>
                 <th className="px-4 py-3 font-medium">Updated</th>
+                <th className="px-4 py-3 font-medium">Collection</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800">
@@ -51,6 +53,9 @@ export default async function InvestigationsPage() {
                     {findings.filter((finding) => finding.investigation_id === investigation.id).length}
                   </td>
                   <td className="px-4 py-3 text-zinc-500">{formatDate(investigation.updated_at)}</td>
+                  <td className="px-4 py-3 align-top">
+                    <CollectionRunControl scope="investigation" entityId={investigation.id} />
+                  </td>
                 </tr>
               ))}
             </tbody>

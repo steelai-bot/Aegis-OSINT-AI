@@ -53,3 +53,31 @@ export type PluginStatus = {
   status: "enabled" | "disabled" | "needs_key";
   coverage: string;
 };
+
+export type CollectionRunStatusValue = "queued" | "running" | "completed" | "failed";
+
+export type CollectionRunQueuedResponse = {
+  run_id: string;
+  status: CollectionRunStatusValue;
+  status_url: string;
+};
+
+export type CollectionRunStatus = {
+  run_id: string;
+  run_scope: "ad_hoc" | "target" | "investigation" | string;
+  status: CollectionRunStatusValue;
+  target: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  investigation_id: string | null;
+  plugin_name: string | null;
+  priority: number;
+  enrich: boolean;
+  persisted_count: number;
+  result: Record<string, unknown>;
+  errors: Record<string, unknown>;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};

@@ -1,7 +1,28 @@
 import * as sample from "./sample-data";
-import type { Finding, Investigation, PluginStatus, Report, Target, TimelineEvent } from "./types";
+import type {
+  CollectionRunQueuedResponse,
+  CollectionRunStatus,
+  Finding,
+  Investigation,
+  PluginStatus,
+  Report,
+  Target,
+  TimelineEvent,
+} from "./types";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_AEGIS_API_URL;
+
+type CollectionWorkflowPayload = {
+  plugin_name?: string;
+  priority?: number;
+  config?: Record<string, unknown>;
+  enrich?: boolean;
+  async_mode: true;
+};
+
+export function isApiConfigured(): boolean {
+  return Boolean(apiBaseUrl);
+}
 
 async function fetchJson<T>(path: string, fallback: T): Promise<T> {
   if (!apiBaseUrl) {
@@ -21,6 +42,24 @@ async function fetchJson<T>(path: string, fallback: T): Promise<T> {
   } catch {
     return fallback;
   }
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  if (!apiBaseUrl) {
+    throw new Error("Backend API URL is not configured.");
+  }
+
+  const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend API request failed with status ${response.status}.`);
+  }
+
+  return (await response.json()) as T;
 }
 
 export async function getInvestigations(): Promise<Investigation[]> {
@@ -56,4 +95,34 @@ export function getTimelineEvents(): TimelineEvent[] {
 
 export function getPlugins(): PluginStatus[] {
   return sample.plugins;
+}
+
+export async function queueTargetCollection(
+  targetId: string,
+  payload: CollectionWorkflowPayload = { async_mode: true },
+): Promise<CollectionRunQueuedResponse> {
+  return postJson(`/api/v1/targets/${targetId}/collect`, { ...payload, async_mode: true });
+}
+
+export async function queueInvestigationCollection(
+  investigationId: string,
+  payload: CollectionWorkflowPayload = { async_mode: true },
+): Promise<CollectionRunQueuedResponse> {
+  return postJson(`/api/v1/investigations/${investigationId}/collect`, { ...payload, async_mode: true });
+}
+
+export async function getCollectionRunStatus(runId: string): Promise<CollectionRunStatus> {
+  if (!apiBaseUrl) {
+    throw new Error("Backend API URL is not configured.");
+  }
+
+  const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/api/v1/collections/runs/${runId}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Collection run status request failed with status ${response.status}.`);
+  }
+
+  return (await response.json()) as CollectionRunStatus;
 }
