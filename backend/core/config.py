@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
     api_prefix: str = ""
+    auth_enabled: bool = False
+    api_auth_token: str | None = None
+    auth_allow_unauthenticated_health: bool = True
 
     database_url: str = Field(
         default="postgresql+asyncpg://aegis:aegis@localhost:5432/aegis",
