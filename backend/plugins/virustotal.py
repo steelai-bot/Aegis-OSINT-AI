@@ -9,6 +9,8 @@ from backend.plugins.base import BasePlugin, PluginResult
 
 class VirusTotalPlugin(BasePlugin):
     name = "virustotal"
+    threat_category = "domain_monitoring"
+    indicator_types = ("domain",)
 
     async def execute(self, target: str, context: dict[str, Any] | None = None) -> PluginResult:
         settings = get_settings()

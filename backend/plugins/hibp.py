@@ -9,6 +9,8 @@ from backend.plugins.base import BasePlugin, PluginResult
 
 class HaveIBeenPwnedPlugin(BasePlugin):
     name = "hibp"
+    threat_category = "credential_leak"
+    indicator_types = ("email",)
 
     async def execute(self, target: str, context: dict[str, Any] | None = None) -> PluginResult:
         settings = get_settings()

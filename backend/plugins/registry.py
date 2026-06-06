@@ -15,8 +15,10 @@ def discover_plugins(package_name: str = "backend.plugins") -> list[type[BasePlu
 
     package = importlib.import_module(package_name)
     discovered: list[type[BasePlugin]] = []
-    for module_info in pkgutil.iter_modules(package.__path__, package.__name__ + "."):
+    for module_info in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
         if module_info.name.endswith((".base", ".registry")):
+            continue
+        if module_info.ispkg:
             continue
         module = importlib.import_module(module_info.name)
         for value in vars(module).values():

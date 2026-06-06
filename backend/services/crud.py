@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -68,7 +69,24 @@ class FindingService:
         severity: str,
         data: dict,
         target_id: UUID | None = None,
+        threat_category: str = "unknown",
+        indicator_type: str = "unknown",
+        first_seen: datetime | None = None,
+        last_seen: datetime | None = None,
+        breach_date: datetime | None = None,
+        threat_actor: str | None = None,
+        campaign_id: str | None = None,
+        source_url: str | None = None,
+        collector_plugin: str = "",
+        raw_evidence: dict | None = None,
+        enriched: bool = False,
+        enrichment_data: dict | None = None,
+        risk_score: float = 0.0,
+        exploitability: str = "unknown",
+        remediation_status: str = "open",
+        remediation_notes: str | None = None,
     ) -> Finding:
+        now = datetime.now(UTC)
         finding = Finding(
             investigation_id=investigation_id,
             target_id=target_id,
@@ -76,16 +94,47 @@ class FindingService:
             confidence=confidence,
             severity=severity,
             data=data,
+            threat_category=threat_category,
+            indicator_type=indicator_type,
+            first_seen=first_seen or now,
+            last_seen=last_seen or first_seen or now,
+            breach_date=breach_date,
+            threat_actor=threat_actor,
+            campaign_id=campaign_id,
+            source_url=source_url,
+            collector_plugin=collector_plugin,
+            raw_evidence=raw_evidence or {},
+            enriched=enriched,
+            enrichment_data=enrichment_data or {},
+            risk_score=risk_score,
+            exploitability=exploitability,
+            remediation_status=remediation_status,
+            remediation_notes=remediation_notes,
         )
         self.session.add(finding)
         await self.session.commit()
         await self.session.refresh(finding)
         return finding
 
-    async def list_findings(self, investigation_id: UUID | None = None) -> list[Finding]:
+    async def list_findings(
+        self,
+        investigation_id: UUID | None = None,
+        threat_category: str | None = None,
+        indicator_type: str | None = None,
+        severity: str | None = None,
+        remediation_status: str | None = None,
+    ) -> list[Finding]:
         statement = select(Finding).order_by(Finding.created_at.desc())
         if investigation_id is not None:
             statement = statement.where(Finding.investigation_id == investigation_id)
+        if threat_category is not None:
+            statement = statement.where(Finding.threat_category == threat_category)
+        if indicator_type is not None:
+            statement = statement.where(Finding.indicator_type == indicator_type)
+        if severity is not None:
+            statement = statement.where(Finding.severity == severity)
+        if remediation_status is not None:
+            statement = statement.where(Finding.remediation_status == remediation_status)
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 

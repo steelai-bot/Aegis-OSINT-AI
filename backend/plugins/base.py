@@ -18,6 +18,8 @@ class PluginResult:
 class BasePlugin(ABC):
     name = "base"
     enabled = True
+    threat_category = "general"
+    indicator_types: tuple[str, ...] = ()
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         self.config = config or {}
