@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 
-from backend.api.routes import agents, collections, findings, health, investigations, reports, targets
+from backend.api.routes import agents, collections, findings, health, investigations, reports, targets, tool_execution_approvals
 from backend.core.config import get_settings
 
 
@@ -20,6 +20,7 @@ def create_app() -> FastAPI:
         targets.router,
         findings.router,
         collections.router,
+        tool_execution_approvals.router,
         reports.router,
         agents.router,
     ):

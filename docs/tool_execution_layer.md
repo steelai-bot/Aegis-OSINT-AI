@@ -22,7 +22,55 @@ approval is mandatory.
 
 ## Approval
 
-Non-passive tools require an approval token. Configure it with:
+Non-passive tools require an approval token. There are two supported approval
+sources:
+
+1. a persistent, scoped approval record created through the API, or
+2. the legacy environment fallback token for local deployments.
+
+### Persistent approvals
+
+Create a scoped approval with:
+
+```http
+POST /tool-execution/approvals
+```
+
+Example payload:
+
+```json
+{
+  "plugin_name": "some_operator_tool",
+  "target_type": "domain",
+  "target": "example.com",
+  "execution_mode": "operator_assisted",
+  "authorized_scope": "ticket-123 approved domain recon",
+  "reason": "Operator-approved verification for an authorized target.",
+  "expires_in_minutes": 30,
+  "max_uses": 1
+}
+```
+
+The create response returns `approval_token` exactly once. The database stores
+only a SHA-256 token hash plus scope fields (`plugin_name`, `target_type`,
+`target_hash`, `execution_mode`, expiry, and use count). Raw targets are not
+stored when the API receives `target`; the service stores a normalized hash.
+
+Operators can review or revoke approvals without exposing token material:
+
+```http
+GET /tool-execution/approvals
+GET /tool-execution/approvals/{approval_id}
+DELETE /tool-execution/approvals/{approval_id}
+```
+
+When `AEGIS_AUTH_ENABLED=true`, approval endpoints require the admin-only
+`tool_execution:approve` permission. With local MVP auth disabled, the endpoints
+remain available for development workflows.
+
+### Environment fallback
+
+For simple local deployments, configure a static fallback token with:
 
 ```bash
 export AEGIS_TOOL_EXECUTION_APPROVAL_TOKEN="change-me"
@@ -47,6 +95,8 @@ audit events:
 - `tool.execution.decision`
 - `tool.execution.completed`
 - `tool.execution.failed`
+- `tool.execution.approval.created`
+- `tool.execution.approval.revoked`
 
 The layer stores target hashes rather than raw targets in audit metadata. Audit
 write failures are logged and do not hide successful domain actions.

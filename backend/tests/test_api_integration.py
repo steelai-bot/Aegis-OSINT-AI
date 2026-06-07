@@ -165,7 +165,7 @@ async def test_agent_run_persists_task_result_metadata(client: AsyncClient) -> N
 
     assert response.status_code == 200
     results = response.json()
-    assert [item["agent_name"] for item in results] == ["recon", "domain", "threat_intel", "report"]
+    assert [item["agent_name"] for item in results] == ["recon", "domain", "social", "threat_intel", "report"]
     assert all(item["status"] == "completed" for item in results)
     assert all(item["metadata"]["task_result_id"] for item in results)
-    assert results[-1]["metadata"]["finding_count"] == 2
+    assert results[-1]["metadata"]["finding_count"] == 3

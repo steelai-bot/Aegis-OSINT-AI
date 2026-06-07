@@ -340,6 +340,11 @@ def test_plugin_configuration_tests_exist() -> None:
 def test_tool_execution_layer_contract_exists() -> None:
     base_text = read("backend/plugins/base.py")
     service_text = read("backend/services/tool_execution.py")
+    approval_service_text = read("backend/services/tool_execution_approvals.py")
+    approval_route_text = read("backend/api/routes/tool_execution_approvals.py")
+    approval_schema_text = read("backend/api/schemas/tool_execution_approvals.py")
+    approval_model_text = read("backend/models/tool_execution_approval.py")
+    approval_migration_text = read("alembic/versions/0006_tool_execution_approvals.py")
     orchestrator_text = read("backend/services/collection_orchestrator.py")
     schema_text = read("backend/api/schemas/collections.py")
     docs_text = read("docs/tool_execution_layer.md")
@@ -348,6 +353,13 @@ def test_tool_execution_layer_contract_exists() -> None:
     assert "requires_approval" in base_text
     assert "class ToolExecutionController" in service_text
     assert "class InMemoryRateLimiter" in service_text
+    assert "ToolExecutionApprovalService" in service_text
+    assert "class ToolExecutionApproval" in approval_model_text
+    assert "tool_execution_approvals" in approval_migration_text
+    assert "class ToolExecutionApprovalService" in approval_service_text
+    assert "consume_approval" in approval_service_text
+    assert '"/tool-execution/approvals"' in approval_route_text
+    assert "ToolExecutionApprovalCreate" in approval_schema_text
     assert "tool.execution.decision" in service_text
     assert "ToolExecutionController" in orchestrator_text
     assert "tool.execution.completed" in orchestrator_text

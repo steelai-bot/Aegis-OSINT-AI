@@ -2,8 +2,9 @@
 
 The first implementation is intentionally lightweight and process-local: it gives
 collection orchestration a single decision point for execution mode checks,
-operator approval requirements, rate limits, and audit-event emission without
-introducing a new durable queue or approval table yet.
+operator approval requirements, rate limits, and audit-event emission. Phase 2
+adds optional persistent approval records while retaining the environment-token
+fallback for local deployments.
 """
 
 from __future__ import annotations
@@ -11,7 +12,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from hashlib import sha256
 from typing import Any, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.config import Settings, get_settings
 from backend.plugins.base import BasePlugin
 from backend.services.audit import AuditEventService
+from backend.services.tool_execution_approvals import ToolExecutionApprovalService, hash_tool_target
 
 
 logger = logging.getLogger(__name__)
@@ -100,10 +101,16 @@ class ToolExecutionController:
         settings: Settings | None = None,
         rate_limiter: InMemoryRateLimiter | None = None,
         audit_session: AsyncSession | None = None,
+        approval_session: AsyncSession | None = None,
+        approval_service: ToolExecutionApprovalService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.rate_limiter = rate_limiter or default_rate_limiter
         self.audit_session = audit_session
+        self.approval_session = approval_session or audit_session
+        self.approval_service = approval_service or (
+            ToolExecutionApprovalService(self.approval_session) if self.approval_session is not None else None
+        )
 
     async def authorize(
         self,
@@ -120,7 +127,7 @@ class ToolExecutionController:
         configured_mode = normalize_execution_mode(self.settings.tool_execution_mode)
         runtime_mode = self._effective_runtime_mode(configured_mode, requested_mode)
         plugin_mode = normalize_execution_mode(getattr(plugin, "execution_mode", "passive"))
-        target_hash = _hash_target(target)
+        target_hash = hash_tool_target(target)
         base_metadata = {
             "target_hash": target_hash,
             "authorized_scope": authorized_scope,
@@ -136,18 +143,43 @@ class ToolExecutionController:
             return self._decision(plugin, "blocked", "runtime_mode_too_restrictive", runtime_mode, plugin_mode, target_type, base_metadata)
 
         requires_approval = bool(getattr(plugin, "requires_approval", False)) or plugin_mode != "passive"
-        if requires_approval and not self._approval_matches(approval_token):
-            reason = "approval_token_not_configured" if not self.settings.tool_execution_approval_token else "approval_required"
-            return self._decision(
-                plugin,
-                "approval_required",
-                reason,
-                runtime_mode,
-                plugin_mode,
-                target_type,
-                base_metadata,
-                requires_approval=True,
+        if requires_approval:
+            approval_metadata: dict[str, Any] = {}
+            persistent_result = await self._persistent_approval_matches(
+                approval_token=approval_token,
+                plugin=plugin,
+                target_type=target_type,
+                target_hash=target_hash,
+                plugin_mode=plugin_mode,
+                requested_mode=runtime_mode,
             )
+            if persistent_result is not None:
+                persistent_allowed, persistent_reason, approval_metadata = persistent_result
+                if not persistent_allowed and not self._approval_matches(approval_token):
+                    return self._decision(
+                        plugin,
+                        "approval_required",
+                        persistent_reason,
+                        runtime_mode,
+                        plugin_mode,
+                        target_type,
+                        {**base_metadata, **approval_metadata},
+                        requires_approval=True,
+                    )
+                if persistent_allowed:
+                    base_metadata = {**base_metadata, **approval_metadata}
+            elif not self._approval_matches(approval_token):
+                reason = "approval_token_not_configured" if not self.settings.tool_execution_approval_token else "approval_required"
+                return self._decision(
+                    plugin,
+                    "approval_required",
+                    reason,
+                    runtime_mode,
+                    plugin_mode,
+                    target_type,
+                    base_metadata,
+                    requires_approval=True,
+                )
 
         limit = self.settings.tool_execution_rate_limit_per_minute
         rate_limit_key = self._rate_limit_key(plugin=plugin, target_hash=target_hash, target_type=target_type)
@@ -238,6 +270,45 @@ class ToolExecutionController:
         configured = self.settings.tool_execution_approval_token
         return bool(configured and approval_token and configured == approval_token)
 
+    async def _persistent_approval_matches(
+        self,
+        *,
+        approval_token: str | None,
+        plugin: BasePlugin,
+        target_type: str,
+        target_hash: str,
+        plugin_mode: ExecutionMode,
+        requested_mode: ExecutionMode,
+    ) -> tuple[bool, str, dict[str, Any]] | None:
+        if self.approval_service is None or not approval_token:
+            return None
+        try:
+            result = await self.approval_service.consume_approval(
+                token=approval_token,
+                plugin_name=plugin.name,
+                target_type=target_type,
+                target_hash=target_hash,
+                plugin_mode=plugin_mode,
+                requested_mode=requested_mode,
+            )
+        except Exception as exc:
+            if self.approval_session is not None:
+                await self.approval_session.rollback()
+            logger.warning("Failed to validate persistent tool approval (%s)", type(exc).__name__)
+            return False, "approval_lookup_failed", {"approval_source": "persistent"}
+
+        metadata: dict[str, Any] = {"approval_source": "persistent"}
+        if result.approval is not None:
+            metadata.update(
+                {
+                    "approval_id": str(result.approval.id),
+                    "approval_status": result.approval.status,
+                    "approval_use_count": result.approval.use_count,
+                    "approval_max_uses": result.approval.max_uses,
+                }
+            )
+        return result.allowed, result.reason, metadata
+
     def _effective_runtime_mode(self, configured_mode: ExecutionMode, requested_mode: str | None) -> ExecutionMode:
         requested = normalize_execution_mode(requested_mode) if requested_mode else configured_mode
         if configured_mode == "disabled":
@@ -285,7 +356,7 @@ def normalize_execution_mode(value: str | None) -> ExecutionMode:
 
 
 def _hash_target(target: str) -> str:
-    return sha256(target.strip().lower().encode("utf-8", errors="ignore")).hexdigest()
+    return hash_tool_target(target)
 
 
 default_rate_limiter = InMemoryRateLimiter()

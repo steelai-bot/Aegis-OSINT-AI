@@ -10,6 +10,7 @@ from backend.models.finding import Finding
 from backend.models.investigation import Investigation
 from backend.models.report import Report
 from backend.models.target import Target
+from backend.models.tool_execution_approval import ToolExecutionApproval
 
 __all__ = [
     "AgentContextSnapshot",
@@ -22,4 +23,5 @@ __all__ = [
     "Investigation",
     "Report",
     "Target",
+    "ToolExecutionApproval",
 ]

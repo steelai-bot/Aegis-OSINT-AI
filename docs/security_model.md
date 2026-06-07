@@ -85,9 +85,11 @@ production deployment, add per-investigation authorization and audit logging for
 ad-hoc collection, target collection, and investigation-wide collection runs.
 
 The Tool Execution Layer adds a service-level policy gate before plugin execution.
-It supports runtime modes, plugin-declared execution modes, approval tokens for
-non-passive tools, process-local rate limits, and sanitized audit events for
-decisions and outcomes. See `docs/tool_execution_layer.md` for the current MVP
+It supports runtime modes, plugin-declared execution modes, persistent scoped
+approval records, environment fallback approval tokens for local use,
+process-local rate limits, and sanitized audit events for decisions and outcomes.
+Persistent approval records store token hashes and target hashes rather than raw
+token/target values. See `docs/tool_execution_layer.md` for the current MVP
 contract.
 
 Recommended controls before production:

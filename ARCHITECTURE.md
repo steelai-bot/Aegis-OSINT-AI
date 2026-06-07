@@ -124,8 +124,11 @@ hijacking.
 `backend/services/tool_execution.py` is the policy gate before plugin/tool
 execution. It evaluates runtime mode, plugin-declared execution mode, approval
 requirements, and process-local rate limits before `CollectionOrchestrator`
-invokes a plugin. Decisions and outcomes are emitted as lifecycle events and, when
-a database session is available, persisted as sanitized audit events.
+invokes a plugin. Persistent approval records live in
+`tool_execution_approvals` and are managed through
+`POST/GET/DELETE /tool-execution/approvals`; only token hashes and target hashes
+are stored. Decisions and outcomes are emitted as lifecycle events and, when a
+database session is available, persisted as sanitized audit events.
 
 The default runtime mode is `passive`. Future active, crawl, or offensive-adjacent
 capabilities should not be removed from the roadmap; they must be gated by stricter
