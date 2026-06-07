@@ -106,6 +106,37 @@ Run diagnostics without starting servers:
 python scripts/dev_lifecycle.py doctor
 ```
 
+## Updating an existing clone
+
+You do not need to delete and re-clone the repository every time new changes are
+pushed. From inside your existing clone, run:
+
+```bash
+./scripts/update_from_repo.sh
+```
+
+If your clone does not have `scripts/update_from_repo.sh` yet, bootstrap the
+first update once with plain Git:
+
+```bash
+git fetch origin
+git pull --ff-only origin main
+```
+
+After that, use the helper above for future updates.
+
+Useful variants:
+
+```bash
+./scripts/update_from_repo.sh --branch main
+./scripts/update_from_repo.sh --stash
+./scripts/update_from_repo.sh --install
+```
+
+The helper fetches from `origin` and uses `git pull --ff-only`, so it will not
+create surprise merge commits. If you have local changes, it stops safely unless
+you pass `--stash`.
+
 ## Docker Compose
 
 Run the local stack:
