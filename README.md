@@ -108,6 +108,18 @@ python scripts/dev_lifecycle.py doctor
 
 ## Updating an existing clone
 
+One-line install/update from GitHub:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/steelai-bot/Aegis-OSINT-AI/main/scripts/install_or_update.sh | bash
+```
+
+By default this clones/updates `~/Aegis-OSINT-AI`. To choose another directory:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/steelai-bot/Aegis-OSINT-AI/main/scripts/install_or_update.sh | AEGIS_DIR=/opt/Aegis-OSINT-AI bash
+```
+
 You do not need to delete and re-clone the repository every time new changes are
 pushed. From inside your existing clone, run:
 

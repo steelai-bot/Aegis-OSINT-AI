@@ -30,6 +30,12 @@ Example job config:
 
 ## Linux smoke test
 
+One-line install/update from GitHub:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/steelai-bot/Aegis-OSINT-AI/main/scripts/install_or_update.sh | bash
+```
+
 If you already cloned the repo earlier, update it instead of deleting/re-cloning:
 
 ```bash
