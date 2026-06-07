@@ -120,15 +120,15 @@ payload execution, phishing operations, browser fingerprint cloning, or session
 hijacking.
 
 ### Tool Execution Layer
-
-`backend/services/tool_execution.py` is the policy gate before plugin/tool
-execution. It evaluates runtime mode, plugin-declared execution mode, approval
-requirements, and process-local rate limits before `CollectionOrchestrator`
-invokes a plugin. Persistent approval records live in
-`tool_execution_approvals` and are managed through
+The Tool Execution Layer in `backend/services/tool_execution.py` is the single
+policy gate before plugins/tools are invoked. It enforces runtime modes,
+per-plugin execution modes, approval tokens, scoped approval metadata, and a
+process-local rate limit before orchestration can call a plugin. Persistent
+approval records live in `tool_execution_approvals` and are managed through
 `POST/GET/DELETE /tool-execution/approvals`; only token hashes and target hashes
-are stored. Decisions and outcomes are emitted as lifecycle events and, when a
-database session is available, persisted as sanitized audit events.
+are stored. Decisions and outcomes are written as sanitized `tool.execution.*`
+audit events when an audit DB session is available, and operators can review
+that trail through `GET /audit/events` or the frontend `/tool-execution` page.
 
 The default runtime mode is `passive`. Future active, crawl, or offensive-adjacent
 capabilities should not be removed from the roadmap; they must be gated by stricter

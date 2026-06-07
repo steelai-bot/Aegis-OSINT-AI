@@ -2,12 +2,16 @@ import * as sample from "./sample-data";
 import type {
   CollectionRunQueuedResponse,
   CollectionRunStatus,
+  AuditEvent,
+  AuditEventListResponse,
   Finding,
   Investigation,
   PluginStatus,
   Report,
   Target,
   TimelineEvent,
+  ToolExecutionApproval,
+  ToolExecutionApprovalListResponse,
 } from "./types";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_AEGIS_API_URL;
@@ -154,4 +158,20 @@ export async function getCollectionRunStatus(runId: string): Promise<CollectionR
   }
 
   return (await response.json()) as CollectionRunStatus;
+}
+
+export async function getToolExecutionApprovalsWithSource(): Promise<ApiDataResult<ToolExecutionApproval[]>> {
+  const response = await fetchJsonWithSource<ToolExecutionApprovalListResponse>(
+    "/api/v1/tool-execution/approvals",
+    { approvals: sample.toolExecutionApprovals },
+  );
+  return { data: response.data.approvals, source: response.source };
+}
+
+export async function getToolAuditEventsWithSource(): Promise<ApiDataResult<AuditEvent[]>> {
+  const response = await fetchJsonWithSource<AuditEventListResponse>(
+    "/api/v1/audit/events?event_type_prefix=tool.execution.&limit=100",
+    { events: sample.auditEvents },
+  );
+  return { data: response.data.events, source: response.source };
 }

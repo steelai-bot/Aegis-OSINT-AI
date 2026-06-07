@@ -101,6 +101,23 @@ audit events:
 The layer stores target hashes rather than raw targets in audit metadata. Audit
 write failures are logged and do not hide successful domain actions.
 
+Operators can read the tool execution audit trail through:
+
+```http
+GET /audit/events?event_type_prefix=tool.execution.&limit=100
+GET /audit/events/{event_id}
+```
+
+`/audit/events` defaults to `event_type_prefix=tool.execution.` so the first
+view is focused on policy decisions, outcomes, and approval lifecycle events.
+Additional filters include `event_type`, `status`, `actor_id`, `resource_type`,
+and `resource_id`. When `AEGIS_AUTH_ENABLED=true`, these endpoints require the
+admin-only `audit:read` permission.
+
+The frontend console exposes the same readback surface at `/tool-execution`,
+showing persistent approvals beside the `tool.execution.*` audit timeline. It
+uses sample fallback data when `NEXT_PUBLIC_AEGIS_API_URL` is not configured.
+
 ## Collection API Example
 
 ```json

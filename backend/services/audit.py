@@ -1,4 +1,4 @@
-"""Write-only audit event persistence service."""
+"""Audit event persistence and readback service."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from backend.models.audit_event import AuditEvent
 
@@ -75,6 +76,41 @@ class AuditEventService:
         await self.session.commit()
         await self.session.refresh(event)
         return event
+
+    async def list_events(
+        self,
+        *,
+        event_type: str | None = None,
+        event_type_prefix: str | None = None,
+        status: str | None = None,
+        actor_id: str | None = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        limit: int = 100,
+    ) -> list[AuditEvent]:
+        """Return recent audit events matching optional operator filters."""
+
+        query = select(AuditEvent)
+        if event_type:
+            query = query.where(AuditEvent.event_type == _truncate(event_type, MAX_EVENT_TYPE_LENGTH))
+        elif event_type_prefix:
+            query = query.where(AuditEvent.event_type.like(f"{_truncate(event_type_prefix, MAX_EVENT_TYPE_LENGTH)}%"))
+        if status:
+            query = query.where(AuditEvent.status == _truncate(status, MAX_STATUS_LENGTH))
+        if actor_id:
+            query = query.where(AuditEvent.actor_id == _truncate(actor_id, MAX_ACTOR_ID_LENGTH))
+        if resource_type:
+            query = query.where(AuditEvent.resource_type == _truncate(resource_type, MAX_RESOURCE_TYPE_LENGTH))
+        if resource_id:
+            query = query.where(AuditEvent.resource_id == _truncate(resource_id, MAX_RESOURCE_ID_LENGTH))
+
+        result = await self.session.execute(query.order_by(AuditEvent.created_at.desc()).limit(limit))
+        return list(result.scalars().all())
+
+    async def get_event(self, event_id: Any) -> AuditEvent | None:
+        """Return one audit event by primary key."""
+
+        return await self.session.get(AuditEvent, event_id)
 
 
 def sanitize_audit_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:

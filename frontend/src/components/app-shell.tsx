@@ -7,6 +7,7 @@ import {
   Flag,
   LayoutDashboard,
   Plug,
+  ScrollText,
   Search,
   Settings,
   ShieldCheck,
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/findings", label: "Findings", icon: Flag },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/plugins", label: "Plugins", icon: Plug },
+  { href: "/tool-execution", label: "Tool Execution", icon: ScrollText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

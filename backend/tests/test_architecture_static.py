@@ -339,7 +339,11 @@ def test_plugin_configuration_tests_exist() -> None:
 
 def test_tool_execution_layer_contract_exists() -> None:
     base_text = read("backend/plugins/base.py")
+    app_text = read("backend/api/app.py")
     service_text = read("backend/services/tool_execution.py")
+    audit_service_text = read("backend/services/audit.py")
+    audit_route_text = read("backend/api/routes/audit.py")
+    audit_schema_text = read("backend/api/schemas/audit.py")
     approval_service_text = read("backend/services/tool_execution_approvals.py")
     approval_route_text = read("backend/api/routes/tool_execution_approvals.py")
     approval_schema_text = read("backend/api/schemas/tool_execution_approvals.py")
@@ -354,6 +358,11 @@ def test_tool_execution_layer_contract_exists() -> None:
     assert "class ToolExecutionController" in service_text
     assert "class InMemoryRateLimiter" in service_text
     assert "ToolExecutionApprovalService" in service_text
+    assert "audit.router" in app_text
+    assert "list_events" in audit_service_text
+    assert '"/audit/events"' in audit_route_text
+    assert "event_type_prefix" in audit_route_text
+    assert "AuditEventRead" in audit_schema_text
     assert "class ToolExecutionApproval" in approval_model_text
     assert "tool_execution_approvals" in approval_migration_text
     assert "class ToolExecutionApprovalService" in approval_service_text

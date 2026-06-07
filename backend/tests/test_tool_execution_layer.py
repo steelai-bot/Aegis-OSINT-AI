@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+import backend.api.routes._audit as route_audit
 from backend.api.app import create_app
 from backend.core.config import Settings
 from backend.models import AuditEvent, ToolExecutionApproval
@@ -15,6 +16,7 @@ from backend.models.base import Base
 from backend.plugins.base import BasePlugin, PluginResult
 from backend.plugins.registry import PluginRegistry
 from backend.services.collection_orchestrator import CollectionJob, CollectionOrchestrator
+from backend.services.audit import AuditEventService
 from backend.services.tool_execution import InMemoryRateLimiter, ToolExecutionController
 from backend.services.tool_execution_approvals import ToolExecutionApprovalService
 from backend.storage.database import get_db_session
@@ -58,7 +60,7 @@ async def approval_session() -> AsyncSession:
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all, tables=[ToolExecutionApproval.__table__])
+        await connection.run_sync(Base.metadata.create_all, tables=[ToolExecutionApproval.__table__, AuditEvent.__table__])
 
     async with session_factory() as session:
         yield session
@@ -82,14 +84,18 @@ async def approval_client() -> AsyncClient:
         async with session_factory() as session:
             yield session
 
+    original_audit_session_local = route_audit.AsyncSessionLocal
+    route_audit.AsyncSessionLocal = session_factory
     app = create_app()
     app.dependency_overrides[get_db_session] = override_db_session
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
-        yield test_client
-
-    app.dependency_overrides.clear()
-    await engine.dispose()
+    try:
+        async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+            yield test_client
+    finally:
+        route_audit.AsyncSessionLocal = original_audit_session_local
+        app.dependency_overrides.clear()
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -297,3 +303,41 @@ async def test_approval_api_create_list_get_and_revoke(approval_client: AsyncCli
     revoke_response = await approval_client.delete(f"/tool-execution/approvals/{created['id']}")
     assert revoke_response.status_code == 200
     assert revoke_response.json()["status"] == "revoked"
+
+
+@pytest.mark.asyncio
+async def test_audit_api_lists_tool_execution_events_by_default(approval_client: AsyncClient) -> None:
+    create_response = await approval_client.post(
+        "/tool-execution/approvals",
+        json={
+            "plugin_name": "operator_tool",
+            "target_type": "domain",
+            "target": "example.com",
+            "execution_mode": "operator_assisted",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    list_response = await approval_client.get("/audit/events")
+    assert list_response.status_code == 200
+    events = list_response.json()["events"]
+    assert events[0]["event_type"] == "tool.execution.approval.created"
+    assert events[0]["resource_type"] == "tool_execution_approval"
+    assert "approval_token" not in list_response.text
+    assert "example.com" not in list_response.text
+
+    get_response = await approval_client.get(f"/audit/events/{events[0]['id']}")
+    assert get_response.status_code == 200
+    assert get_response.json()["id"] == events[0]["id"]
+
+
+@pytest.mark.asyncio
+async def test_audit_service_filters_event_type_prefix(approval_session: AsyncSession) -> None:
+    service = AuditEventService(approval_session)
+    await service.create_event(event_type="tool.execution.decision", status="approval_required", resource_id="operator_tool")
+    await service.create_event(event_type="finding.created", status="success", resource_id="finding-1")
+
+    events = await service.list_events(event_type_prefix="tool.execution.")
+
+    assert [event.event_type for event in events] == ["tool.execution.decision"]
