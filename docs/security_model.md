@@ -87,10 +87,13 @@ ad-hoc collection, target collection, and investigation-wide collection runs.
 The Tool Execution Layer adds a service-level policy gate before plugin execution.
 It supports runtime modes, plugin-declared execution modes, persistent scoped
 approval records, environment fallback approval tokens for local use,
-process-local rate limits, and sanitized audit events for decisions and outcomes.
-Persistent approval records store token hashes and target hashes rather than raw
-token/target values. See `docs/tool_execution_layer.md` for the current MVP
-contract.
+process-local or database-backed rate limits, and sanitized audit events for
+decisions and outcomes. Persistent approval records store token hashes and target
+hashes rather than raw token/target values. For distributed deployments, set
+`AEGIS_TOOL_EXECUTION_RATE_LIMIT_BACKEND=database` so multiple API/worker
+processes share the same `tool_execution_rate_limit_buckets` counters; the layer
+falls back to local memory limiting if the database limiter cannot be reached.
+See `docs/tool_execution_layer.md` for the current MVP contract.
 
 Recommended controls before production:
 

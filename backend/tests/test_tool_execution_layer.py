@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 import backend.api.routes._audit as route_audit
 from backend.api.app import create_app
 from backend.core.config import Settings
-from backend.models import AuditEvent, ToolExecutionApproval
+from backend.models import AuditEvent, ToolExecutionApproval, ToolExecutionRateLimitBucket
 from backend.models.base import Base
 from backend.plugins.base import BasePlugin, PluginResult
 from backend.plugins.registry import PluginRegistry
@@ -60,7 +60,10 @@ async def approval_session() -> AsyncSession:
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all, tables=[ToolExecutionApproval.__table__, AuditEvent.__table__])
+        await connection.run_sync(
+            Base.metadata.create_all,
+            tables=[ToolExecutionApproval.__table__, AuditEvent.__table__, ToolExecutionRateLimitBucket.__table__],
+        )
 
     async with session_factory() as session:
         yield session
@@ -78,7 +81,10 @@ async def approval_client() -> AsyncClient:
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all, tables=[ToolExecutionApproval.__table__, AuditEvent.__table__])
+        await connection.run_sync(
+            Base.metadata.create_all,
+            tables=[ToolExecutionApproval.__table__, AuditEvent.__table__, ToolExecutionRateLimitBucket.__table__],
+        )
 
     async def override_db_session():
         async with session_factory() as session:
@@ -162,6 +168,60 @@ async def test_tool_execution_rate_limit_blocks_repeated_attempts() -> None:
     assert first.allowed
     assert second.status == "rate_limited"
     assert second.reason == "rate_limit_exceeded"
+    assert second.metadata["rate_limit_backend"] == "memory"
+
+
+@pytest.mark.asyncio
+async def test_database_rate_limiter_blocks_across_controller_instances(approval_session: AsyncSession) -> None:
+    settings = Settings(tool_execution_rate_limit_per_minute=1, tool_execution_rate_limit_backend="database")
+    first_controller = ToolExecutionController(settings=settings, audit_session=approval_session)
+    second_controller = ToolExecutionController(settings=settings, audit_session=approval_session)
+
+    first = await first_controller.authorize(plugin=PassiveToolPlugin(), target="example.com", target_type="domain")
+    second = await second_controller.authorize(plugin=PassiveToolPlugin(), target="example.com", target_type="domain")
+
+    assert first.allowed
+    assert first.metadata["rate_limit_backend"] == "database"
+    assert second.status == "rate_limited"
+    assert second.metadata["rate_limit_backend"] == "database"
+
+
+@pytest.mark.asyncio
+async def test_database_rate_limiter_falls_back_to_memory_on_failure(approval_session: AsyncSession) -> None:
+    class BrokenDatabaseRateLimiter:
+        async def allow(self, key: str, *, limit: int, window_seconds: int = 60) -> bool:
+            raise RuntimeError("simulated database limiter outage")
+
+    controller = ToolExecutionController(
+        settings=Settings(tool_execution_rate_limit_per_minute=1, tool_execution_rate_limit_backend="database"),
+        rate_limiter=InMemoryRateLimiter(),
+        database_rate_limiter=BrokenDatabaseRateLimiter(),  # type: ignore[arg-type]
+        audit_session=approval_session,
+    )
+
+    first = await controller.authorize(plugin=PassiveToolPlugin(), target="example.com", target_type="domain")
+    second = await controller.authorize(plugin=PassiveToolPlugin(), target="example.com", target_type="domain")
+
+    assert first.allowed
+    assert first.metadata["rate_limit_backend"] == "memory_fallback"
+    assert second.status == "rate_limited"
+    assert second.metadata["rate_limit_backend"] == "memory_fallback"
+
+
+@pytest.mark.asyncio
+async def test_database_rate_limiter_without_session_uses_memory_fallback() -> None:
+    controller = ToolExecutionController(
+        settings=Settings(tool_execution_rate_limit_per_minute=1, tool_execution_rate_limit_backend="database"),
+        rate_limiter=InMemoryRateLimiter(),
+    )
+
+    first = await controller.authorize(plugin=PassiveToolPlugin(), target="example.com", target_type="domain")
+    second = await controller.authorize(plugin=PassiveToolPlugin(), target="example.com", target_type="domain")
+
+    assert first.allowed
+    assert first.metadata["rate_limit_backend"] == "memory_fallback"
+    assert second.status == "rate_limited"
+    assert second.metadata["rate_limit_backend"] == "memory_fallback"
 
 
 @pytest.mark.asyncio

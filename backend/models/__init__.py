@@ -11,6 +11,7 @@ from backend.models.investigation import Investigation
 from backend.models.report import Report
 from backend.models.target import Target
 from backend.models.tool_execution_approval import ToolExecutionApproval
+from backend.models.tool_execution_rate_limit import ToolExecutionRateLimitBucket
 
 __all__ = [
     "AgentContextSnapshot",
@@ -24,4 +25,5 @@ __all__ = [
     "Report",
     "Target",
     "ToolExecutionApproval",
+    "ToolExecutionRateLimitBucket",
 ]

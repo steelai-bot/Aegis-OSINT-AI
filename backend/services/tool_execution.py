@@ -1,10 +1,9 @@
 """Policy-gated tool execution controls for plugin workflows.
 
-The first implementation is intentionally lightweight and process-local: it gives
-collection orchestration a single decision point for execution mode checks,
-operator approval requirements, rate limits, and audit-event emission. Phase 2
-adds optional persistent approval records while retaining the environment-token
-fallback for local deployments.
+The layer gives collection orchestration a single decision point for execution
+mode checks, operator approval requirements, rate limits, and audit-event
+emission. Local deployments can use a process-local limiter while distributed
+API/worker deployments can opt into a database-backed fixed-window limiter.
 """
 
 from __future__ import annotations
@@ -12,11 +11,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from typing import Any, Literal
 
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import Settings, get_settings
+from backend.models.tool_execution_rate_limit import ToolExecutionRateLimitBucket
 from backend.plugins.base import BasePlugin
 from backend.services.audit import AuditEventService
 from backend.services.tool_execution_approvals import ToolExecutionApprovalService, hash_tool_target
@@ -73,7 +76,7 @@ class InMemoryRateLimiter:
     def __init__(self) -> None:
         self._windows: dict[str, list[datetime]] = {}
 
-    def allow(self, key: str, *, limit: int, window_seconds: int = 60) -> bool:
+    async def allow(self, key: str, *, limit: int, window_seconds: int = 60) -> bool:
         if limit <= 0:
             return True
 
@@ -92,6 +95,64 @@ class InMemoryRateLimiter:
         self._windows.clear()
 
 
+class DatabaseRateLimiter:
+    """Database-backed fixed-window limiter shared across processes.
+
+    Each policy key has one durable bucket. The row is locked during updates on
+    databases that support `SELECT ... FOR UPDATE` (PostgreSQL in production),
+    preventing multiple API/worker processes from independently exceeding the
+    same per-minute allowance. If the database write path fails, callers should
+    fall back to the local limiter rather than bypass rate limiting entirely.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def allow(self, key: str, *, limit: int, window_seconds: int = 60, _retried_insert: bool = False) -> bool:
+        if limit <= 0:
+            return True
+
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(seconds=window_seconds)
+        storage_key = _rate_limit_storage_key(key)
+
+        result = await self.session.execute(
+            select(ToolExecutionRateLimitBucket)
+            .where(ToolExecutionRateLimitBucket.key == storage_key)
+            .with_for_update()
+        )
+        bucket = result.scalar_one_or_none()
+        if bucket is None:
+            self.session.add(ToolExecutionRateLimitBucket(key=storage_key, window_start=now, count=1))
+            try:
+                await self.session.commit()
+            except IntegrityError:
+                await self.session.rollback()
+                if _retried_insert:
+                    raise
+                return await self.allow(
+                    key,
+                    limit=limit,
+                    window_seconds=window_seconds,
+                    _retried_insert=True,
+                )
+            return True
+
+        if _ensure_aware_utc(bucket.window_start) <= cutoff:
+            bucket.window_start = now
+            bucket.count = 1
+            await self.session.commit()
+            return True
+
+        if bucket.count >= limit:
+            await self.session.commit()
+            return False
+
+        bucket.count += 1
+        await self.session.commit()
+        return True
+
+
 class ToolExecutionController:
     """Authorize and audit tool/plugin execution attempts."""
 
@@ -100,12 +161,18 @@ class ToolExecutionController:
         *,
         settings: Settings | None = None,
         rate_limiter: InMemoryRateLimiter | None = None,
+        database_rate_limiter: DatabaseRateLimiter | None = None,
         audit_session: AsyncSession | None = None,
         approval_session: AsyncSession | None = None,
         approval_service: ToolExecutionApprovalService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.rate_limiter = rate_limiter or default_rate_limiter
+        self.database_rate_limiter = database_rate_limiter or (
+            DatabaseRateLimiter(audit_session)
+            if audit_session is not None and self.settings.tool_execution_rate_limit_backend == "database"
+            else None
+        )
         self.audit_session = audit_session
         self.approval_session = approval_session or audit_session
         self.approval_service = approval_service or (
@@ -183,7 +250,8 @@ class ToolExecutionController:
 
         limit = self.settings.tool_execution_rate_limit_per_minute
         rate_limit_key = self._rate_limit_key(plugin=plugin, target_hash=target_hash, target_type=target_type)
-        if limit > 0 and not self.rate_limiter.allow(rate_limit_key, limit=limit):
+        rate_limit_allowed, rate_limit_backend = await self._rate_limit_allowed(rate_limit_key, limit=limit)
+        if limit > 0 and not rate_limit_allowed:
             return self._decision(
                 plugin,
                 "rate_limited",
@@ -191,7 +259,7 @@ class ToolExecutionController:
                 runtime_mode,
                 plugin_mode,
                 target_type,
-                {**base_metadata, "rate_limit_per_minute": limit},
+                {**base_metadata, "rate_limit_per_minute": limit, "rate_limit_backend": rate_limit_backend},
                 requires_approval=requires_approval,
                 rate_limit_key=rate_limit_key,
             )
@@ -203,7 +271,7 @@ class ToolExecutionController:
             runtime_mode,
             plugin_mode,
             target_type,
-            {**base_metadata, "rate_limit_per_minute": limit},
+            {**base_metadata, "rate_limit_per_minute": limit, "rate_limit_backend": rate_limit_backend},
             requires_approval=requires_approval,
             rate_limit_key=rate_limit_key,
         )
@@ -325,6 +393,23 @@ class ToolExecutionController:
             return str(configured_key)
         return f"{plugin.name}:{target_type}:{target_hash}"
 
+    async def _rate_limit_allowed(self, key: str, *, limit: int) -> tuple[bool, str]:
+        if limit <= 0:
+            return True, "disabled"
+
+        if self.settings.tool_execution_rate_limit_backend == "database":
+            if self.database_rate_limiter is None:
+                return await self.rate_limiter.allow(key, limit=limit), "memory_fallback"
+            try:
+                return await self.database_rate_limiter.allow(key, limit=limit), "database"
+            except Exception as exc:
+                if self.audit_session is not None:
+                    await self.audit_session.rollback()
+                logger.warning("Database tool execution rate limiter failed (%s); using memory fallback", type(exc).__name__)
+                return await self.rate_limiter.allow(key, limit=limit), "memory_fallback"
+
+        return await self.rate_limiter.allow(key, limit=limit), "memory"
+
     async def _record_audit_event(
         self,
         *,
@@ -357,6 +442,22 @@ def normalize_execution_mode(value: str | None) -> ExecutionMode:
 
 def _hash_target(target: str) -> str:
     return hash_tool_target(target)
+
+
+def _rate_limit_storage_key(key: str) -> str:
+    """Return a DB-safe bucket key while preserving readable short keys."""
+
+    normalized = key[:255]
+    if len(key) <= 255:
+        return normalized
+    digest = sha256(key.encode("utf-8", errors="ignore")).hexdigest()
+    return f"{key[:190]}:{digest}"
+
+
+def _ensure_aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 default_rate_limiter = InMemoryRateLimiter()

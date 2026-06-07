@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     auth_allow_unauthenticated_health: bool = True
     tool_execution_mode: Literal["passive", "operator_assisted", "manual_review_only", "disabled"] = "passive"
     tool_execution_rate_limit_per_minute: int = Field(default=60, ge=0)
+    tool_execution_rate_limit_backend: Literal["memory", "database"] = "memory"
     tool_execution_approval_token: str | None = None
 
     database_url: str = Field(

@@ -349,14 +349,19 @@ def test_tool_execution_layer_contract_exists() -> None:
     approval_schema_text = read("backend/api/schemas/tool_execution_approvals.py")
     approval_model_text = read("backend/models/tool_execution_approval.py")
     approval_migration_text = read("alembic/versions/0006_tool_execution_approvals.py")
+    rate_limit_model_text = read("backend/models/tool_execution_rate_limit.py")
+    rate_limit_migration_text = read("alembic/versions/0007_tool_execution_rate_limit_buckets.py")
     orchestrator_text = read("backend/services/collection_orchestrator.py")
     schema_text = read("backend/api/schemas/collections.py")
+    config_text = read("backend/core/config.py")
     docs_text = read("docs/tool_execution_layer.md")
 
     assert "execution_mode" in base_text
     assert "requires_approval" in base_text
     assert "class ToolExecutionController" in service_text
     assert "class InMemoryRateLimiter" in service_text
+    assert "class DatabaseRateLimiter" in service_text
+    assert "tool_execution_rate_limit_backend" in config_text
     assert "ToolExecutionApprovalService" in service_text
     assert "audit.router" in app_text
     assert "list_events" in audit_service_text
@@ -365,6 +370,8 @@ def test_tool_execution_layer_contract_exists() -> None:
     assert "AuditEventRead" in audit_schema_text
     assert "class ToolExecutionApproval" in approval_model_text
     assert "tool_execution_approvals" in approval_migration_text
+    assert "class ToolExecutionRateLimitBucket" in rate_limit_model_text
+    assert "tool_execution_rate_limit_buckets" in rate_limit_migration_text
     assert "class ToolExecutionApprovalService" in approval_service_text
     assert "consume_approval" in approval_service_text
     assert '"/tool-execution/approvals"' in approval_route_text

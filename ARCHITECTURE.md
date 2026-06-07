@@ -122,9 +122,13 @@ hijacking.
 ### Tool Execution Layer
 The Tool Execution Layer in `backend/services/tool_execution.py` is the single
 policy gate before plugins/tools are invoked. It enforces runtime modes,
-per-plugin execution modes, approval tokens, scoped approval metadata, and a
-process-local rate limit before orchestration can call a plugin. Persistent
-approval records live in `tool_execution_approvals` and are managed through
+per-plugin execution modes, approval tokens, scoped approval metadata, and fixed
+window rate limits before orchestration can call a plugin. Local deployments use
+the default process-local limiter; distributed API/worker deployments can opt
+into the database limiter with `AEGIS_TOOL_EXECUTION_RATE_LIMIT_BACKEND=database`,
+which shares counters through `tool_execution_rate_limit_buckets` and falls back
+to the local limiter if the database limiter is unavailable. Persistent approval
+records live in `tool_execution_approvals` and are managed through
 `POST/GET/DELETE /tool-execution/approvals`; only token hashes and target hashes
 are stored. Decisions and outcomes are written as sanitized `tool.execution.*`
 audit events when an audit DB session is available, and operators can review

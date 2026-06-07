@@ -82,10 +82,22 @@ responses and audit metadata redacts sensitive token-like keys.
 
 ## Rate Limits
 
-`AEGIS_TOOL_EXECUTION_RATE_LIMIT_PER_MINUTE` sets a process-local fixed-window
-limit per plugin/target/type key. `0` disables this MVP limiter. This is suitable
-for local/API-process gating and should be replaced or backed by Redis/Postgres
-for distributed deployments.
+`AEGIS_TOOL_EXECUTION_RATE_LIMIT_PER_MINUTE` sets a fixed-window limit per
+plugin/target/type key. `0` disables tool execution rate limiting.
+
+The limiter backend is selected with `AEGIS_TOOL_EXECUTION_RATE_LIMIT_BACKEND`:
+
+| Backend | Meaning |
+| --- | --- |
+| `memory` | Default. Process-local fixed-window limiter for local development and single-process deployments. |
+| `database` | Durable PostgreSQL-backed fixed-window limiter using `tool_execution_rate_limit_buckets` so API/worker processes share counters. |
+
+When `database` is enabled, `ToolExecutionController` uses the same DB session
+passed to collection orchestration. Bucket rows are locked during counter updates
+on PostgreSQL. If the database limiter fails, the controller logs the failure and
+falls back to the process-local limiter rather than bypassing rate limits. Policy
+metadata includes `rate_limit_backend` (`memory`, `database`, `memory_fallback`,
+or `disabled`) for operator visibility in API responses and audit events.
 
 ## Audit
 
