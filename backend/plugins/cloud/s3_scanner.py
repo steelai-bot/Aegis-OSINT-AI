@@ -17,13 +17,14 @@ class S3ScannerPlugin(BasePlugin):
     name = "s3_scanner"
     threat_category = "cloud_exposure"
     indicator_types = ("domain", "url")
+    egress_allowed_hosts = ("*.s3.amazonaws.com",)
 
     async def execute(self, target: str, context: dict[str, Any] | None = None) -> PluginResult:
         bucket_names = self._bucket_candidates(target)
         settings = get_settings()
         findings: list[dict[str, Any]] = []
         errors: dict[str, str] = {}
-        async with http_client(settings) as client:
+        async with http_client(settings, **self.http_policy_kwargs()) as client:
             for bucket in bucket_names:
                 url = f"https://{bucket}.s3.amazonaws.com/"
                 try:

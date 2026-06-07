@@ -119,6 +119,16 @@ Plugins must remain passive and must not perform exploitation, credential replay
 payload execution, phishing operations, browser fingerprint cloning, or session
 hijacking.
 
+Plugin outbound HTTP access is mediated by the shared client in
+`backend/core/http.py` and the egress policy service in
+`backend/services/egress_policy.py`. Plugins declare `egress_allowed_hosts` and
+can extend that list with approved configured source hosts. The policy denies
+private, loopback, link-local, multicast, reserved, and `.local` destinations by
+default; enforces response-size limits; and emits sanitized
+`tool.execution.egress` events containing only plugin, scheme, host, and policy
+reason metadata. Provider/LLM HTTP clients remain unscoped so local providers
+such as Ollama can use loopback endpoints without weakening plugin SSRF controls.
+
 ### Tool Execution Layer
 The Tool Execution Layer in `backend/services/tool_execution.py` is the single
 policy gate before plugins/tools are invoked. It enforces runtime modes,
@@ -133,6 +143,9 @@ records live in `tool_execution_approvals` and are managed through
 are stored. Decisions and outcomes are written as sanitized `tool.execution.*`
 audit events when an audit DB session is available, and operators can review
 that trail through `GET /audit/events` or the frontend `/tool-execution` page.
+Per-plugin egress decisions are also emitted as sanitized `tool.execution.egress`
+events through the event bus for future persistent audit subscribers and runtime
+observability.
 
 The default runtime mode is `passive`. Future active, crawl, or offensive-adjacent
 capabilities should not be removed from the roadmap; they must be gated by stricter

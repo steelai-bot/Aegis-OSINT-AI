@@ -24,6 +24,7 @@ class TelegramChannelMonitorPlugin(BasePlugin):
     name = "telegram_channel_monitor"
     threat_category = "darkweb_mention"
     indicator_types = ("email", "url", "crypto_address", "keyword")
+    egress_allowed_hosts = ("api.telegram.org",)
 
     async def execute(self, target: str, context: dict[str, Any] | None = None) -> PluginResult:
         token = self.config.get("bot_token") or os.getenv("AEGIS_TELEGRAM_BOT_TOKEN")
@@ -36,7 +37,7 @@ class TelegramChannelMonitorPlugin(BasePlugin):
         settings = get_settings()
         findings: list[dict[str, Any]] = []
         errors: dict[str, str] = {}
-        async with http_client(settings) as client:
+        async with http_client(settings, **self.http_policy_kwargs()) as client:
             for channel in channels:
                 try:
                     response = await client.get(

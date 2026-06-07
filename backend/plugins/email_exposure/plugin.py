@@ -10,8 +10,10 @@ from backend.core.http import http_client
 from backend.plugins.base import BasePlugin, PluginResult
 from backend.plugins.email_exposure.classifiers import ExposureEvidence, redact_text
 from backend.plugins.email_exposure.config import EmailExposureConfig
+from backend.plugins.email_exposure.discovery import configured_sources
 from backend.plugins.email_exposure.scrapers import ConfiguredPasteScraper, GitHubCodeSearchScraper, PassiveExposureScraper
 from backend.plugins.email_exposure.scrapers.breach_databases import ExistingBreachPluginDelegation
+from backend.services.egress_policy import allowed_hosts_from_urls
 
 
 class EmailExposurePlugin(BasePlugin):
@@ -20,6 +22,7 @@ class EmailExposurePlugin(BasePlugin):
     name = "email_exposure"
     threat_category = "credential_leak"
     indicator_types = ("email", "domain", "keyword")
+    egress_allowed_hosts = ("api.github.com",)
 
     async def execute(self, target: str, context: dict[str, Any] | None = None) -> PluginResult:
         config = EmailExposureConfig.from_runtime(self.config, context)
@@ -41,7 +44,8 @@ class EmailExposurePlugin(BasePlugin):
         scraper_metadata: dict[str, dict[str, Any]] = {}
 
         settings = get_settings()
-        async with http_client(settings) as client:
+        allowed_hosts = self._allowed_hosts(config, target)
+        async with http_client(settings, **self.http_policy_kwargs(allowed_hosts=allowed_hosts)) as client:
             for scraper in self._build_scrapers(client, config):
                 result = await scraper.search(target, target_type=target_type)
                 scraper_metadata[result.scraper_name] = result.metadata
@@ -70,6 +74,11 @@ class EmailExposurePlugin(BasePlugin):
             scrapers.append(GitHubCodeSearchScraper(client, config))
         scrapers.append(ExistingBreachPluginDelegation(client, config))
         return tuple(scrapers)
+
+    def _allowed_hosts(self, config: EmailExposureConfig, target: str) -> tuple[str, ...]:
+        source_hosts = allowed_hosts_from_urls(tuple(source.url for source in configured_sources(config, target)))
+        github_hosts = allowed_hosts_from_urls((config.github_api_url,)) if config.github_token else ()
+        return tuple(dict.fromkeys((*self.egress_allowed_hosts, *source_hosts, *github_hosts)))
 
     def _finding(
         self,

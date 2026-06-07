@@ -340,7 +340,9 @@ def test_plugin_configuration_tests_exist() -> None:
 def test_tool_execution_layer_contract_exists() -> None:
     base_text = read("backend/plugins/base.py")
     app_text = read("backend/api/app.py")
+    http_text = read("backend/core/http.py")
     service_text = read("backend/services/tool_execution.py")
+    egress_text = read("backend/services/egress_policy.py")
     audit_service_text = read("backend/services/audit.py")
     audit_route_text = read("backend/api/routes/audit.py")
     audit_schema_text = read("backend/api/schemas/audit.py")
@@ -358,10 +360,21 @@ def test_tool_execution_layer_contract_exists() -> None:
 
     assert "execution_mode" in base_text
     assert "requires_approval" in base_text
+    assert "egress_allowed_hosts" in base_text
+    assert "http_policy_kwargs" in base_text
+    assert "class EgressPolicy" in egress_text
+    assert "class EgressPolicyDecision" in egress_text
+    assert "private_ip_blocked" in egress_text
+    assert "host_not_in_plugin_allowlist" in egress_text
+    assert "EgressPolicyError" in http_text
+    assert "tool.execution.egress" in http_text
     assert "class ToolExecutionController" in service_text
     assert "class InMemoryRateLimiter" in service_text
     assert "class DatabaseRateLimiter" in service_text
     assert "tool_execution_rate_limit_backend" in config_text
+    assert "http_egress_policy_enabled" in config_text
+    assert "http_egress_deny_private_networks" in config_text
+    assert "http_max_response_bytes" in config_text
     assert "ToolExecutionApprovalService" in service_text
     assert "audit.router" in app_text
     assert "list_events" in audit_service_text
@@ -382,3 +395,4 @@ def test_tool_execution_layer_contract_exists() -> None:
     assert "tool.execution.failed" in orchestrator_text
     assert "approval_token" in schema_text
     assert "AEGIS_TOOL_EXECUTION_MODE" in docs_text
+    assert "AEGIS_HTTP_EGRESS_POLICY_ENABLED" in docs_text

@@ -11,12 +11,13 @@ class HaveIBeenPwnedPlugin(BasePlugin):
     name = "hibp"
     threat_category = "credential_leak"
     indicator_types = ("email",)
+    egress_allowed_hosts = ("haveibeenpwned.com",)
 
     async def execute(self, target: str, context: dict[str, Any] | None = None) -> PluginResult:
         settings = get_settings()
         if not settings.hibp_api_key:
             return PluginResult(plugin_name=self.name, status="skipped", metadata={"reason": "missing_api_key"})
-        async with http_client(settings) as client:
+        async with http_client(settings, **self.http_policy_kwargs()) as client:
             response = await client.get(
                 f"https://haveibeenpwned.com/api/v3/breachedaccount/{target}",
                 headers={"hibp-api-key": settings.hibp_api_key},

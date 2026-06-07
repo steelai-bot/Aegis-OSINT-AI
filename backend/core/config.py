@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     http_max_retries: int = 3
     http_backoff_seconds: float = 0.5
     http_user_agent: str = "Aegis-v2-OSINT/0.1"
+    http_max_response_bytes: int = Field(default=5_000_000, ge=16_384)
+    http_egress_policy_enabled: bool = True
+    http_egress_deny_private_networks: bool = True
     serus_ai_api_key: str | None = None
 
 

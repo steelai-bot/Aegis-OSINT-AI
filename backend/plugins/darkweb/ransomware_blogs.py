@@ -10,6 +10,7 @@ import httpx
 from backend.core.config import get_settings
 from backend.core.http import http_client
 from backend.plugins.base import BasePlugin, PluginResult
+from backend.services.egress_policy import allowed_hosts_from_urls
 
 
 EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
@@ -31,7 +32,8 @@ class RansomwareBlogScraperPlugin(BasePlugin):
         settings = get_settings()
         findings: list[dict[str, Any]] = []
         errors: dict[str, str] = {}
-        async with http_client(settings) as client:
+        allowed_hosts = allowed_hosts_from_urls([str(source_url) for source_url in sources])
+        async with http_client(settings, **self.http_policy_kwargs(allowed_hosts=allowed_hosts)) as client:
             for source_url in sources:
                 try:
                     response = await client.get(str(source_url))

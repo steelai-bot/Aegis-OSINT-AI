@@ -9,12 +9,13 @@ from backend.plugins.base import BasePlugin, PluginResult
 
 class SecurityTrailsPlugin(BasePlugin):
     name = "securitytrails"
+    egress_allowed_hosts = ("api.securitytrails.com",)
 
     async def execute(self, target: str, context: dict[str, Any] | None = None) -> PluginResult:
         settings = get_settings()
         if not settings.securitytrails_api_key:
             return PluginResult(plugin_name=self.name, status="skipped", metadata={"reason": "missing_api_key"})
-        async with http_client(settings) as client:
+        async with http_client(settings, **self.http_policy_kwargs()) as client:
             response = await client.get(
                 f"https://api.securitytrails.com/v1/domain/{target}/subdomains",
                 headers={"APIKEY": settings.securitytrails_api_key},

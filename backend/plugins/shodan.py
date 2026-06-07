@@ -9,12 +9,13 @@ from backend.plugins.base import BasePlugin, PluginResult
 
 class ShodanPlugin(BasePlugin):
     name = "shodan"
+    egress_allowed_hosts = ("api.shodan.io",)
 
     async def execute(self, target: str, context: dict[str, Any] | None = None) -> PluginResult:
         settings = get_settings()
         if not settings.shodan_api_key:
             return PluginResult(plugin_name=self.name, status="skipped", metadata={"reason": "missing_api_key"})
-        async with http_client(settings) as client:
+        async with http_client(settings, **self.http_policy_kwargs()) as client:
             response = await client.get("https://api.shodan.io/shodan/host/search", params={"key": settings.shodan_api_key, "query": target})
         payload = response.json()
         findings = [

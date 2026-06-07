@@ -130,6 +130,23 @@ The frontend console exposes the same readback surface at `/tool-execution`,
 showing persistent approvals beside the `tool.execution.*` audit timeline. It
 uses sample fallback data when `NEXT_PUBLIC_AEGIS_API_URL` is not configured.
 
+## Egress Policy Events
+
+Plugin-scoped outbound HTTP calls are controlled by
+`backend/services/egress_policy.py` through the shared `http_client(...)` helper.
+The default policy is enabled with `AEGIS_HTTP_EGRESS_POLICY_ENABLED=true`, denies
+private/link-local destinations with `AEGIS_HTTP_EGRESS_DENY_PRIVATE_NETWORKS=true`,
+and enforces `AEGIS_HTTP_MAX_RESPONSE_BYTES` response-size caps.
+
+Plugins declare `egress_allowed_hosts` on `BasePlugin`; configurable-source
+plugins derive additional hosts from operator-approved source URLs. Policy
+decisions publish sanitized `tool.execution.egress` events through the event bus.
+Those events include policy status, reason, plugin name, scheme, host, and matched
+rule only—never paths, query strings, headers, targets, approval tokens, or API
+keys. LLM/provider HTTP clients are intentionally unscoped so local provider
+endpoints such as Ollama loopback URLs remain usable without weakening plugin
+SSRF protections.
+
 ## Collection API Example
 
 ```json

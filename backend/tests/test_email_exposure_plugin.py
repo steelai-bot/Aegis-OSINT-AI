@@ -67,7 +67,7 @@ async def test_email_exposure_plugin_scans_configured_public_url(monkeypatch) ->
             return None
 
     monkeypatch.setattr(plugin_module, "get_settings", lambda: Settings())
-    monkeypatch.setattr(plugin_module, "http_client", lambda settings: FakeClientContext())
+    monkeypatch.setattr(plugin_module, "http_client", lambda settings, **kwargs: FakeClientContext())
 
     plugin = EmailExposurePlugin(config={"source_urls": ["https://example.test/paste"], "max_findings_per_source": 5})
     result = await plugin.execute("example.com", context={"target_type": "domain"})
@@ -101,7 +101,7 @@ async def test_email_exposure_plugin_treats_brand_jobs_as_keyword(monkeypatch) -
             return None
 
     monkeypatch.setattr(plugin_module, "get_settings", lambda: Settings())
-    monkeypatch.setattr(plugin_module, "http_client", lambda settings: FakeClientContext())
+    monkeypatch.setattr(plugin_module, "http_client", lambda settings, **kwargs: FakeClientContext())
 
     plugin = EmailExposurePlugin(config={"source_urls": ["https://example.test/search?q=Acme%20Corp"]})
     result = await plugin.execute("Acme Corp", context={"target_type": "brand"})
@@ -128,7 +128,7 @@ async def test_email_exposure_plugin_redacts_email_target_in_source_url(monkeypa
             return None
 
     monkeypatch.setattr(plugin_module, "get_settings", lambda: Settings())
-    monkeypatch.setattr(plugin_module, "http_client", lambda settings: FakeClientContext())
+    monkeypatch.setattr(plugin_module, "http_client", lambda settings, **kwargs: FakeClientContext())
 
     plugin = EmailExposurePlugin(config={"source_url_templates": ["https://example.test/search?q={target_query}"]})
     result = await plugin.execute("alice@example.com", context={"target_type": "email"})

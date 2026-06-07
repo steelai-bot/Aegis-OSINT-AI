@@ -79,6 +79,23 @@ The backend should use outbound network access only for configured passive
 providers and public-source lookups. Do not allow arbitrary operator-supplied
 URLs to trigger internal network requests without SSRF protections.
 
+Plugin-scoped outbound HTTP calls now use the shared client in
+`backend/core/http.py` with `backend/services/egress_policy.py`. The policy is
+enabled by default with `AEGIS_HTTP_EGRESS_POLICY_ENABLED=true`, blocks private
+and link-local destinations with `AEGIS_HTTP_EGRESS_DENY_PRIVATE_NETWORKS=true`,
+and limits response bodies with `AEGIS_HTTP_MAX_RESPONSE_BYTES` (default 5 MB).
+Plugins declare `egress_allowed_hosts`; source-driven plugins derive additional
+allowlist hosts from explicitly configured public source URLs. Operators may add
+plugin config keys such as `egress_allowed_hosts`, `egress_allow_private_networks`,
+or `egress_max_response_bytes` only for controlled deployments. Private-network
+allowance should remain disabled unless the source is a verified target-owned
+internal asset and the collection is explicitly authorized.
+
+Every plugin-scoped HTTP authorization publishes a sanitized
+`tool.execution.egress` event with policy status, reason, plugin name, URL scheme,
+host, and matched rule. The event intentionally omits paths, query strings,
+headers, targets, and credentials.
+
 Passive collection endpoints are privileged operator workflows. They now have
 route-level permission dependencies for opt-in backend auth. Before shared
 production deployment, add per-investigation authorization and audit logging for
@@ -97,10 +114,10 @@ See `docs/tool_execution_layer.md` for the current MVP contract.
 
 Recommended controls before production:
 
-- egress allowlist per plugin,
-- deny private and link-local IP ranges for external fetches,
-- request timeout and response size limits,
-- source-specific rate limits,
+- keep plugin egress allowlists narrow and reviewed,
+- keep private and link-local deny rules enabled for external fetches,
+- tune request timeout and response size limits per source,
+- add source-specific distributed rate limits where provider terms require them,
 - structured audit events for every external provider call.
 
 Request-scoped plugin configuration should be limited to authorized public sources

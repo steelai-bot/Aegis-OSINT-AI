@@ -11,10 +11,11 @@ class CrtShPlugin(BasePlugin):
     name = "crtsh"
     threat_category = "domain_monitoring"
     indicator_types = ("domain",)
+    egress_allowed_hosts = ("crt.sh",)
 
     async def execute(self, target: str, context: dict[str, Any] | None = None) -> PluginResult:
         settings = get_settings()
-        async with http_client(settings) as client:
+        async with http_client(settings, **self.http_policy_kwargs()) as client:
             response = await client.get("https://crt.sh/", params={"q": target, "output": "json"})
         rows = response.json()
         findings = []

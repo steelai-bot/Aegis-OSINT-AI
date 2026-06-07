@@ -18,12 +18,13 @@ class CertStreamMonitorPlugin(BasePlugin):
     name = "certstream_monitor"
     threat_category = "phishing"
     indicator_types = ("domain", "certificate")
+    egress_allowed_hosts = ("crt.sh",)
 
     async def execute(self, target: str, context: dict[str, Any] | None = None) -> PluginResult:
         domain = self._normalize_domain(target)
         settings = get_settings()
         try:
-            async with http_client(settings) as client:
+            async with http_client(settings, **self.http_policy_kwargs()) as client:
                 response = await client.get("https://crt.sh/", params={"q": domain, "output": "json"})
             rows = response.json()
         except (httpx.HTTPError, ValueError) as exc:
