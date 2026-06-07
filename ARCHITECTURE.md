@@ -119,6 +119,19 @@ Plugins must remain passive and must not perform exploitation, credential replay
 payload execution, phishing operations, browser fingerprint cloning, or session
 hijacking.
 
+### Tool Execution Layer
+
+`backend/services/tool_execution.py` is the policy gate before plugin/tool
+execution. It evaluates runtime mode, plugin-declared execution mode, approval
+requirements, and process-local rate limits before `CollectionOrchestrator`
+invokes a plugin. Decisions and outcomes are emitted as lifecycle events and, when
+a database session is available, persisted as sanitized audit events.
+
+The default runtime mode is `passive`. Future active, crawl, or offensive-adjacent
+capabilities should not be removed from the roadmap; they must be gated by stricter
+modes, explicit operator approval, scoped authorization notes, audit logs, rate
+limits, and operator control.
+
 ### Providers
 
 LLM provider-specific code is isolated behind `BaseLLMProvider`. Provider selection is configuration-driven. No agent, service, or API route should import a vendor SDK directly.

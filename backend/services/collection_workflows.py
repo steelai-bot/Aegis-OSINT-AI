@@ -42,6 +42,9 @@ async def run_collection_job(payload: CollectionRunRequest, *, session: AsyncSes
         priority=payload.priority,
         config=payload.config,
         enrich=payload.enrich,
+        execution_mode=payload.execution_mode,
+        approval_token=payload.approval_token,
+        authorized_scope=payload.authorized_scope,
     )
     result = await CollectionOrchestrator(
         registry=PluginRegistry(plugin_configs=_plugin_configs_from_payload(payload)),
@@ -188,6 +191,9 @@ async def run_investigation_collection_job(
                     priority=payload.priority,
                     config=payload.config,
                     enrich=payload.enrich,
+                    execution_mode=payload.execution_mode,
+                    approval_token=payload.approval_token,
+                    authorized_scope=payload.authorized_scope,
                 ),
                 session=session,
             )

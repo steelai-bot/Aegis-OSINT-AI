@@ -335,3 +335,22 @@ def test_plugin_configuration_tests_exist() -> None:
     assert "def is_enabled" in registry_text
     assert "test_plugin_registry_filters_and_injects_plugin_config" in test_text
     assert "test_api_backed_plugins_skip_without_required_api_keys" in test_text
+
+
+def test_tool_execution_layer_contract_exists() -> None:
+    base_text = read("backend/plugins/base.py")
+    service_text = read("backend/services/tool_execution.py")
+    orchestrator_text = read("backend/services/collection_orchestrator.py")
+    schema_text = read("backend/api/schemas/collections.py")
+    docs_text = read("docs/tool_execution_layer.md")
+
+    assert "execution_mode" in base_text
+    assert "requires_approval" in base_text
+    assert "class ToolExecutionController" in service_text
+    assert "class InMemoryRateLimiter" in service_text
+    assert "tool.execution.decision" in service_text
+    assert "ToolExecutionController" in orchestrator_text
+    assert "tool.execution.completed" in orchestrator_text
+    assert "tool.execution.failed" in orchestrator_text
+    assert "approval_token" in schema_text
+    assert "AEGIS_TOOL_EXECUTION_MODE" in docs_text

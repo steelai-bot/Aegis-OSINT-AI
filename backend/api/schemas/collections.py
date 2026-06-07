@@ -39,6 +39,9 @@ class CollectionRunRequest(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
     enrich: bool = False
     async_mode: bool = False
+    execution_mode: str | None = Field(default=None, max_length=50)
+    approval_token: str | None = Field(default=None, max_length=255, exclude=True)
+    authorized_scope: str | None = Field(default=None, max_length=2048)
 
 
 class CollectionWorkflowRunRequest(BaseModel):
@@ -62,6 +65,9 @@ class CollectionWorkflowRunRequest(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
     enrich: bool = False
     async_mode: bool = False
+    execution_mode: str | None = Field(default=None, max_length=50)
+    approval_token: str | None = Field(default=None, max_length=255, exclude=True)
+    authorized_scope: str | None = Field(default=None, max_length=2048)
 
 
 class CollectionPluginResultRead(BaseModel):

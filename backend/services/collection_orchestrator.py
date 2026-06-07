@@ -16,6 +16,7 @@ from backend.plugins.registry import PluginRegistry
 from backend.services.crud import FindingService
 from backend.services.enrichment_pipeline import EnrichmentPipeline
 from backend.services.risk_scoring import RiskScoringService
+from backend.services.tool_execution import ToolExecutionController
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +31,9 @@ class CollectionJob:
     priority: int = 100
     config: dict[str, Any] = field(default_factory=dict)
     enrich: bool = False
+    execution_mode: str | None = None
+    approval_token: str | None = None
+    authorized_scope: str | None = None
 
 
 @dataclass(slots=True)
@@ -54,12 +58,14 @@ class CollectionOrchestrator:
         bus: EventBus | None = None,
         scorer: RiskScoringService | None = None,
         enrichment: EnrichmentPipeline | None = None,
+        tool_execution: ToolExecutionController | None = None,
     ) -> None:
         self.registry = registry or PluginRegistry()
         self.session = session
         self.event_bus = bus or event_bus
         self.scorer = scorer or RiskScoringService()
         self.enrichment = enrichment or EnrichmentPipeline(registry=self.registry, scorer=self.scorer)
+        self.tool_execution = tool_execution or ToolExecutionController(audit_session=session)
 
     async def run_job(self, job: CollectionJob) -> CollectionRunResult:
         await self.event_bus.publish(
@@ -69,12 +75,46 @@ class CollectionOrchestrator:
 
         run_result = CollectionRunResult(target=job.target)
         for plugin in self._plugins_for_job(job):
+            decision = await self.tool_execution.authorize(
+                plugin=plugin,
+                target=job.target,
+                target_type=job.target_type,
+                requested_mode=job.execution_mode,
+                approval_token=job.approval_token,
+                authorized_scope=job.authorized_scope,
+            )
+            await self.tool_execution.record_decision(decision)
+            await self.event_bus.publish(
+                "tool.execution.decision",
+                {"plugin_name": plugin.name, "status": decision.status, "reason": decision.reason},
+            )
+
+            if not decision.allowed:
+                run_result.plugin_results.append(
+                    PluginResult(plugin_name=plugin.name, status=decision.status, metadata=decision.plugin_result_metadata())
+                )
+                continue
+
             try:
                 plugin_result = await plugin.execute(job.target, context={"target_type": job.target_type, "job_config": job.config})
             except Exception as exc:  # Defensive boundary around untrusted external providers.
                 run_result.errors[plugin.name] = str(exc)
+                await self.tool_execution.record_outcome(decision=decision, status="error", error=str(exc))
+                await self.event_bus.publish(
+                    "tool.execution.failed",
+                    {"plugin_name": plugin.name, "status": "error", "error": str(exc)},
+                )
                 continue
 
+            await self.tool_execution.record_outcome(
+                decision=decision,
+                status=plugin_result.status,
+                finding_count=len(plugin_result.findings),
+            )
+            await self.event_bus.publish(
+                "tool.execution.completed",
+                {"plugin_name": plugin.name, "status": plugin_result.status, "finding_count": len(plugin_result.findings)},
+            )
             run_result.plugin_results.append(plugin_result)
             normalized = [self.normalize_finding(raw, plugin=plugin, job=job) for raw in plugin_result.findings]
             if job.enrich:

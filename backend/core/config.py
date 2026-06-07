@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     auth_enabled: bool = False
     api_auth_token: str | None = None
     auth_allow_unauthenticated_health: bool = True
+    tool_execution_mode: Literal["passive", "operator_assisted", "manual_review_only", "disabled"] = "passive"
+    tool_execution_rate_limit_per_minute: int = Field(default=60, ge=0)
+    tool_execution_approval_token: str | None = None
 
     database_url: str = Field(
         default="postgresql+asyncpg://aegis:aegis@localhost:5432/aegis",

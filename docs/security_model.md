@@ -84,6 +84,12 @@ route-level permission dependencies for opt-in backend auth. Before shared
 production deployment, add per-investigation authorization and audit logging for
 ad-hoc collection, target collection, and investigation-wide collection runs.
 
+The Tool Execution Layer adds a service-level policy gate before plugin execution.
+It supports runtime modes, plugin-declared execution modes, approval tokens for
+non-passive tools, process-local rate limits, and sanitized audit events for
+decisions and outcomes. See `docs/tool_execution_layer.md` for the current MVP
+contract.
+
 Recommended controls before production:
 
 - egress allowlist per plugin,

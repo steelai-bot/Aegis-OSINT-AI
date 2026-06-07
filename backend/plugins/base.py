@@ -20,6 +20,9 @@ class BasePlugin(ABC):
     enabled = True
     threat_category = "general"
     indicator_types: tuple[str, ...] = ()
+    execution_mode = "passive"
+    requires_approval = False
+    rate_limit_key: str | None = None
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         self.config = config or {}
