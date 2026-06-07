@@ -14,6 +14,7 @@ from backend.core.events import EventBus, event_bus
 from backend.plugins.base import BasePlugin, PluginResult
 from backend.plugins.registry import PluginRegistry
 from backend.services.crud import FindingService
+from backend.services.egress_audit import EgressAuditSubscriber
 from backend.services.enrichment_pipeline import EnrichmentPipeline
 from backend.services.risk_scoring import RiskScoringService
 from backend.services.tool_execution import ToolExecutionController
@@ -62,82 +63,91 @@ class CollectionOrchestrator:
     ) -> None:
         self.registry = registry or PluginRegistry()
         self.session = session
-        self.event_bus = bus or event_bus
+        self.event_bus = bus or (EventBus() if session is not None else event_bus)
         self.scorer = scorer or RiskScoringService()
         self.enrichment = enrichment or EnrichmentPipeline(registry=self.registry, scorer=self.scorer)
         self.tool_execution = tool_execution or ToolExecutionController(audit_session=session)
 
     async def run_job(self, job: CollectionJob) -> CollectionRunResult:
+        egress_audit = EgressAuditSubscriber(self.session) if self.session is not None else None
+        if egress_audit is not None:
+            egress_audit.subscribe(self.event_bus)
+
         await self.event_bus.publish(
             "collection.started",
             {"target": job.target, "target_type": job.target_type, "plugin_name": job.plugin_name, "priority": job.priority},
         )
 
-        run_result = CollectionRunResult(target=job.target)
-        for plugin in self._plugins_for_job(job):
-            decision = await self.tool_execution.authorize(
-                plugin=plugin,
-                target=job.target,
-                target_type=job.target_type,
-                requested_mode=job.execution_mode,
-                approval_token=job.approval_token,
-                authorized_scope=job.authorized_scope,
-            )
-            await self.tool_execution.record_decision(decision)
-            await self.event_bus.publish(
-                "tool.execution.decision",
-                {"plugin_name": plugin.name, "status": decision.status, "reason": decision.reason},
-            )
-
-            if not decision.allowed:
-                run_result.plugin_results.append(
-                    PluginResult(plugin_name=plugin.name, status=decision.status, metadata=decision.plugin_result_metadata())
+        try:
+            run_result = CollectionRunResult(target=job.target)
+            for plugin in self._plugins_for_job(job):
+                plugin.event_bus = self.event_bus
+                decision = await self.tool_execution.authorize(
+                    plugin=plugin,
+                    target=job.target,
+                    target_type=job.target_type,
+                    requested_mode=job.execution_mode,
+                    approval_token=job.approval_token,
+                    authorized_scope=job.authorized_scope,
                 )
-                continue
-
-            try:
-                plugin_result = await plugin.execute(job.target, context={"target_type": job.target_type, "job_config": job.config})
-            except Exception as exc:  # Defensive boundary around untrusted external providers.
-                run_result.errors[plugin.name] = str(exc)
-                await self.tool_execution.record_outcome(decision=decision, status="error", error=str(exc))
+                await self.tool_execution.record_decision(decision)
                 await self.event_bus.publish(
-                    "tool.execution.failed",
-                    {"plugin_name": plugin.name, "status": "error", "error": str(exc)},
+                    "tool.execution.decision",
+                    {"plugin_name": plugin.name, "status": decision.status, "reason": decision.reason},
                 )
-                continue
 
-            await self.tool_execution.record_outcome(
-                decision=decision,
-                status=plugin_result.status,
-                finding_count=len(plugin_result.findings),
-            )
+                if not decision.allowed:
+                    run_result.plugin_results.append(
+                        PluginResult(plugin_name=plugin.name, status=decision.status, metadata=decision.plugin_result_metadata())
+                    )
+                    continue
+
+                try:
+                    plugin_result = await plugin.execute(job.target, context={"target_type": job.target_type, "job_config": job.config})
+                except Exception as exc:  # Defensive boundary around untrusted external providers.
+                    run_result.errors[plugin.name] = str(exc)
+                    await self.tool_execution.record_outcome(decision=decision, status="error", error=str(exc))
+                    await self.event_bus.publish(
+                        "tool.execution.failed",
+                        {"plugin_name": plugin.name, "status": "error", "error": str(exc)},
+                    )
+                    continue
+
+                await self.tool_execution.record_outcome(
+                    decision=decision,
+                    status=plugin_result.status,
+                    finding_count=len(plugin_result.findings),
+                )
+                await self.event_bus.publish(
+                    "tool.execution.completed",
+                    {"plugin_name": plugin.name, "status": plugin_result.status, "finding_count": len(plugin_result.findings)},
+                )
+                run_result.plugin_results.append(plugin_result)
+                normalized = [self.normalize_finding(raw, plugin=plugin, job=job) for raw in plugin_result.findings]
+                if job.enrich:
+                    normalized = [await self.enrichment.enrich(finding) for finding in normalized]
+                else:
+                    normalized = [self.scorer.apply(finding) for finding in normalized]
+                run_result.findings.extend(normalized)
+
+            run_result.findings = self.deduplicate(run_result.findings)
+            if self.session is not None and job.investigation_id is not None:
+                run_result.persisted_count = await self.persist_findings(run_result.findings, job=job)
+
             await self.event_bus.publish(
-                "tool.execution.completed",
-                {"plugin_name": plugin.name, "status": plugin_result.status, "finding_count": len(plugin_result.findings)},
+                "collection.completed",
+                {
+                    "target": job.target,
+                    "target_type": job.target_type,
+                    "finding_count": len(run_result.findings),
+                    "persisted_count": run_result.persisted_count,
+                    "errors": run_result.errors,
+                },
             )
-            run_result.plugin_results.append(plugin_result)
-            normalized = [self.normalize_finding(raw, plugin=plugin, job=job) for raw in plugin_result.findings]
-            if job.enrich:
-                normalized = [await self.enrichment.enrich(finding) for finding in normalized]
-            else:
-                normalized = [self.scorer.apply(finding) for finding in normalized]
-            run_result.findings.extend(normalized)
-
-        run_result.findings = self.deduplicate(run_result.findings)
-        if self.session is not None and job.investigation_id is not None:
-            run_result.persisted_count = await self.persist_findings(run_result.findings, job=job)
-
-        await self.event_bus.publish(
-            "collection.completed",
-            {
-                "target": job.target,
-                "target_type": job.target_type,
-                "finding_count": len(run_result.findings),
-                "persisted_count": run_result.persisted_count,
-                "errors": run_result.errors,
-            },
-        )
-        return run_result
+            return run_result
+        finally:
+            if egress_audit is not None:
+                egress_audit.unsubscribe(self.event_bus)
 
     def normalize_finding(self, raw: dict[str, Any], *, plugin: BasePlugin, job: CollectionJob) -> dict[str, Any]:
         now = datetime.now(UTC)

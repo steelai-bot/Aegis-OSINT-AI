@@ -7,6 +7,7 @@ import pkgutil
 from collections.abc import Iterable
 from typing import Any
 
+from backend.core.events import EventBus
 from backend.plugins.base import BasePlugin
 
 
@@ -35,11 +36,13 @@ class PluginRegistry:
         enabled_plugin_names: Iterable[str] | None = None,
         disabled_plugin_names: Iterable[str] | None = None,
         plugin_configs: dict[str, dict[str, Any]] | None = None,
+        bus: EventBus | None = None,
     ) -> None:
         self.plugin_classes = list(plugin_classes or discover_plugins())
         self.enabled_plugin_names = set(enabled_plugin_names) if enabled_plugin_names is not None else None
         self.disabled_plugin_names = set(disabled_plugin_names or [])
         self.plugin_configs = plugin_configs or {}
+        self.bus = bus
 
     def is_enabled(self, plugin_class: type[BasePlugin]) -> bool:
         if not plugin_class.enabled:
@@ -52,7 +55,7 @@ class PluginRegistry:
 
     def enabled_plugins(self) -> list[BasePlugin]:
         return [
-            plugin_class(config=self.plugin_configs.get(plugin_class.name, {}))
+            plugin_class(config=self.plugin_configs.get(plugin_class.name, {}), bus=self.bus)
             for plugin_class in self.plugin_classes
             if self.is_enabled(plugin_class)
         ]

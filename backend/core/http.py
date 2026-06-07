@@ -104,6 +104,7 @@ async def http_client(
     allowed_hosts: tuple[str, ...] = (),
     allow_private_networks: bool = False,
     max_response_bytes: int | None = None,
+    bus: EventBus | None = None,
 ) -> AsyncIterator[AsyncHttpClient]:
     client = AsyncHttpClient(
         settings=settings,
@@ -111,6 +112,7 @@ async def http_client(
         allowed_hosts=allowed_hosts,
         allow_private_networks=allow_private_networks,
         max_response_bytes=max_response_bytes,
+        bus=bus,
     )
     try:
         yield client

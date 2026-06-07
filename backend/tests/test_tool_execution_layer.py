@@ -11,12 +11,14 @@ from sqlalchemy.pool import StaticPool
 import backend.api.routes._audit as route_audit
 from backend.api.app import create_app
 from backend.core.config import Settings
+from backend.core.events import EventBus, event_bus
 from backend.models import AuditEvent, ToolExecutionApproval, ToolExecutionRateLimitBucket
 from backend.models.base import Base
 from backend.plugins.base import BasePlugin, PluginResult
 from backend.plugins.registry import PluginRegistry
 from backend.services.collection_orchestrator import CollectionJob, CollectionOrchestrator
 from backend.services.audit import AuditEventService
+from backend.services.egress_audit import EgressAuditSubscriber
 from backend.services.tool_execution import InMemoryRateLimiter, ToolExecutionController
 from backend.services.tool_execution_approvals import ToolExecutionApprovalService
 from backend.storage.database import get_db_session
@@ -48,6 +50,28 @@ class MustNotRunOperatorToolPlugin(OperatorToolPlugin):
 
     async def execute(self, target: str, context: dict | None = None) -> PluginResult:
         raise AssertionError("blocked tools must not execute")
+
+
+class EgressPublishingPlugin(BasePlugin):
+    name = "egress_plugin"
+    indicator_types = ("domain",)
+
+    async def execute(self, target: str, context: dict | None = None) -> PluginResult:
+        assert self.event_bus is not None
+        await self.event_bus.publish(
+            "tool.execution.egress",
+            {
+                "egress_policy_status": "allowed",
+                "egress_policy_reason": "egress_policy_allowed",
+                "egress_plugin_name": self.name,
+                "egress_scheme": "https",
+                "egress_host": "api.example.test",
+                "egress_matched_rule": "api.example.test",
+                "raw_url": f"https://api.example.test/search?q={target}",
+                "authorization_header": "Bearer secret-token",
+            },
+        )
+        return PluginResult(plugin_name=self.name, status="completed", findings=[])
 
 
 @pytest_asyncio.fixture
@@ -262,6 +286,88 @@ async def test_orchestrator_runs_operator_tool_with_mode_and_approval() -> None:
     assert result.plugin_results[0].status == "completed"
     assert len(result.findings) == 1
     assert result.findings[0]["collector_plugin"] == "operator_tool"
+
+
+@pytest.mark.asyncio
+async def test_egress_audit_subscriber_persists_sanitized_events(approval_session: AsyncSession) -> None:
+    bus = EventBus()
+    subscriber = EgressAuditSubscriber(approval_session)
+    subscriber.subscribe(bus)
+
+    await bus.publish(
+        "tool.execution.egress",
+        {
+            "egress_policy_status": "blocked",
+            "egress_policy_reason": "host_not_in_plugin_allowlist",
+            "egress_plugin_name": "unit_plugin",
+            "egress_scheme": "https",
+            "egress_host": "blocked.example",
+            "egress_matched_rule": None,
+            "raw_url": "https://blocked.example/path?token=secret",
+            "token": "secret",
+            "headers": {"Authorization": "Bearer secret"},
+        },
+    )
+    subscriber.unsubscribe(bus)
+
+    events = await AuditEventService(approval_session).list_events(event_type="tool.execution.egress")
+
+    assert len(events) == 1
+    assert events[0].status == "blocked"
+    assert events[0].resource_type == "tool_egress"
+    assert events[0].resource_id == "unit_plugin"
+    assert events[0].metadata_json["egress_host"] == "blocked.example"
+    assert "raw_url" not in events[0].metadata_json
+    assert "token" not in str(events[0].metadata_json).lower()
+    assert "/path" not in str(events[0].metadata_json)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_persists_plugin_egress_audit_events(approval_session: AsyncSession) -> None:
+    bus = EventBus()
+    orchestrator = CollectionOrchestrator(
+        registry=PluginRegistry([EgressPublishingPlugin], bus=bus),
+        session=approval_session,
+        bus=bus,
+        tool_execution=ToolExecutionController(
+            settings=Settings(tool_execution_rate_limit_per_minute=0),
+            rate_limiter=InMemoryRateLimiter(),
+            audit_session=approval_session,
+        ),
+    )
+
+    result = await orchestrator.run_job(CollectionJob(target="example.com", target_type="domain"))
+    events = await AuditEventService(approval_session).list_events(event_type_prefix="tool.execution.")
+
+    assert result.plugin_results[0].status == "completed"
+    egress_events = [event for event in events if event.event_type == "tool.execution.egress"]
+    assert len(egress_events) == 1
+    assert egress_events[0].status == "allowed"
+    assert egress_events[0].resource_type == "tool_egress"
+    assert egress_events[0].resource_id == "egress_plugin"
+    assert egress_events[0].metadata_json["egress_host"] == "api.example.test"
+    assert "example.com" not in str(egress_events[0].metadata_json)
+    assert "secret-token" not in str(egress_events[0].metadata_json)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_uses_scoped_bus_for_persistent_egress_audit(approval_session: AsyncSession) -> None:
+    orchestrator = CollectionOrchestrator(
+        registry=PluginRegistry([EgressPublishingPlugin]),
+        session=approval_session,
+        tool_execution=ToolExecutionController(
+            settings=Settings(tool_execution_rate_limit_per_minute=0),
+            rate_limiter=InMemoryRateLimiter(),
+            audit_session=approval_session,
+        ),
+    )
+
+    assert orchestrator.event_bus is not event_bus
+    await orchestrator.run_job(CollectionJob(target="example.com", target_type="domain"))
+    events = await AuditEventService(approval_session).list_events(event_type="tool.execution.egress")
+
+    assert len(events) == 1
+    assert events[0].resource_id == "egress_plugin"
 
 
 @pytest.mark.asyncio

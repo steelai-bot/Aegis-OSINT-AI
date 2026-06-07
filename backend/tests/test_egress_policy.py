@@ -151,3 +151,20 @@ async def test_async_http_client_raises_policy_error_for_blocked_plugin_request(
         await client.aclose()
 
     assert exc_info.value.decision.reason == "host_not_in_plugin_allowlist"
+
+
+async def test_plugin_http_policy_kwargs_carries_scoped_event_bus() -> None:
+    from backend.core.events import EventBus
+    from backend.plugins.base import BasePlugin
+
+    class ScopedPlugin(BasePlugin):
+        name = "scoped_plugin"
+        egress_allowed_hosts = ("api.example.test",)
+
+        async def execute(self, target: str, context: dict[str, Any] | None = None):
+            raise NotImplementedError
+
+    bus = EventBus()
+    plugin = ScopedPlugin(bus=bus)
+
+    assert plugin.http_policy_kwargs()["bus"] is bus

@@ -1,9 +1,10 @@
-import { KeyRound, ScrollText, ShieldCheck } from "lucide-react";
+import { Globe2, KeyRound, ScrollText, ShieldCheck } from "lucide-react";
 
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { formatDate, titleCase } from "@/lib/format";
 import { getToolAuditEventsWithSource, getToolExecutionApprovalsWithSource } from "@/lib/api";
+import type { AuditEvent } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,15 @@ function metadataSummary(metadata: Record<string, unknown>): string {
   return entries.map(([key, value]) => `${key}: ${String(value)}`).join(" · ");
 }
 
+function eventResourceSummary(event: AuditEvent): string {
+  if (event.event_type === "tool.execution.egress") {
+    const host = String(event.metadata_json.egress_host ?? "unknown host");
+    const plugin = String(event.metadata_json.egress_plugin_name ?? event.resource_id ?? "unknown plugin");
+    return `host: ${host} · plugin: ${plugin}`;
+  }
+  return `resource: ${event.resource_id ?? "n/a"}`;
+}
+
 export default async function ToolExecutionPage() {
   const [approvalsResult, auditResult] = await Promise.all([
     getToolExecutionApprovalsWithSource(),
@@ -59,19 +69,21 @@ export default async function ToolExecutionPage() {
   const approvals = approvalsResult.data;
   const auditEvents = auditResult.data;
   const activeApprovals = approvals.filter((approval) => approval.status === "active").length;
+  const egressAuditEvents = auditEvents.filter((event) => event.event_type === "tool.execution.egress");
   const blockedOrRequired = auditEvents.filter((event) => ["blocked", "approval_required", "rate_limited"].includes(event.status)).length;
 
   return (
     <>
       <PageHeader
         title="Tool Execution"
-        description="Review persistent approval grants and the audited tool execution decision trail."
+          description="Review persistent approval grants, execution decisions, outcomes, and per-plugin egress audit events."
         icon={ShieldCheck}
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Approval grants" value={String(approvals.length)} detail={`${activeApprovals} currently active`} icon={KeyRound} />
         <MetricCard label="Audit events" value={String(auditEvents.length)} detail="tool.execution.* read API" icon={ScrollText} />
+        <MetricCard label="Egress events" value={String(egressAuditEvents.length)} detail="sanitized plugin HTTP policy decisions" icon={Globe2} />
         <MetricCard label="Blocked/queued review" value={String(blockedOrRequired)} detail="approval required, blocked, or rate limited" icon={ShieldCheck} />
       </div>
 
@@ -126,7 +138,7 @@ export default async function ToolExecutionPage() {
           <div>
             <h2 className="text-sm font-semibold text-zinc-100">Tool execution audit trail</h2>
             <p className="mt-1 text-xs text-zinc-500">
-              Source: {auditResult.source === "live" ? "live API" : "sample fallback"}. Default filter is event_type_prefix=tool.execution.
+              Source: {auditResult.source === "live" ? "live API" : "sample fallback"}. Includes persisted egress events with host-only metadata.
             </p>
           </div>
           <ScrollText className="size-4 text-cyan-200" aria-hidden="true" />
@@ -136,7 +148,7 @@ export default async function ToolExecutionPage() {
             <article key={event.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[240px_140px_1fr_160px] lg:items-start">
               <div>
                 <h3 className="font-mono text-sm text-zinc-100">{event.event_type}</h3>
-                <p className="mt-1 text-xs text-zinc-500">resource: {event.resource_id ?? "n/a"}</p>
+                <p className="mt-1 text-xs text-zinc-500">{eventResourceSummary(event)}</p>
               </div>
               <div><StatusBadge status={event.status} /></div>
               <p className="text-sm leading-6 text-zinc-400">{metadataSummary(event.metadata_json)}</p>

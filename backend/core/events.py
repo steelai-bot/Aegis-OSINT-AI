@@ -36,6 +36,14 @@ class EventBus:
     def subscribe(self, event_name: str, handler: EventHandler) -> None:
         self._subscribers[event_name].append(handler)
 
+    def unsubscribe(self, event_name: str, handler: EventHandler) -> None:
+        """Remove a previously registered handler when a scoped listener ends."""
+
+        handlers = self._subscribers.get(event_name)
+        if not handlers:
+            return
+        self._subscribers[event_name] = [registered for registered in handlers if registered != handler]
+
     async def publish(self, event_name: str, payload: dict[str, Any]) -> Event:
         event = Event(name=event_name, payload=payload)
         async with self._lock:

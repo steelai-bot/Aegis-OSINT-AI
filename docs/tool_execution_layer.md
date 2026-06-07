@@ -107,6 +107,7 @@ audit events:
 - `tool.execution.decision`
 - `tool.execution.completed`
 - `tool.execution.failed`
+- `tool.execution.egress`
 - `tool.execution.approval.created`
 - `tool.execution.approval.revoked`
 
@@ -140,12 +141,14 @@ and enforces `AEGIS_HTTP_MAX_RESPONSE_BYTES` response-size caps.
 
 Plugins declare `egress_allowed_hosts` on `BasePlugin`; configurable-source
 plugins derive additional hosts from operator-approved source URLs. Policy
-decisions publish sanitized `tool.execution.egress` events through the event bus.
-Those events include policy status, reason, plugin name, scheme, host, and matched
-rule only—never paths, query strings, headers, targets, approval tokens, or API
-keys. LLM/provider HTTP clients are intentionally unscoped so local provider
-endpoints such as Ollama loopback URLs remain usable without weakening plugin
-SSRF protections.
+decisions publish sanitized `tool.execution.egress` events through the event bus
+and, during collection runs with a DB session, persist them to the audit table
+with `resource_type=tool_egress` and the plugin name as `resource_id`. Those
+events include policy status, reason, plugin name, scheme, host, and matched rule
+only—never paths, query strings, headers, targets, approval tokens, or API keys.
+LLM/provider HTTP clients are intentionally unscoped so local provider endpoints
+such as Ollama loopback URLs remain usable without weakening plugin SSRF
+protections.
 
 ## Collection API Example
 

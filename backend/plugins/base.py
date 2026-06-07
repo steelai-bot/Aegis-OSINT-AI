@@ -6,6 +6,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from backend.core.events import EventBus
+
 
 @dataclass(slots=True)
 class PluginResult:
@@ -27,8 +29,9 @@ class BasePlugin(ABC):
     egress_allow_private_networks = False
     egress_max_response_bytes: int | None = None
 
-    def __init__(self, config: dict[str, Any] | None = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None, bus: EventBus | None = None) -> None:
         self.config = config or {}
+        self.event_bus = bus
 
     def http_policy_kwargs(self, *, allowed_hosts: tuple[str, ...] | None = None) -> dict[str, Any]:
         """Return shared HTTP-client policy kwargs for this plugin."""
@@ -46,6 +49,7 @@ class BasePlugin(ABC):
             "allowed_hosts": merged_hosts,
             "allow_private_networks": allow_private,
             "max_response_bytes": int(max_response_bytes) if max_response_bytes is not None else None,
+            "bus": self.event_bus,
         }
 
     @abstractmethod

@@ -93,8 +93,9 @@ internal asset and the collection is explicitly authorized.
 
 Every plugin-scoped HTTP authorization publishes a sanitized
 `tool.execution.egress` event with policy status, reason, plugin name, URL scheme,
-host, and matched rule. The event intentionally omits paths, query strings,
-headers, targets, and credentials.
+host, and matched rule. Collection orchestration persists those events to audit
+readback when a DB session is available. The event intentionally omits paths,
+query strings, headers, targets, and credentials.
 
 Passive collection endpoints are privileged operator workflows. They now have
 route-level permission dependencies for opt-in backend auth. Before shared
@@ -118,7 +119,7 @@ Recommended controls before production:
 - keep private and link-local deny rules enabled for external fetches,
 - tune request timeout and response size limits per source,
 - add source-specific distributed rate limits where provider terms require them,
-- structured audit events for every external provider call.
+- review persisted `tool.execution.egress` events for every plugin external call.
 
 Request-scoped plugin configuration should be limited to authorized public sources
 or explicit target-owned assets. Provider credentials must remain environment-backed

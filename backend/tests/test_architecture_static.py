@@ -343,6 +343,7 @@ def test_tool_execution_layer_contract_exists() -> None:
     http_text = read("backend/core/http.py")
     service_text = read("backend/services/tool_execution.py")
     egress_text = read("backend/services/egress_policy.py")
+    egress_audit_text = read("backend/services/egress_audit.py")
     audit_service_text = read("backend/services/audit.py")
     audit_route_text = read("backend/api/routes/audit.py")
     audit_schema_text = read("backend/api/schemas/audit.py")
@@ -364,6 +365,9 @@ def test_tool_execution_layer_contract_exists() -> None:
     assert "http_policy_kwargs" in base_text
     assert "class EgressPolicy" in egress_text
     assert "class EgressPolicyDecision" in egress_text
+    assert "class EgressAuditSubscriber" in egress_audit_text
+    assert "resource_type=\"tool_egress\"" in egress_audit_text
+    assert "raw_url" not in egress_audit_text
     assert "private_ip_blocked" in egress_text
     assert "host_not_in_plugin_allowlist" in egress_text
     assert "EgressPolicyError" in http_text
@@ -391,6 +395,7 @@ def test_tool_execution_layer_contract_exists() -> None:
     assert "ToolExecutionApprovalCreate" in approval_schema_text
     assert "tool.execution.decision" in service_text
     assert "ToolExecutionController" in orchestrator_text
+    assert "EventBus() if session is not None else event_bus" in orchestrator_text
     assert "tool.execution.completed" in orchestrator_text
     assert "tool.execution.failed" in orchestrator_text
     assert "approval_token" in schema_text
