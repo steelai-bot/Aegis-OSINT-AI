@@ -41,7 +41,7 @@ class GitHubCodeSearchScraper(PassiveExposureScraper):
             if not isinstance(item, dict):
                 continue
             source_url = str(item.get("html_url") or item.get("url") or self.config.github_api_url)
-            searchable_text = _github_item_text(item, target)
+            searchable_text = _github_item_text(item)
             result.exposures.extend(
                 classify_text(
                     searchable_text,
@@ -59,12 +59,11 @@ class GitHubCodeSearchScraper(PassiveExposureScraper):
         return result
 
 
-def _github_item_text(item: dict[str, Any], target: str) -> str:
+def _github_item_text(item: dict[str, Any]) -> str:
     repo = item.get("repository") if isinstance(item.get("repository"), dict) else {}
     return " ".join(
         str(value)
         for value in [
-            target,
             item.get("name"),
             item.get("path"),
             item.get("html_url"),

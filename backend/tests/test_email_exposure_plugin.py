@@ -8,6 +8,7 @@ import backend.plugins.email_exposure.plugin as plugin_module
 from backend.core.config import Settings
 from backend.plugins.email_exposure.classifiers import classify_text, hash_value, redact_email
 from backend.plugins.email_exposure.plugin import EmailExposurePlugin
+from backend.plugins.email_exposure.scrapers.code_repos import _github_item_text
 
 
 def test_redact_email_and_hash_value_are_stable() -> None:
@@ -32,6 +33,12 @@ def test_classify_text_hashes_email_and_redacts_preview() -> None:
     assert "password" in item.data_types_found
     assert item.severity == "high"
     assert "alice@example.com" not in item.content_preview
+
+
+def test_github_item_text_does_not_inject_target() -> None:
+    text = _github_item_text({"name": "config.txt", "path": "safe/config.txt", "repository": {"full_name": "org/repo"}})
+
+    assert "alice@example.com" not in text
 
 
 @pytest.mark.asyncio
