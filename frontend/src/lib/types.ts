@@ -62,6 +62,19 @@ export type CollectionRunQueuedResponse = {
   status_url: string;
 };
 
+export type ToolExecutionMode = "passive" | "operator_assisted" | "manual_review_only" | "disabled";
+
+export type CollectionWorkflowPayload = {
+  plugin_name?: string;
+  priority?: number;
+  config?: Record<string, unknown>;
+  enrich?: boolean;
+  async_mode: true;
+  execution_mode?: Exclude<ToolExecutionMode, "disabled">;
+  approval_token?: string;
+  authorized_scope?: string;
+};
+
 export type CollectionRunStatus = {
   run_id: string;
   run_scope: "ad_hoc" | "target" | "investigation" | string;
@@ -101,6 +114,24 @@ export type ToolExecutionApproval = {
   metadata_json: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+};
+
+export type ToolExecutionApprovalCreatePayload = {
+  plugin_name?: string;
+  target_type?: string;
+  target?: string;
+  target_hash?: string;
+  execution_mode: Extract<ToolExecutionMode, "operator_assisted" | "manual_review_only">;
+  authorized_scope?: string;
+  reason?: string;
+  requested_by?: string;
+  expires_in_minutes: number;
+  max_uses: number;
+  metadata?: Record<string, unknown>;
+};
+
+export type ToolExecutionApprovalCreated = ToolExecutionApproval & {
+  approval_token: string;
 };
 
 export type ToolExecutionApprovalListResponse = {

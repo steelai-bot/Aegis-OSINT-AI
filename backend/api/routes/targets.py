@@ -89,6 +89,9 @@ async def collect_target(
         priority=payload.priority,
         config=payload.config,
         enrich=payload.enrich,
+        execution_mode=payload.execution_mode,
+        approval_token=payload.approval_token,
+        authorized_scope=payload.authorized_scope,
     )
     if payload.async_mode:
         queued = await queue_collection_run(

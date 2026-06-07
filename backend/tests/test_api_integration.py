@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 from backend.api.app import create_app
+from backend.api.schemas.collections import CollectionRunResponse
 from backend.models import AgentContextSnapshot, AgentTaskResult, Finding, Investigation, Report, Target
 from backend.models.base import Base
 from backend.storage.database import get_db_session
@@ -147,6 +148,46 @@ async def test_target_creation_returns_404_for_missing_investigation(client: Asy
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Investigation not found"
+
+
+async def test_target_collection_forwards_tool_execution_controls(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    async def fake_run_collection_job(payload, *, session):  # noqa: ANN001
+        captured["payload"] = payload
+        return CollectionRunResponse(target=payload.target, target_type=payload.target_type, target_id=payload.target_id)
+
+    monkeypatch.setattr("backend.api.routes.targets.run_collection_job", fake_run_collection_job)
+
+    investigation_response = await client.post("/investigations", json={"title": "Approval forwarding"})
+    target_response = await client.post(
+        "/targets",
+        json={
+            "investigation_id": investigation_response.json()["id"],
+            "type": "domain",
+            "value": "example.com",
+        },
+    )
+
+    collect_response = await client.post(
+        f"/targets/{target_response.json()['id']}/collect",
+        json={
+            "plugin_name": "operator_tool",
+            "execution_mode": "operator_assisted",
+            "approval_token": "one-time-token",
+            "authorized_scope": "ticket-123 approved domain run",
+        },
+    )
+
+    assert collect_response.status_code == 200
+    payload = captured["payload"]
+    assert payload.plugin_name == "operator_tool"
+    assert payload.execution_mode == "operator_assisted"
+    assert payload.approval_token == "one-time-token"
+    assert payload.authorized_scope == "ticket-123 approved domain run"
 
 
 async def test_agent_run_persists_task_result_metadata(client: AsyncClient) -> None:

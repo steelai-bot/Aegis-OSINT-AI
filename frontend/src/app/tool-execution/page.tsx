@@ -2,6 +2,7 @@ import { Globe2, KeyRound, ScrollText, ShieldCheck } from "lucide-react";
 
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { ToolApprovalManagement } from "@/components/tool-approval-management";
 import { formatDate, titleCase } from "@/lib/format";
 import { getToolAuditEventsWithSource, getToolExecutionApprovalsWithSource } from "@/lib/api";
 import type { AuditEvent } from "@/lib/types";
@@ -37,13 +38,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function shortHash(value: string | null): string {
-  if (!value) {
-    return "scope-wide";
-  }
-  return `${value.slice(0, 10)}…${value.slice(-6)}`;
-}
-
 function metadataSummary(metadata: Record<string, unknown>): string {
   const entries = Object.entries(metadata).slice(0, 4);
   if (entries.length === 0) {
@@ -76,7 +70,7 @@ export default async function ToolExecutionPage() {
     <>
       <PageHeader
         title="Tool Execution"
-          description="Review persistent approval grants, execution decisions, outcomes, and per-plugin egress audit events."
+        description="Review persistent approval grants, execution decisions, outcomes, and per-plugin egress audit events."
         icon={ShieldCheck}
       />
 
@@ -87,51 +81,7 @@ export default async function ToolExecutionPage() {
         <MetricCard label="Blocked/queued review" value={String(blockedOrRequired)} detail="approval required, blocked, or rate limited" icon={ShieldCheck} />
       </div>
 
-      <section className="rounded-md border border-zinc-800 bg-zinc-900/70">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-100">Persistent approvals</h2>
-            <p className="mt-1 text-xs text-zinc-500">
-              Source: {approvalsResult.source === "live" ? "live API" : "sample fallback"}. Tokens and raw targets are never displayed.
-            </p>
-          </div>
-          <KeyRound className="size-4 text-cyan-200" aria-hidden="true" />
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="text-xs uppercase text-zinc-500">
-              <tr className="border-b border-zinc-800">
-                <th className="px-4 py-3 font-medium">Plugin</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Mode</th>
-                <th className="px-4 py-3 font-medium">Target hash</th>
-                <th className="px-4 py-3 font-medium">Uses</th>
-                <th className="px-4 py-3 font-medium">Scope / reason</th>
-                <th className="px-4 py-3 font-medium">Expires</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800">
-              {approvals.map((approval) => (
-                <tr key={approval.id}>
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-zinc-100">{approval.plugin_name ?? "any plugin"}</div>
-                    <div className="mt-1 text-xs text-zinc-500">{approval.target_type ?? "any target type"}</div>
-                  </td>
-                  <td className="px-4 py-3"><StatusBadge status={approval.status} /></td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">{approval.execution_mode}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-400">{shortHash(approval.target_hash)}</td>
-                  <td className="px-4 py-3 font-mono text-zinc-300">{approval.use_count}/{approval.max_uses}</td>
-                  <td className="max-w-md px-4 py-3 text-zinc-400">
-                    <div>{approval.authorized_scope ?? "No scope note"}</div>
-                    <div className="mt-1 text-xs text-zinc-500">{approval.reason ?? "No reason supplied"}</div>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-500">{formatDate(approval.expires_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <ToolApprovalManagement initialApprovals={approvals} source={approvalsResult.source} />
 
       <section className="rounded-md border border-zinc-800 bg-zinc-900/70">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">

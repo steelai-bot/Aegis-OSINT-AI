@@ -4,6 +4,7 @@ import type {
   CollectionRunStatus,
   AuditEvent,
   AuditEventListResponse,
+  CollectionWorkflowPayload,
   Finding,
   Investigation,
   PluginStatus,
@@ -11,6 +12,8 @@ import type {
   Target,
   TimelineEvent,
   ToolExecutionApproval,
+  ToolExecutionApprovalCreatePayload,
+  ToolExecutionApprovalCreated,
   ToolExecutionApprovalListResponse,
 } from "./types";
 
@@ -21,14 +24,6 @@ export type ApiDataSource = "live" | "sample";
 export type ApiDataResult<T> = {
   data: T;
   source: ApiDataSource;
-};
-
-type CollectionWorkflowPayload = {
-  plugin_name?: string;
-  priority?: number;
-  config?: Record<string, unknown>;
-  enrich?: boolean;
-  async_mode: true;
 };
 
 export function isApiConfigured(): boolean {
@@ -68,6 +63,23 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend API request failed with status ${response.status}.`);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function deleteJson<T>(path: string): Promise<T> {
+  if (!apiBaseUrl) {
+    throw new Error("Backend API URL is not configured.");
+  }
+
+  const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}${path}`, {
+    method: "DELETE",
+    cache: "no-store",
   });
 
   if (!response.ok) {
@@ -166,6 +178,16 @@ export async function getToolExecutionApprovalsWithSource(): Promise<ApiDataResu
     { approvals: sample.toolExecutionApprovals },
   );
   return { data: response.data.approvals, source: response.source };
+}
+
+export async function createToolExecutionApproval(
+  payload: ToolExecutionApprovalCreatePayload,
+): Promise<ToolExecutionApprovalCreated> {
+  return postJson("/api/v1/tool-execution/approvals", payload);
+}
+
+export async function revokeToolExecutionApproval(approvalId: string): Promise<ToolExecutionApproval> {
+  return deleteJson(`/api/v1/tool-execution/approvals/${approvalId}`);
 }
 
 export async function getToolAuditEventsWithSource(): Promise<ApiDataResult<AuditEvent[]>> {

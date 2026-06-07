@@ -80,6 +80,11 @@ Collection requests may include `execution_mode`, `approval_token`, and
 `authorized_scope`. The approval token is excluded from serialized Pydantic
 responses and audit metadata redacts sensitive token-like keys.
 
+The frontend target and investigation collection controls include an optional
+operator control panel for `plugin_name`, `execution_mode`, `authorized_scope`,
+and one-time `approval_token`. The token field is password-style, sent only with
+the queue request, and cleared from the form after submission.
+
 ## Rate Limits
 
 `AEGIS_TOOL_EXECUTION_RATE_LIMIT_PER_MINUTE` sets a fixed-window limit per
@@ -128,8 +133,13 @@ and `resource_id`. When `AEGIS_AUTH_ENABLED=true`, these endpoints require the
 admin-only `audit:read` permission.
 
 The frontend console exposes the same readback surface at `/tool-execution`,
-showing persistent approvals beside the `tool.execution.*` audit timeline. It
-uses sample fallback data when `NEXT_PUBLIC_AEGIS_API_URL` is not configured.
+showing persistent approvals beside the `tool.execution.*` audit timeline. When
+`NEXT_PUBLIC_AEGIS_API_URL` points at a live backend, operators can create scoped
+approvals and revoke active grants from that page. The create workflow displays
+the plaintext `approval_token` only in immediate client state after the create
+response; list/read/revoke views continue to show only hash-backed approval
+metadata. It uses sample fallback data when the API URL is not configured, and
+sample fallback is intentionally read-only.
 
 ## Egress Policy Events
 
