@@ -222,6 +222,90 @@ export async function revokeToolExecutionApproval(approvalId: string): Promise<T
   return deleteJson(`/api/v1/tool-execution/approvals/${approvalId}`);
 }
 
+// ── Enrichment ─────────────────────────────────────────────────────────────
+
+export async function enrichIndicator(indicator: string, indicatorType: string): Promise<{
+  indicator: string;
+  indicator_type: string;
+  enriched: boolean;
+  enrichment_data: Record<string, unknown>;
+  risk_score: number | null;
+} > {
+  return postJson("/api/v1/enrichment/enrich", { indicator, indicator_type: indicatorType });
+}
+
+// ── Report export ──────────────────────────────────────────────────────────
+
+export async function exportReportCSV(investigationId: string): Promise<string> {
+  if (!apiBaseUrl) throw new Error("Backend API URL is not configured.");
+  const response = await fetch(
+    `${apiBaseUrl.replace(/\/$/, "")}/api/v1/reports/export/${investigationId}/csv`,
+    { cache: "no-store" },
+  );
+  if (!response.ok) throw new Error(`Export failed with status ${response.status}`);
+  return response.text();
+}
+
+export async function exportReportPDF(investigationId: string): Promise<string> {
+  if (!apiBaseUrl) throw new Error("Backend API URL is not configured.");
+  const response = await fetch(
+    `${apiBaseUrl.replace(/\/$/, "")}/api/v1/reports/export/${investigationId}/pdf`,
+    { cache: "no-store" },
+  );
+  if (!response.ok) throw new Error(`Export failed with status ${response.status}`);
+  return response.text();
+}
+
+// ── Worker monitoring ──────────────────────────────────────────────────────
+
+export type WorkerStatusResult = {
+  status: {
+    queue_backend: string;
+    redis_url: string | null;
+    job_timeout_seconds: number;
+    max_retries: number;
+    worker_count: number;
+    queue_depth: number;
+    active_jobs: number;
+    failed_jobs: number;
+    completed_jobs: number;
+    status: string;
+  };
+  metrics: {
+    total_jobs: number;
+    successful_jobs: number;
+    failed_jobs: number;
+    avg_job_duration_seconds: number;
+    active_workers: number;
+    queue_health: string;
+  };
+};
+
+export async function getWorkerStatusWithSource(): Promise<ApiDataResult<WorkerStatusResult>> {
+  return fetchJsonWithSource<WorkerStatusResult>("/api/v1/workers/status", {
+    status: {
+      queue_backend: "in_process",
+      redis_url: null,
+      job_timeout_seconds: 600,
+      max_retries: 3,
+      worker_count: 1,
+      queue_depth: 0,
+      active_jobs: 0,
+      failed_jobs: 0,
+      completed_jobs: 0,
+      status: "healthy",
+    },
+    metrics: {
+      total_jobs: 0,
+      successful_jobs: 0,
+      failed_jobs: 0,
+      avg_job_duration_seconds: 0,
+      active_workers: 1,
+      queue_health: "healthy",
+    },
+  });
+}
+
 export async function getToolAuditEventsWithSource(): Promise<ApiDataResult<AuditEvent[]>> {
   const response = await fetchJsonWithSource<AuditEventListResponse>(
     "/api/v1/audit/events?event_type_prefix=tool.execution.&limit=100",

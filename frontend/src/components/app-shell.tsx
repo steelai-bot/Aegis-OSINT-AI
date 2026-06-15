@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Target,
   UserIcon,
+  Server,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/plugins", label: "Plugins", icon: Plug },
   { href: "/tool-execution", label: "Tool Execution", icon: ScrollText },
+  { href: "/workers", label: "Workers", icon: Server },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

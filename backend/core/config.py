@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     http_egress_deny_private_networks: bool = True
     serus_ai_api_key: str | None = None
 
+    # --- API rate limiting ------------------------------------------------
+    api_rate_limit_per_minute: int = Field(
+        default=120,
+        ge=1,
+        description="Maximum API requests per client IP per minute.",
+    )
+
     # --- JWT / Auth -------------------------------------------------------
     jwt_secret: str = Field(
         default="change-me-in-production-aegis-jwt-secret",
