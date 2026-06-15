@@ -1,11 +1,22 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Loader2, Play, RefreshCw, ShieldCheck } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  ShieldCheck,
+  Square,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { StatusPill } from "@/components/status-pill";
 import {
+  cancelCollectionRun,
   getCollectionRunStatus,
+  getEntityCollectionRuns,
   isApiConfigured,
   queueInvestigationCollection,
   queueTargetCollection,
@@ -52,9 +63,14 @@ export function CollectionRunControl({ scope, entityId, disabledReason }: Collec
   const [runStatus, setRunStatus] = useState<CollectionRunStatus | null>(null);
   const [isQueueing, setIsQueueing] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isRerunning, setIsRerunning] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [controls, setControls] = useState<ExecutionControlState>(defaultExecutionControlState);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<CollectionRunStatus[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const canPoll = useMemo(() => Boolean(runId && status && !terminalStatuses.includes(status)), [runId, status]);
 
@@ -122,6 +138,70 @@ export function CollectionRunControl({ scope, entityId, disabledReason }: Collec
     }
   }
 
+  async function handleCancel() {
+    if (!runId) {
+      return;
+    }
+    setIsCancelling(true);
+    setError(null);
+    try {
+      const cancelled = await cancelCollectionRun(runId);
+      setRunStatus(cancelled);
+      setStatus(cancelled.status);
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : "Unable to cancel collection run.");
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
+  async function handleRerun() {
+    if (!apiReady) {
+      setError("Set NEXT_PUBLIC_AEGIS_API_URL to enable live async collection.");
+      return;
+    }
+    setIsRerunning(true);
+    setError(null);
+    setRunStatus(null);
+    setRunId(null);
+    setStatus(null);
+
+    try {
+      const payload = buildCollectionPayload(controls);
+      const queued =
+        scope === "target"
+          ? await queueTargetCollection(entityId, payload)
+          : await queueInvestigationCollection(entityId, payload);
+
+      setRunId(queued.run_id);
+      setStatus(queued.status);
+      setControls((current) => ({ ...current, approvalToken: "" }));
+    } catch (rerunError) {
+      setError(rerunError instanceof Error ? rerunError.message : "Unable to re-run collection.");
+    } finally {
+      setIsRerunning(false);
+    }
+  }
+
+  async function toggleHistory() {
+    if (showHistory) {
+      setShowHistory(false);
+      return;
+    }
+    setShowHistory(true);
+    if (history === null) {
+      setHistoryLoading(true);
+      try {
+        const runs = await getEntityCollectionRuns(scope, entityId, 5);
+        setHistory(runs);
+      } catch {
+        setHistory([]);
+      } finally {
+        setHistoryLoading(false);
+      }
+    }
+  }
+
   return (
     <div className="flex min-w-[260px] flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -145,6 +225,32 @@ export function CollectionRunControl({ scope, entityId, disabledReason }: Collec
           {showControls ? <ChevronUp className="size-3.5" aria-hidden="true" /> : <ChevronDown className="size-3.5" aria-hidden="true" />}
         </button>
       </div>
+
+      {/* ── Cancellation ──────────────────────────────────────────────── */}
+      {runId && status && ["queued", "running"].includes(status) && (
+        <button
+          type="button"
+          onClick={handleCancel}
+          disabled={isCancelling}
+          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-red-400/30 bg-red-400/10 px-2.5 text-[11px] font-semibold text-red-200 transition-colors hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isCancelling ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : <Square className="size-3" aria-hidden="true" />}
+          Cancel run
+        </button>
+      )}
+
+      {/* ── Re-run ────────────────────────────────────────────────────── */}
+      {!runId && status && terminalStatuses.includes(status) && (
+        <button
+          type="button"
+          onClick={handleRerun}
+          disabled={isRerunning || !apiReady}
+          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 text-[11px] font-semibold text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isRerunning ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : <RotateCcw className="size-3" aria-hidden="true" />}
+          Re-run
+        </button>
+      )}
 
       {showControls ? (
         <div className="grid gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-3">
@@ -197,6 +303,7 @@ export function CollectionRunControl({ scope, entityId, disabledReason }: Collec
         </div>
       ) : null}
 
+      {/* ── Status / error area ────────────────────────────────────────── */}
       <div className="min-h-6 text-xs text-zinc-500">
         {disabledReason ? <span>{disabledReason}</span> : null}
         {!disabledReason && !apiReady ? <span>Offline: configure API URL</span> : null}
@@ -214,6 +321,47 @@ export function CollectionRunControl({ scope, entityId, disabledReason }: Collec
         <p className="text-[11px] text-zinc-500">Persisted findings: {runStatus.persisted_count}</p>
       ) : null}
       {error ? <p className="text-[11px] leading-4 text-red-200">{error}</p> : null}
+
+      {/* ── Inline run history ────────────────────────────────────────── */}
+      <button
+        type="button"
+        onClick={toggleHistory}
+        className="inline-flex h-7 items-center gap-1 self-start text-[11px] text-zinc-500 transition-colors hover:text-zinc-300"
+      >
+        {showHistory ? <ChevronUp className="size-3" aria-hidden="true" /> : <ChevronDown className="size-3" aria-hidden="true" />}
+        Run history
+      </button>
+
+      {showHistory && (
+        <div className="grid gap-1.5 rounded-md border border-zinc-800 bg-zinc-950/40 p-2">
+          {historyLoading ? (
+            <div className="flex items-center gap-2 py-2 text-xs text-zinc-500">
+              <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+              Loading history …
+            </div>
+          ) : history && history.length > 0 ? (
+            history.map((h) => (
+              <div key={h.run_id} className="flex flex-wrap items-center gap-2 text-[11px]">
+                <StatusPill value={h.status} />
+                <span className="font-mono text-zinc-500">{h.run_id.slice(0, 8)}</span>
+                {h.persisted_count > 0 && (
+                  <span className="text-zinc-500">{h.persisted_count} findings</span>
+                )}
+                {h.completed_at && (
+                  <span className="text-zinc-500">{formatDate(h.completed_at)}</span>
+                )}
+                {h.plugin_name && (
+                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-100">
+                    {h.plugin_name}
+                  </span>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="py-1 text-xs text-zinc-500">No runs yet.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

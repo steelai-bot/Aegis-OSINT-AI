@@ -100,3 +100,34 @@ class CollectionRunService:
         await self.session.commit()
         await self.session.refresh(run)
         return run
+
+    async def mark_cancelled(self, run_id: UUID) -> CollectionRun | None:
+        """Mark a queued or running collection run as cancelled."""
+        run = await self.get_run(run_id)
+        if run is None:
+            return None
+        if run.status not in ("queued", "running"):
+            raise ValueError(f"Cannot cancel run in status {run.status!r}")
+        run.status = "failed"
+        run.error_json = {"message": "Cancelled by operator"}
+        run.completed_at = datetime.now(UTC)
+        await self.session.commit()
+        await self.session.refresh(run)
+        return run
+
+    async def list_runs_for_entity(
+        self,
+        *,
+        target_id: UUID | None = None,
+        investigation_id: UUID | None = None,
+        limit: int = 10,
+    ) -> list[CollectionRun]:
+        """Return recent collection runs for a specific target or investigation."""
+        stmt = select(CollectionRun)
+        if target_id is not None:
+            stmt = stmt.where(CollectionRun.target_id == target_id)
+        if investigation_id is not None:
+            stmt = stmt.where(CollectionRun.investigation_id == investigation_id)
+        stmt = stmt.order_by(CollectionRun.updated_at.desc()).limit(limit)
+        result = await self.session.scalars(stmt)
+        return list(result)

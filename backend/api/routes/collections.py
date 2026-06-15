@@ -76,3 +76,51 @@ async def get_collection_run(run_id: UUID, session: AsyncSession = Depends(get_d
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collection run not found")
     return collection_run_status_response(run)
 
+
+@router.post(
+    "/collections/runs/{run_id}/cancel",
+    response_model=CollectionRunStatusResponse,
+    dependencies=[Depends(require_permission("collection:run"))],
+)
+async def cancel_collection_run(run_id: UUID, session: AsyncSession = Depends(get_db_session)):
+    """Cancel a queued or running collection run."""
+
+    run = await CollectionRunService(session).mark_cancelled(run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collection run not found")
+    return collection_run_status_response(run)
+
+
+@router.get(
+    "/targets/{target_id}/collection-runs",
+    response_model=CollectionRunListResponse,
+    dependencies=[Depends(require_permission("collection:status"))],
+)
+async def list_target_collection_runs(
+    target_id: UUID,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return recent collection runs for a specific target."""
+
+    runs = await CollectionRunService(session).list_runs_for_entity(target_id=target_id, limit=limit)
+    return CollectionRunListResponse(runs=[collection_run_status_response(run) for run in runs])
+
+
+@router.get(
+    "/investigations/{investigation_id}/collection-runs",
+    response_model=CollectionRunListResponse,
+    dependencies=[Depends(require_permission("collection:status"))],
+)
+async def list_investigation_collection_runs(
+    investigation_id: UUID,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return recent collection runs for a specific investigation."""
+
+    runs = await CollectionRunService(session).list_runs_for_entity(
+        investigation_id=investigation_id, limit=limit,
+    )
+    return CollectionRunListResponse(runs=[collection_run_status_response(run) for run in runs])
+

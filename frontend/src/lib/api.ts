@@ -173,6 +173,29 @@ export async function getCollectionRunStatus(runId: string): Promise<CollectionR
   return (await response.json()) as CollectionRunStatus;
 }
 
+export async function cancelCollectionRun(runId: string): Promise<CollectionRunStatus> {
+  return postJson(`/api/v1/collections/runs/${runId}/cancel`, {});
+}
+
+export async function getEntityCollectionRuns(
+  entityType: "target" | "investigation",
+  entityId: string,
+  limit = 10,
+): Promise<CollectionRunStatus[]> {
+  return fetchJson(`/api/v1/${entityType}s/${entityId}/collection-runs?limit=${encodeURIComponent(String(limit))}`, []);
+}
+
+export async function getEntityCollectionRunsWithSource(
+  entityType: "target" | "investigation",
+  entityId: string,
+  limit = 10,
+): Promise<ApiDataResult<CollectionRunStatus[]>> {
+  return fetchJsonWithSource<CollectionRunListResponse>(
+    `/api/v1/${entityType}s/${entityId}/collection-runs?limit=${encodeURIComponent(String(limit))}`,
+    { runs: sample.collectionRuns },
+  );
+}
+
 export async function getCollectionRunsWithSource(limit = 10): Promise<ApiDataResult<CollectionRunStatus[]>> {
   const response = await fetchJsonWithSource<CollectionRunListResponse>(
     `/api/v1/collections/runs?limit=${encodeURIComponent(String(limit))}`,
