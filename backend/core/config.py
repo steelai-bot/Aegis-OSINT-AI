@@ -54,6 +54,26 @@ class Settings(BaseSettings):
     http_egress_deny_private_networks: bool = True
     serus_ai_api_key: str | None = None
 
+    # --- Arq / Redis queue ------------------------------------------------
+    queue_backend: Literal["in_process", "arq"] = Field(
+        default="in_process",
+        description="Which queue backend to use for async collection runs.",
+    )
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        description="Redis connection string used by the arq queue backend.",
+    )
+    arq_job_timeout_seconds: int = Field(
+        default=600,
+        ge=1,
+        description="Maximum seconds a single arq job may run before timeout.",
+    )
+    arq_max_retries: int = Field(
+        default=3,
+        ge=0,
+        description="Number of retry attempts for failed arq jobs.",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -15,6 +15,16 @@ services:
     ports:
       - "5432:5432"
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -24,11 +34,31 @@ services:
       AEGIS_API_PREFIX: /api/v1
       AEGIS_DATABASE_URL: postgresql+asyncpg://aegis:aegis@db:5432/aegis
       AEGIS_LLM_PROVIDER: disabled
+      AEGIS_REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "8000:8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    entrypoint: >
+      python -c "from backend.workers.collection_worker import poll_queue; poll_queue()"
+    environment:
+      AEGIS_ENVIRONMENT: container
+      AEGIS_API_PREFIX: /api/v1
+      AEGIS_DATABASE_URL: postgresql+asyncpg://aegis:aegis@db:5432/aegis
+      AEGIS_LLM_PROVIDER: disabled
+      AEGIS_REDIS_URL: redis://redis:6379/0
+      AEGIS_QUEUE_BACKEND: arq
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   frontend:
     build:

@@ -76,7 +76,12 @@ async def queue_collection_run(
     background_tasks: BackgroundTasks,
     session: AsyncSession,
 ) -> CollectionRunQueuedResponse:
-    """Persist a queued collection run and schedule process-local execution."""
+    """Persist a queued collection run and schedule execution.
+
+    When ``settings.queue_backend == \"arq\"`` the run is enqueued via Redis
+    for the external worker process. Otherwise the existing in-process
+    ``BackgroundTasks`` path is used.
+    """
 
     await validate_collection_scope(payload, session=session)
 
@@ -91,11 +96,20 @@ async def queue_collection_run(
         config=payload.config,
         enrich=payload.enrich,
     )
-    background_tasks.add_task(execute_collection_run_background, run.id, payload)
+
+    settings = get_settings()
+    if settings.queue_backend == "arq":
+        from backend.workers.collection_worker import enqueue_collection_run_via_arq
+
+        payload_dict = payload.model_dump(mode="json")
+        await enqueue_collection_run_via_arq(str(run.id), payload_dict)
+    else:
+        background_tasks.add_task(execute_collection_run_background, run.id, payload)
+
     return CollectionRunQueuedResponse(
         run_id=run.id,
         status=run.status,
-        status_url=f"{get_settings().api_prefix}/collections/runs/{run.id}",
+        status_url=f"{settings.api_prefix}/collections/runs/{run.id}",
     )
 
 
@@ -106,7 +120,12 @@ async def queue_investigation_collection_run(
     background_tasks: BackgroundTasks,
     session: AsyncSession,
 ) -> CollectionRunQueuedResponse:
-    """Persist a queued investigation-wide run and schedule process-local execution."""
+    """Persist a queued investigation-wide run and schedule execution.
+
+    When ``settings.queue_backend == \"arq\"`` the run is enqueued via Redis
+    for the external worker process. Otherwise the existing in-process
+    ``BackgroundTasks`` path is used.
+    """
 
     await validate_investigation_scope(investigation_id, session=session)
 
@@ -118,11 +137,26 @@ async def queue_investigation_collection_run(
         config=payload.config,
         enrich=payload.enrich,
     )
-    background_tasks.add_task(execute_investigation_collection_background, run.id, investigation_id, payload)
+
+    settings = get_settings()
+    if settings.queue_backend == "arq":
+        from backend.workers.collection_worker import enqueue_collection_run_via_arq
+
+        payload_dict = payload.model_dump(mode="json")
+        await enqueue_collection_run_via_arq(
+            str(run.id),
+            payload_dict,
+            investigation_id=str(investigation_id),
+        )
+    else:
+        background_tasks.add_task(
+            execute_investigation_collection_background, run.id, investigation_id, payload,
+        )
+
     return CollectionRunQueuedResponse(
         run_id=run.id,
         status=run.status,
-        status_url=f"{get_settings().api_prefix}/collections/runs/{run.id}",
+        status_url=f"{settings.api_prefix}/collections/runs/{run.id}",
     )
 
 
