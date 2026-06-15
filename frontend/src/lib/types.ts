@@ -95,6 +95,10 @@ export type CollectionRunStatus = {
   updated_at: string;
 };
 
+export type CollectionRunListResponse = {
+  runs: CollectionRunStatus[];
+};
+
 export type ToolExecutionApproval = {
   id: string;
   status: "active" | "used" | "revoked" | "expired" | string;

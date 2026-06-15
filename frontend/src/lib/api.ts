@@ -1,6 +1,7 @@
 import * as sample from "./sample-data";
 import type {
   CollectionRunQueuedResponse,
+  CollectionRunListResponse,
   CollectionRunStatus,
   AuditEvent,
   AuditEventListResponse,
@@ -170,6 +171,14 @@ export async function getCollectionRunStatus(runId: string): Promise<CollectionR
   }
 
   return (await response.json()) as CollectionRunStatus;
+}
+
+export async function getCollectionRunsWithSource(limit = 10): Promise<ApiDataResult<CollectionRunStatus[]>> {
+  const response = await fetchJsonWithSource<CollectionRunListResponse>(
+    `/api/v1/collections/runs?limit=${encodeURIComponent(String(limit))}`,
+    { runs: sample.collectionRuns },
+  );
+  return { data: response.data.runs, source: response.source };
 }
 
 export async function getToolExecutionApprovalsWithSource(): Promise<ApiDataResult<ToolExecutionApproval[]>> {

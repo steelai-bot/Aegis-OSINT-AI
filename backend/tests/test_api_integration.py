@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.api.app import create_app
 from backend.api.schemas.collections import CollectionRunResponse
-from backend.models import AgentContextSnapshot, AgentTaskResult, Finding, Investigation, Report, Target
+from backend.models import AgentContextSnapshot, AgentTaskResult, CollectionRun, Finding, Investigation, Report, Target
 from backend.models.base import Base
 from backend.storage.database import get_db_session
 
@@ -35,6 +35,7 @@ async def client() -> AsyncIterator[AsyncClient]:
                 Target.__table__,
                 Finding.__table__,
                 Report.__table__,
+                CollectionRun.__table__,
                 AgentContextSnapshot.__table__,
                 AgentTaskResult.__table__,
             ],
@@ -188,6 +189,35 @@ async def test_target_collection_forwards_tool_execution_controls(
     assert payload.execution_mode == "operator_assisted"
     assert payload.approval_token == "one-time-token"
     assert payload.authorized_scope == "ticket-123 approved domain run"
+
+
+async def test_collection_runs_can_be_listed(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_background_run(*args, **kwargs):  # noqa: ANN002, ANN003
+        return None
+
+    monkeypatch.setattr("backend.services.collection_workflows.execute_collection_run_background", fake_background_run)
+
+    queued_response = await client.post(
+        "/collections/run",
+        json={
+            "target": "example.com",
+            "target_type": "domain",
+            "plugin_name": "crtsh",
+            "async_mode": True,
+        },
+    )
+
+    assert queued_response.status_code == 202
+
+    list_response = await client.get("/collections/runs")
+
+    assert list_response.status_code == 200
+    runs = list_response.json()["runs"]
+    assert len(runs) == 1
+    assert runs[0]["run_id"] == queued_response.json()["run_id"]
+    assert runs[0]["target"] == "example.com"
+    assert runs[0]["plugin_name"] == "crtsh"
+    assert runs[0]["status"] in {"queued", "running", "completed", "failed"}
 
 
 async def test_agent_run_persists_task_result_metadata(client: AsyncClient) -> None:

@@ -128,3 +128,9 @@ class CollectionRunStatusResponse(BaseModel):
     completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class CollectionRunListResponse(BaseModel):
+    """Recent persisted collection runs."""
+
+    runs: list[CollectionRunStatusResponse] = Field(default_factory=list)

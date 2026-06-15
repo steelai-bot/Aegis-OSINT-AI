@@ -3,18 +3,20 @@ import { AlertTriangle, FileText, Flag, Search, Target } from "lucide-react";
 import { LiveTimeline } from "@/components/live-timeline";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { RecentCollectionRuns } from "@/components/recent-collection-runs";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate, formatPercent } from "@/lib/format";
-import { getFindings, getInvestigations, getReports, getTargets, getTimelineEvents } from "@/lib/api";
+import { getCollectionRunsWithSource, getFindings, getInvestigations, getReports, getTargets, getTimelineEvents } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [investigations, targets, findings, reports] = await Promise.all([
+  const [investigations, targets, findings, reports, collectionRuns] = await Promise.all([
     getInvestigations(),
     getTargets(),
     getFindings(),
     getReports(),
+    getCollectionRunsWithSource(),
   ]);
   const runningCount = investigations.filter((investigation) => investigation.status === "running").length;
   const highRiskCount = findings.filter((finding) => ["high", "critical"].includes(finding.severity)).length;
@@ -44,6 +46,8 @@ export default async function DashboardPage() {
         />
         <MetricCard label="Reports" value={String(reports.length)} detail="Rendered exports and briefings" icon={FileText} />
       </div>
+
+      <RecentCollectionRuns runs={collectionRuns.data} source={collectionRuns.source} />
 
       <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
         <section className="rounded-md border border-zinc-800 bg-zinc-900/70">

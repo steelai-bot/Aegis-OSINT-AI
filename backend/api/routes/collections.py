@@ -2,10 +2,13 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.schemas.collections import (
+    CollectionRunListResponse,
     CollectionRunQueuedResponse,
     CollectionRunRequest,
     CollectionRunResponse,
@@ -43,6 +46,21 @@ async def run_collection(
         response.status_code = status.HTTP_202_ACCEPTED
         return queued
     return await run_collection_job(payload, session=session)
+
+
+@router.get(
+    "/collections/runs",
+    response_model=CollectionRunListResponse,
+    dependencies=[Depends(require_permission("collection:status"))],
+)
+async def list_collection_runs(
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return recent persisted background collection runs for operator review."""
+
+    runs = await CollectionRunService(session).list_runs(limit=limit)
+    return CollectionRunListResponse(runs=[collection_run_status_response(run) for run in runs])
 
 
 @router.get(

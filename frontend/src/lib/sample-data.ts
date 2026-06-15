@@ -1,4 +1,14 @@
-import type { AuditEvent, Finding, Investigation, PluginStatus, Report, Target, TimelineEvent, ToolExecutionApproval } from "./types";
+import type {
+  AuditEvent,
+  CollectionRunStatus,
+  Finding,
+  Investigation,
+  PluginStatus,
+  Report,
+  Target,
+  TimelineEvent,
+  ToolExecutionApproval,
+} from "./types";
 
 export const investigations: Investigation[] = [
   {
@@ -103,6 +113,47 @@ export const reports: Report[] = [
     format: "pdf",
     created_at: "2026-06-04T14:12:00.000Z",
     updated_at: "2026-06-04T14:12:00.000Z",
+  },
+];
+
+export const collectionRuns: CollectionRunStatus[] = [
+  {
+    run_id: "2dca80a6-f9e0-4ac6-86d4-89fe6d571281",
+    run_scope: "target",
+    status: "completed",
+    target: targets[0].value,
+    target_type: targets[0].type,
+    target_id: targets[0].id,
+    investigation_id: investigations[0].id,
+    plugin_name: "crtsh",
+    priority: 100,
+    enrich: false,
+    persisted_count: 2,
+    result: { plugin_results: 1 },
+    errors: {},
+    started_at: "2026-06-05T10:01:00.000Z",
+    completed_at: "2026-06-05T10:02:04.000Z",
+    created_at: "2026-06-05T10:00:58.000Z",
+    updated_at: "2026-06-05T10:02:04.000Z",
+  },
+  {
+    run_id: "5cce2eb7-9b56-4925-a65f-b39386a88ef6",
+    run_scope: "investigation",
+    status: "running",
+    target: null,
+    target_type: null,
+    target_id: null,
+    investigation_id: investigations[0].id,
+    plugin_name: null,
+    priority: 100,
+    enrich: true,
+    persisted_count: 0,
+    result: {},
+    errors: {},
+    started_at: "2026-06-05T10:40:30.000Z",
+    completed_at: null,
+    created_at: "2026-06-05T10:40:20.000Z",
+    updated_at: "2026-06-05T10:40:30.000Z",
   },
 ];
 

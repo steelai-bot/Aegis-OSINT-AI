@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.collection_run import CollectionRun
@@ -52,6 +53,13 @@ class CollectionRunService:
 
     async def get_run(self, run_id: UUID) -> CollectionRun | None:
         return await self.session.get(CollectionRun, run_id)
+
+    async def list_runs(self, *, limit: int = 25) -> list[CollectionRun]:
+        """Return recent collection runs ordered by newest activity first."""
+
+        statement = select(CollectionRun).order_by(CollectionRun.updated_at.desc()).limit(limit)
+        result = await self.session.scalars(statement)
+        return list(result)
 
     async def mark_running(self, run_id: UUID) -> CollectionRun | None:
         run = await self.get_run(run_id)
