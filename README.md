@@ -4,6 +4,43 @@ Aegis v2 is a defensive OSINT investigation framework for authorized,
 passive evidence collection, investigation workflow tracking, and reporting.
 The migration does not preserve the legacy monolithic script runtime.
 
+## Quick Install
+
+### Linux / macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/steelai-bot/Aegis-OSINT-AI/main/scripts/install_or_update.sh | bash
+```
+
+### Windows (PowerShell)
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/steelai-bot/Aegis-OSINT-AI/main/scripts/install.ps1 | iex"
+```
+
+### What the installer does
+
+1. Clones (or updates) the repository into `$HOME/Aegis-OSINT-AI` (override with `$env:AEGIS_DIR`)
+2. Creates a Python virtual environment in `.venv` and installs backend dependencies
+3. Installs frontend dependencies (Node.js)
+4. Starts Docker Compose stack (PostgreSQL + Redis) if Docker is available
+5. Creates a `.env` template if one doesn't exist
+
+After installation, the API starts with:
+
+```bash
+cd Aegis-OSINT-AI
+source .venv/bin/activate        # Linux/macOS
+# .venv\Scripts\activate         # Windows
+uvicorn backend.api.app:create_app --factory --reload
+```
+
+Frontend:
+
+```bash
+cd frontend && npm run dev
+```
+
 Offensive exploitation, session replay, credential replay, browser fingerprint
 cloning, payload execution, hardcoded target workflows, and banking-specific
 automation are excluded from the runnable v2 application.
