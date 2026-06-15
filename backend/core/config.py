@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     http_egress_deny_private_networks: bool = True
     serus_ai_api_key: str | None = None
 
+    # --- JWT / Auth -------------------------------------------------------
+    jwt_secret: str = Field(
+        default="change-me-in-production-aegis-jwt-secret",
+        description="HMAC key used to sign and verify JWT tokens.",
+    )
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_ttl_minutes: int = Field(default=60, ge=1)
+    jwt_refresh_token_ttl_minutes: int = Field(default=43200, ge=1)  # 30 days
+
     # --- Arq / Redis queue ------------------------------------------------
     queue_backend: Literal["in_process", "arq"] = Field(
         default="in_process",

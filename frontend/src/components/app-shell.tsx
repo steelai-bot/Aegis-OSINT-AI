@@ -6,15 +6,18 @@ import {
   FileText,
   Flag,
   LayoutDashboard,
+  LogOut,
   Plug,
   ScrollText,
   Search,
   Settings,
   ShieldCheck,
   Target,
+  UserIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -27,8 +30,23 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+const publicPaths = ["/login", "/register"];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { isAuthenticated, user, logout } = useAuth();
+
+  // Public pages (login, register) render without shell
+  if (publicPaths.includes(pathname)) {
+    return <>{children}</>;
+  }
+
+  // Protected pages — redirect to login if not authenticated
+  if (!isAuthenticated && typeof window !== "undefined") {
+    router.push("/login");
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -84,9 +102,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <ChartNoAxesCombined className="size-4 text-cyan-200" aria-hidden="true" />
               <span>Operational workspace</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-zinc-500">
-              <span className="size-2 rounded-full bg-emerald-300" aria-hidden="true" />
-              API-ready
+            <div className="flex items-center gap-3">
+              {user && (
+                <div className="hidden items-center gap-2 sm:flex">
+                  <UserIcon className="size-4 text-zinc-500" aria-hidden="true" />
+                  <span className="text-xs text-zinc-400">{user.display_name}</span>
+                  <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase text-zinc-500">
+                    {user.role}
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={logout}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                title="Sign out"
+              >
+                <LogOut className="size-3.5" />
+                <span className="hidden sm:inline">Sign out</span>
+              </button>
             </div>
           </header>
           <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">{children}</main>

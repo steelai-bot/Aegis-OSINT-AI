@@ -4,9 +4,10 @@ from uuid import UUID
 
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.routes._audit import record_route_audit_event
 from backend.api.schemas.collections import (
     CollectionRunListResponse,
     CollectionRunQueuedResponse,
@@ -14,7 +15,7 @@ from backend.api.schemas.collections import (
     CollectionRunResponse,
     CollectionRunStatusResponse,
 )
-from backend.api.security import require_permission
+from backend.api.security import Principal, require_permission
 from backend.services.collection_runs import CollectionRunService
 from backend.services.collection_workflows import collection_run_status_response, queue_collection_run, run_collection_job
 from backend.storage.database import get_db_session
@@ -31,8 +32,10 @@ router = APIRouter(tags=["collections"])
 async def run_collection(
     payload: CollectionRunRequest,
     background_tasks: BackgroundTasks,
+    request: Request,
     response: Response,
     session: AsyncSession = Depends(get_db_session),
+    principal: Principal | None = Depends(require_permission("collection:run")),
 ):
     """Run approved passive collectors for a single target and optionally persist findings."""
 
@@ -82,12 +85,25 @@ async def get_collection_run(run_id: UUID, session: AsyncSession = Depends(get_d
     response_model=CollectionRunStatusResponse,
     dependencies=[Depends(require_permission("collection:run"))],
 )
-async def cancel_collection_run(run_id: UUID, session: AsyncSession = Depends(get_db_session)):
+async def cancel_collection_run(
+    run_id: UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    _: Principal | None = Depends(require_permission("collection:run")),
+):
     """Cancel a queued or running collection run."""
 
     run = await CollectionRunService(session).mark_cancelled(run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Collection run not found")
+    await record_route_audit_event(
+        request=request,
+        principal=_,
+        event_type="collection.run.cancelled",
+        status="success",
+        resource_type="collection_run",
+        resource_id=str(run_id),
+    )
     return collection_run_status_response(run)
 
 
@@ -123,4 +139,3 @@ async def list_investigation_collection_runs(
         investigation_id=investigation_id, limit=limit,
     )
     return CollectionRunListResponse(runs=[collection_run_status_response(run) for run in runs])
-
