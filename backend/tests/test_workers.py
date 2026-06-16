@@ -180,3 +180,99 @@ async def test_queue_collection_run_uses_in_process_when_backend_in_process() ->
     assert result.run_id == UUID("550e8400-e29b-41d4-a716-446655440020")
     # BackgroundTasks should now have one task (the in-process path)
     assert len(background_tasks.tasks) == 1
+
+
+# ---------------------------------------------------------------------------
+# queue_collection_run / queue_investigation_collection_run enqueue failure
+# ---------------------------------------------------------------------------
+
+async def test_queue_collection_run_raises_503_when_arq_enqueue_fails() -> None:
+    """When enqueue_collection_run_via_arq returns None, raise HTTPException 503."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from fastapi import BackgroundTasks, HTTPException
+
+    from backend.api.schemas.collections import CollectionRunRequest
+    from backend.services.collection_workflows import queue_collection_run
+
+    payload = CollectionRunRequest(target="example.com", target_type="domain", plugin_name="dns")
+    background_tasks = BackgroundTasks()
+    session = AsyncMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    fake_run = MagicMock()
+    fake_run.id = "550e8400-e29b-41d4-a716-446655440030"
+    fake_run.status = "queued"
+
+    with (
+        patch("backend.services.collection_workflows.CollectionRunService") as mock_service_cls,
+        patch("backend.services.collection_workflows.get_settings") as mock_settings,
+        patch("backend.workers.collection_worker.enqueue_collection_run_via_arq", AsyncMock(return_value=None)) as mock_enqueue,
+    ):
+        mock_service = mock_service_cls.return_value
+        mock_service.create_run = AsyncMock(return_value=fake_run)
+
+        mock_settings.return_value.queue_backend = "arq"
+        mock_settings.return_value.api_prefix = "/api/v1"
+
+        try:
+            await queue_collection_run(
+                payload,
+                run_scope="target",
+                background_tasks=background_tasks,
+                session=session,
+            )
+            assert False, "Expected HTTPException 503"
+        except HTTPException as exc:
+            assert exc.status_code == 503
+            assert exc.detail == "Worker queue unavailable"
+
+    # enqueue should have been called
+    mock_enqueue.assert_awaited_once()
+
+
+async def test_queue_investigation_collection_run_raises_503_when_arq_enqueue_fails() -> None:
+    """When enqueue_collection_run_via_arq returns None for investigation run, raise HTTPException 503."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from fastapi import BackgroundTasks, HTTPException
+    from uuid import UUID
+
+    from backend.api.schemas.collections import CollectionWorkflowRunRequest
+    from backend.services.collection_workflows import queue_investigation_collection_run
+
+    investigation_id = UUID("550e8400-e29b-41d4-a716-446655440099")
+    payload = CollectionWorkflowRunRequest(plugin_name="dns")
+    background_tasks = BackgroundTasks()
+    session = AsyncMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+
+    fake_run = MagicMock()
+    fake_run.id = "550e8400-e29b-41d4-a716-446655440040"
+    fake_run.status = "queued"
+
+    with (
+        patch("backend.services.collection_workflows.CollectionRunService") as mock_service_cls,
+        patch("backend.services.collection_workflows.get_settings") as mock_settings,
+        patch("backend.workers.collection_worker.enqueue_collection_run_via_arq", AsyncMock(return_value=None)) as mock_enqueue,
+        patch("backend.services.collection_workflows.validate_investigation_scope", AsyncMock()),
+    ):
+        mock_service = mock_service_cls.return_value
+        mock_service.create_run = AsyncMock(return_value=fake_run)
+
+        mock_settings.return_value.queue_backend = "arq"
+        mock_settings.return_value.api_prefix = "/api/v1"
+
+        try:
+            await queue_investigation_collection_run(
+                investigation_id,
+                payload,
+                background_tasks=background_tasks,
+                session=session,
+            )
+            assert False, "Expected HTTPException 503"
+        except HTTPException as exc:
+            assert exc.status_code == 503
+            assert exc.detail == "Worker queue unavailable"
+
+    mock_enqueue.assert_awaited_once()

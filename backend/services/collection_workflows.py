@@ -102,7 +102,12 @@ async def queue_collection_run(
         from backend.workers.collection_worker import enqueue_collection_run_via_arq
 
         payload_dict = payload.model_dump(mode="json")
-        await enqueue_collection_run_via_arq(str(run.id), payload_dict)
+        job_id = await enqueue_collection_run_via_arq(str(run.id), payload_dict)
+        if job_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Worker queue unavailable",
+            )
     else:
         background_tasks.add_task(execute_collection_run_background, run.id, payload)
 
@@ -143,11 +148,16 @@ async def queue_investigation_collection_run(
         from backend.workers.collection_worker import enqueue_collection_run_via_arq
 
         payload_dict = payload.model_dump(mode="json")
-        await enqueue_collection_run_via_arq(
+        job_id = await enqueue_collection_run_via_arq(
             str(run.id),
             payload_dict,
             investigation_id=str(investigation_id),
         )
+        if job_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Worker queue unavailable",
+            )
     else:
         background_tasks.add_task(
             execute_investigation_collection_background, run.id, investigation_id, payload,
