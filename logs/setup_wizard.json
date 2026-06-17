@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-06-17T15:04:05.925108",
+  "os": "Linux",
+  "python": "3.12.1 (main, Mar 11 2026, 12:17:56) [GCC 13.3.0]",
+  "ram_gb": 7.8,
+  "ram_tier": "LOW",
+  "gpu": null,
+  "missing_critical": [],
+  "missing_optional": [],
+  "outdated": [],
+  "sys_deps": {
+    "tesseract": false,
+    "git": true
+  }
+}

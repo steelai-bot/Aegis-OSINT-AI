@@ -29,7 +29,7 @@ Manual backend setup remains available:
 2. Install dependencies:
 
    ```bash
-   pip install -r requirements.txt
+   pip install -r backend/requirements.runtime.txt
    ```
 
 3. Set required runtime configuration:

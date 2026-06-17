@@ -269,10 +269,10 @@ Install dependencies with the lifecycle helper:
 python scripts/dev_lifecycle.py setup
 ```
 
-Or install dependencies manually and run local checks:
+Or install runtime backend dependencies manually and run local checks:
 
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.runtime.txt
 python3 scripts/kali_compatibility.py --json
 python3 -m pytest backend/tests
 ```
