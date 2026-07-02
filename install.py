@@ -680,10 +680,14 @@ def _interactive_flow(sys_profile, mode="interactive"):
     if missing_sys:
         section("Step 4/12: Kali System Packages")
         info(f"Missing: {', '.join(missing_sys)}")
-        if ask("Install missing Kali system packages via apt?"):
+        if os.geteuid() == 0:
+            info("Running as root - installing automatically")
+            install_apt_packages(missing_only=True)
+        elif ask("Install missing Kali system packages via apt? (recommended)"):
             install_apt_packages(missing_only=True)
         else:
-            err("Cannot continue without Kali system packages")
+            err("Cannot continue without system packages")
+            info("Run manually: sudo apt install tesseract-ocr holehe")
             sys.exit(1)
     else:
         section("Step 4/12: Kali System Packages")
