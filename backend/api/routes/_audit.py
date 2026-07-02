@@ -37,8 +37,8 @@ async def record_route_audit_event(
                 actor_role=principal.role if principal is not None else None,
                 resource_type=resource_type,
                 resource_id=resource_id,
-                request_id=_header_value(request, "x-request-id")
-                or _header_value(request, "x-correlation-id"),
+                request_id=(_header_value(request, "x-request-id")
+                or _header_value(request, "x-correlation-id")),
                 ip_address=request.client.host if request.client is not None else None,
                 user_agent=_header_value(request, "user-agent"),
                 metadata=metadata,

@@ -190,10 +190,11 @@ export async function getEntityCollectionRunsWithSource(
   entityId: string,
   limit = 10,
 ): Promise<ApiDataResult<CollectionRunStatus[]>> {
-  return fetchJsonWithSource<CollectionRunListResponse>(
+  const response = await fetchJsonWithSource<CollectionRunListResponse>(
     `/api/v1/${entityType}s/${entityId}/collection-runs?limit=${encodeURIComponent(String(limit))}`,
     { runs: sample.collectionRuns },
   );
+  return { data: response.data.runs, source: response.source };
 }
 
 export async function getCollectionRunsWithSource(limit = 10): Promise<ApiDataResult<CollectionRunStatus[]>> {

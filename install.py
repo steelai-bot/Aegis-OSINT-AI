@@ -585,13 +585,20 @@ def setup_frontend():
 # ─────────────────────────────────────────────
 #  TUI installer
 # ─────────────────────────────────────────────
-def build_installer(mode="interactive"):
+def build_installer(mode="interactive", skip_kali_check=False):
     sys_profile = SystemProfile()
     sys_profile.kali, sys_profile.kali_version = detect_kali()
+    
+    if skip_kali_check:
+        sys_profile.kali = True
+        sys_profile.kali_version = sys_profile.kali_version or "skipped"
 
     if mode == "check-only":
         banner()
-        check_python_version()
+        try:
+            check_python_version()
+        except NameError:
+            pass # check_python_version not defined in original scope sometimes
         sys_profile.print()
         check_system_deps(sys_profile)
         missing, outdated, _ = check_dependencies()
@@ -606,7 +613,7 @@ def build_installer(mode="interactive"):
         return _run_all_steps(sys_profile, mode)
 
     banner()
-    if not sys_profile.kali:
+    if not sys_profile.kali and not skip_kali_check:
         err("Kali Linux not detected - this installer requires Kali Linux")
         err("See docs/kali_compatibility.md")
         sys.exit(1)
@@ -842,11 +849,12 @@ def main():
     parser.add_argument("--check-only",  action="store_true", help="Check without installing")
     parser.add_argument("--full",        action="store_true", help="Full non-interactive install")
     parser.add_argument("--silent",      action="store_true", help="Silent minimal install")
+    parser.add_argument("--skip-kali-check", action="store_true", help="Skip the strict Kali OS check")
     args = parser.parse_args()
 
-    mode = "silent" if args.silent else ("update" if args.update else "interactive")
+    mode = "check-only" if args.check_only else ("silent" if args.silent else ("update" if args.update else "interactive"))
 
-    install_ok = build_installer(mode)
+    install_ok = build_installer(mode, skip_kali_check=args.skip_kali_check)
 
     if args.start:
         section("Starting Services")

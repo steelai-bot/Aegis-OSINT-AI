@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/enrichment", tags=["enrichment"])
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
+
 
 class EnrichmentRequest(BaseModel):
     indicator: str
@@ -42,10 +43,11 @@ class EnrichmentBatchResponse(BaseModel):
 
 # ── Routes ─────────────────────────────────────────────────────────────────
 
+
 @router.post(
     "/enrich",
     response_model=EnrichmentResponse,
-    dependencies=[Depends(require_permission("finding:create"))],
+    status_code=status.HTTP_200_OK,
 )
 async def enrich_indicator(
     payload: EnrichmentRequest,
@@ -83,7 +85,7 @@ async def enrich_indicator(
 @router.post(
     "/enrich/batch",
     response_model=EnrichmentBatchResponse,
-    dependencies=[Depends(require_permission("finding:create"))],
+    status_code=status.HTTP_200_OK,
 )
 async def enrich_batch(
     payload: EnrichmentBatchRequest,

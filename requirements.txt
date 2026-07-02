@@ -1,5 +1,5 @@
 # ══════════════════════════════════════════════════════════════
-#  AU-OSINT-RECON — Python Dependencies
+#  Aegis OSINT AI — Python Dependencies
 #  Install: pip install -r requirements.txt
 #  Python 3.12+ required
 # ══════════════════════════════════════════════════════════════

@@ -5,13 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from backend.api.security import Principal, require_permission
+from backend.api.security import require_permission
 from backend.core.config import get_settings
 
 router = APIRouter(prefix="/workers", tags=["worker-monitor"])
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
+
 
 class WorkerStatus(BaseModel):
     queue_backend: str
@@ -52,22 +53,19 @@ class WorkerStatusResponse(BaseModel):
 
 # ── Routes ─────────────────────────────────────────────────────────────────
 
+
 @router.get(
     "/status",
     response_model=WorkerStatusResponse,
     dependencies=[Depends(require_permission("agent:run"))],
 )
-async def worker_status(
-    _: Principal | None = Depends(require_permission("agent:run")),
-):
+async def worker_status():
     """Return current worker queue status and metrics."""
     settings = get_settings()
     backend = settings.queue_backend
     redis_url = settings.redis_url if backend == "arq" else None
 
-    # For now, return a health structure without Redis polling
-    # This will be extended with real arq worker stats when Redis is connected
-    status = WorkerStatus(
+    worker_status_obj = WorkerStatus(
         queue_backend=backend,
         redis_url=redis_url,
         job_timeout_seconds=settings.arq_job_timeout_seconds,
@@ -75,25 +73,16 @@ async def worker_status(
         status="healthy" if backend == "in_process" else "waiting_for_redis",
     )
 
-    metrics = WorkerMetrics(
-        total_jobs=0,
-        successful_jobs=0,
-        failed_jobs=0,
-        avg_job_duration_seconds=0,
-        active_workers=0,
-        queue_health="healthy",
-    )
+    metrics = WorkerMetrics()
 
-    return WorkerStatusResponse(status=status, metrics=metrics)
+    return WorkerStatusResponse(status=worker_status_obj, metrics=metrics)
 
 
 @router.get(
     "/health",
     dependencies=[Depends(require_permission("agent:run"))],
 )
-async def worker_health(
-    _: Principal | None = Depends(require_permission("agent:run")),
-):
+async def worker_health():
     """Quick health check for worker infrastructure."""
     settings = get_settings()
     return {

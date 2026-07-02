@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.audit_event import AuditEvent
 
@@ -94,7 +94,9 @@ class AuditEventService:
         if event_type:
             query = query.where(AuditEvent.event_type == _truncate(event_type, MAX_EVENT_TYPE_LENGTH))
         elif event_type_prefix:
-            query = query.where(AuditEvent.event_type.like(f"{_truncate(event_type_prefix, MAX_EVENT_TYPE_LENGTH)}%"))
+            query = query.where(
+                AuditEvent.event_type.like(f"{_truncate(event_type_prefix, MAX_EVENT_TYPE_LENGTH)}%")
+            )
         if status:
             query = query.where(AuditEvent.status == _truncate(status, MAX_STATUS_LENGTH))
         if actor_id:
@@ -109,13 +111,11 @@ class AuditEventService:
 
     async def get_event(self, event_id: Any) -> AuditEvent | None:
         """Return one audit event by primary key."""
-
         return await self.session.get(AuditEvent, event_id)
 
 
 def sanitize_audit_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
     """Return bounded metadata with sensitive values redacted."""
-
     if metadata is None:
         return {}
     return _sanitize_mapping(metadata, depth=0)

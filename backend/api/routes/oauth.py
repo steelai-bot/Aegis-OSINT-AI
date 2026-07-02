@@ -67,7 +67,10 @@ async def _exchange_code_for_token(
     if not client_id or not client_secret:
         raise HTTPException(
             status_code=501,
-            detail=f"Provider '{provider}' is not configured. Set {cfg['client_id_var']} and {cfg['client_secret_var']} in .env",
+            detail=(
+                f"Provider '{provider}' is not configured. "
+                f"Set {cfg['client_id_var']} and {cfg['client_secret_var']} in .env"
+            ),
         )
 
     async with httpx.AsyncClient() as client:
@@ -105,19 +108,25 @@ async def oauth_login(provider: str, request: Request):
         )
 
     redirect_uri = _get_callback_url(request, provider)
-    params = (
-        f"client_id={client_id}"
+    scope_encoded = cfg["scope"].replace(" ", "%20")
+    url = (
+        f"{cfg['authorize_url']}"
+        f"?client_id={client_id}"
         f"&redirect_uri={redirect_uri}"
-        f"&scope={cfg['scope'].replace(' ', '%20')}"
+        f"&scope={scope_encoded}"
         f"&response_type=code"
         f"&state=aegis_oauth_{provider}"
     )
-    url = f"{cfg['authorize_url']}?{params}"
     return RedirectResponse(url=url)
 
 
 @router.get("/{provider}/callback")
-async def oauth_callback(provider: str, code: str | None = None, state: str | None = None):
+async def oauth_callback(
+    provider: str,
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+):
     """Handle OAuth callback with real token exchange."""
     cfg = PROVIDERS.get(provider.lower())
     if cfg is None:
@@ -126,11 +135,11 @@ async def oauth_callback(provider: str, code: str | None = None, state: str | No
     if not code:
         raise HTTPException(status_code=400, detail="Missing authorization code")
 
-    redirect_uri = _get_callback_url(Request(scope={"type": "http"}), provider)
+    # Build redirect_uri using the real incoming request, not a dummy Request object
+    redirect_uri = _get_callback_url(request, provider)
     token_data = await _exchange_code_for_token(provider, code, redirect_uri)
 
-    # TODO: Create or update user with tokens
-    # For now, redirect to frontend with access token
+    # TODO: Create or update user record with provider identity
     access_token = token_data.get("access_token", "")
     return RedirectResponse(
         url=f"{FRONTEND_URL}/login?oauth=success&provider={provider}&token={access_token}"
