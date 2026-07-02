@@ -32,6 +32,11 @@ reports/
 *.env
 config.local.py
 
+# Runtime logs
+logs/
+!.gitkeep
+!.gitignore
+
 # Aegis local runtime state
 .aegis/
 
