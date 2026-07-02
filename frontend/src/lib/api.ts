@@ -18,7 +18,7 @@ import type {
   ToolExecutionApprovalListResponse,
 } from "./types";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_AEGIS_API_URL;
+const apiBaseUrl = process.env.NEXT_PUBLIC_AEGIS_API_URL || "http://localhost:8000";
 
 export type ApiDataSource = "live" | "sample";
 
