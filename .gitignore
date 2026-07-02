@@ -47,3 +47,6 @@ config.local.py
 .vscode/
 .idea/
 *.swp
+
+# Temporary editor directories
+.kilo/
