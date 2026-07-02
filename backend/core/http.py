@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+import backoff
 
 from backend.core.config import Settings, get_settings
 from backend.core.events import EventBus, event_bus
@@ -64,11 +64,13 @@ class AsyncHttpClient:
         if not decision.allowed:
             raise EgressPolicyError(decision)
 
-        @retry(
-            retry=retry_if_exception_type((httpx.TimeoutException, httpx.TransportError)),
-            wait=wait_exponential(multiplier=self.settings.http_backoff_seconds, min=0.1, max=8),
-            stop=stop_after_attempt(self.settings.http_max_retries),
-            reraise=True,
+        @backoff.on_exception(
+            backoff.expo,
+            (httpx.TimeoutException, httpx.TransportError),
+            max_tries=self.settings.http_max_retries,
+            base=2,
+            factor=self.settings.http_backoff_seconds,
+            max_value=8,
         )
         async def _send() -> httpx.Response:
             response = await self._client.request(method, url, **kwargs)

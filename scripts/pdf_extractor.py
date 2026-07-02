@@ -14,10 +14,10 @@ from typing import Any
 from collections import defaultdict
 
 try:
-    import fitz  # PyMuPDF
-    PYMUPDF_OK = True
+    import pdfplumber
+    PDFPLUMBER_OK = True
 except ImportError:
-    PYMUPDF_OK = False
+    PDFPLUMBER_OK = False
 
 try:
     from pypdf import PdfReader
@@ -114,13 +114,12 @@ SEVERITY_MAP = {
 #  PDF Text Extraction
 # ─────────────────────────────────────────────
 
-def extract_text_pymupdf(pdf_path: str) -> dict[int, str]:
-    """Extract text per page using PyMuPDF (preferred — handles scanned PDFs via OCR flag)."""
+def extract_text_pdfplumber(pdf_path: str) -> dict[int, str]:
+    """Extract text per page using pdfplumber."""
     pages = {}
-    doc = fitz.open(pdf_path)
-    for i, page in enumerate(doc, start=1):
-        pages[i] = page.get_text("text")
-    doc.close()
+    with pdfplumber.open(pdf_path) as pdf:
+        for i, page in enumerate(pdf.pages, start=1):
+            pages[i] = page.extract_text() or ""
     return pages
 
 
@@ -135,11 +134,11 @@ def extract_text_pypdf(pdf_path: str) -> dict[int, str]:
 
 def extract_text(pdf_path: str) -> dict[int, str]:
     """Extract text from PDF, using best available library."""
-    if PYMUPDF_OK:
-        return extract_text_pymupdf(pdf_path)
+    if PDFPLUMBER_OK:
+        return extract_text_pdfplumber(pdf_path)
     if PYPDF_OK:
         return extract_text_pypdf(pdf_path)
-    raise RuntimeError("No PDF library available. Install PyMuPDF: pip install PyMuPDF")
+    raise RuntimeError("No PDF library available. Install pdfplumber: pip install pdfplumber")
 
 
 def extract_metadata(pdf_path: str) -> dict:
@@ -149,19 +148,18 @@ def extract_metadata(pdf_path: str) -> dict:
         "size_kb":  round(os.path.getsize(pdf_path) / 1024, 1),
         "sha256":   _file_hash(pdf_path),
     }
-    if PYMUPDF_OK:
-        doc = fitz.open(pdf_path)
-        raw = doc.metadata or {}
-        doc.close()
-        meta.update({
-            "title":        raw.get("title", ""),
-            "author":       raw.get("author", ""),
-            "creator":      raw.get("creator", ""),
-            "producer":     raw.get("producer", ""),
-            "created":      raw.get("creationDate", ""),
-            "modified":     raw.get("modDate", ""),
-            "page_count":   doc.page_count if hasattr(doc, "page_count") else 0,
-        })
+    if PDFPLUMBER_OK:
+        with pdfplumber.open(pdf_path) as pdf:
+            raw = pdf.metadata
+            meta.update({
+                "title":        raw.get("Title", ""),
+                "author":       raw.get("Author", ""),
+                "creator":      raw.get("Creator", ""),
+                "producer":     raw.get("Producer", ""),
+                "created":      raw.get("CreationDate", ""),
+                "modified":     raw.get("ModDate", ""),
+                "page_count":   len(pdf.pages),
+            })
     return meta
 
 

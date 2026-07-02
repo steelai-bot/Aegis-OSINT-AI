@@ -70,7 +70,7 @@ REQUIRED = [
     ("tqdm",            "tqdm>=4.66.0",           "4.66.0", True),
     ("click",           "click>=8.1.7",           "8.1.7",  True),
     ("loguru",          "loguru>=0.7.2",          "0.7.2",  True),
-    ("tenacity",        "tenacity>=8.3.0",        "8.3.0",  True),
+    ("backoff",         "backoff>=2.2.1",         "2.2.1",  True),
     ("pandas",          "pandas>=2.2.0",          "2.2.0",  True),
     ("numpy",           "numpy>=1.26.0",          "1.26.0", True),
     ("jinja2",          "jinja2>=3.1.4",          "3.1.4",  True),
@@ -80,13 +80,10 @@ REQUIRED = [
     ("whois",           "python-whois>=0.9.4",    "0.9.4",  True),
     ("psutil",          "psutil>=5.9.8",          "5.9.8",  True),
     ("cpuinfo",         "py-cpuinfo>=9.0.0",      "9.0.0",  True),
-    ("fitz",            "PyMuPDF>=1.24.0",        "1.24.0", True),
+    ("pdfplumber",      "pdfplumber>=0.11.0",     "0.11.0", True),
     ("pypdf",           "pypdf>=4.2.0",           "4.2.0",  False),
-    ("pdfminer",        "pdfminer.six>=20221105", "20221105", False),
-    ("py7zr",           "py7zr>=0.21.0",          "0.21.0", False),
-    ("rarfile",         "rarfile>=4.1",           "4.1",    False),
+    ("patool",          "patool>=1.11",           "1.11",   False),
     ("cryptography",    "cryptography>=42.0.0",   "42.0.0", True),
-    ("passlib",         "passlib>=1.7.4",         "1.7.4",  False),
 ]
 
 ENV_TEMPLATE = """\
@@ -244,9 +241,9 @@ def _installed_version(import_name):
     try:
         import importlib.metadata
         dist_map = {
-            "bs4": "beautifulsoup4", "fitz": "PyMuPDF", "dotenv": "python-dotenv",
+            "bs4": "beautifulsoup4", "dotenv": "python-dotenv",
             "dns": "dnspython", "whois": "python-whois", "cpuinfo": "py-cpuinfo",
-            "pdfminer": "pdfminer.six", "huggingface_hub": "huggingface-hub",
+            "huggingface_hub": "huggingface-hub",
             "llama_cpp": "llama-cpp-python",
         }
         return importlib.metadata.version(dist_map.get(import_name, import_name))
@@ -359,7 +356,7 @@ def verify_install():
         ("bs4",       "HTML parser"),
         ("rich",      "Terminal UI"),
         ("psutil",    "Hardware detection"),
-        ("fitz",      "PDF extraction"),
+        ("pdfplumber", "PDF extraction"),
         ("pandas",    "Data processing"),
         ("loguru",    "Logging"),
         ("jinja2",    "Report templates"),
