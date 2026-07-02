@@ -3,6 +3,7 @@
 install.py — Aegis-OSINT-AI Kali-only automated installer
 
 Single entry point for full installation, updates, and service management.
+No LLM is installed by default — models are configured via the frontend UI.
 
 Usage:
     python3 install.py                  # Full interactive TUI install
@@ -36,18 +37,18 @@ DIM    = "\033[2m"
 WHITE  = "\033[97m"
 
 def c(text, colour):   return f"{colour}{text}{RESET}"
-def ok(msg):           print(f"  {c('\u2713', GREEN)}  {msg}")
-def warn(msg):         print(f"  {c('\u26A0', YELLOW)}  {msg}")
-def err(msg):          print(f"  {c('\u2717', RED)}  {msg}")
-def info(msg):         print(f"  {c('\u2192', CYAN)}  {msg}")
-def section(title):    print(f"\n{BOLD}{CYAN}{'\u2500'*60}{RESET}\n  {BOLD}{title}{RESET}\n{'\u2500'*60}")
+def ok(msg):           print(f"  {c('OK', GREEN)}  {msg}")
+def warn(msg):         print(f"  {c('!!', YELLOW)}  {msg}")
+def err(msg):          print(f"  {c('XX', RED)}  {msg}")
+def info(msg):         print(f"  {c('->', CYAN)}  {msg}")
+def section(title):    print(f"\n{BOLD}{CYAN}{'-'*60}{RESET}\n  {BOLD}{title}{RESET}\n{'-'*60}")
 def banner():
     print(f"""
 {CYAN}{BOLD}
-  {'\u2554'}{'\u2550'*55}{'\u2557'}
-  {'\u2551'}          AEGIS-OSINT-AI  --  Installer                {'\u2551'}
-  {'u2551'}     Australian Breach Intelligence Platform           {'\u2551'}
-  {'\u255A'}{'\u2550'*55}{'\u255D'}
+  {'+'}{'='*55}{'+'}
+  {'|'}          AEGIS-OSINT-AI  --  Installer                {'|'}
+  {'|'}     Australian Breach Intelligence Platform           {'|'}
+  {'+'}{'='*55}{'+'}
 {RESET}""")
 
 # ─────────────────────────────────────────────
@@ -87,7 +88,7 @@ REQUIRED = [
     ("cryptography",    "cryptography>=42.0.0",   "42.0.0", True),
     ("passlib",         "passlib>=1.7.4",         "1.7.4",  False),
 ]
-LLAMA_CPP = ("llama_cpp", "llama-cpp-python>=0.2.77", "0.2.77", False)
+
 ENV_TEMPLATE = """\
 # Aegis-OSINT-AI -- Environment Configuration
 HIBP_API_KEY=
@@ -100,6 +101,8 @@ RAPIDAPI_API_KEY=
 HTTP_PROXY=
 HF_TOKEN=
 HF_CACHE_DIR=./models
+OPENAI_API_KEY=
+OPENROUTER_API_KEY=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 MICROSOFT_CLIENT_ID=
@@ -266,7 +269,7 @@ def check_dependencies(silent=False):
     missing  = []
     outdated = []
     ok_list  = []
-    all_deps = REQUIRED + [LLAMA_CPP]
+    all_deps = list(REQUIRED)
 
     for import_name, pip_spec, min_ver, critical in all_deps:
         importable = _is_importable(import_name)
@@ -328,14 +331,6 @@ def install_packages(packages, pip_path, upgrade=False):
             ok(f"Installed: {spec}")
     return len(failed) == 0
 
-def install_llama_cpp():
-    info("llama-cpp-python enables GGUF model inference on CPU")
-    info("This may take 5-10 minutes to compile")
-    pip_path = f"{sys.executable} -m pip"
-    cmd = f"{pip_path} install llama-cpp-python --no-cache-dir"
-    result = subprocess.run(cmd, shell=True)
-    return result.returncode == 0
-
 def setup_env_file(silent=False):
     section(".env Configuration")
     env_path = Path(".env")
@@ -381,26 +376,16 @@ def verify_install():
     return all_ok
 
 def show_ai_recommendations(sys_profile):
-    section("AI Model Recommendations")
+    section("AI Model Info")
     ram = sys_profile.ram_gb
     info(f"Available RAM: {ram} GB  [{sys_profile.ram_tier()}]")
+    info("No local LLM installed by default.")
+    info("Configure API keys in the frontend UI (Settings > API Keys):")
+    info("  - OpenAI API Key")
+    info("  - OpenRouter API Key")
+    info("  - HuggingFace Token")
+    info("Or run: python3 scripts/ai_modules.py --detect-hardware --select-model")
     print()
-    models = [
-        (64,  "llama-3.1-70b-instruct-GGUF",   "38 GB", "High quality local analysis"),
-        (32,  "mixtral-8x7b-instruct-GGUF",    "26 GB", "Large local analysis model"),
-        (16,  "mistral-7b-instruct-v0.3-GGUF", "5 GB",  "Fast local analysis"),
-        (8,   "openhermes-2.5-mistral-7b-GGUF","5 GB",  "General local analysis"),
-        (4,   "Phi-3-mini-4k-instruct-gguf",   "3 GB",  "Minimal footprint"),
-        (0,   "tinyllama-1.1b-chat-v1.0-GGUF","1 GB",  "Last resort"),
-    ]
-    print(f"  {'Model':<42} {'RAM':>6}  Description")
-    print(f"  {'-'*42} {'-'*6}  {'-'*30}")
-    for min_ram, name, size, desc in models:
-        fits = ram >= min_ram
-        marker = c("\u2713", GREEN) if fits else c("\u2717", DIM)
-        print(f"  {marker} {name:<40} {size:>6}  {desc}")
-    print()
-    info("Run: python3 scripts/ai_modules.py --detect-hardware --select-model")
 
 def print_summary(missing, outdated, sys_deps, install_ok):
     section("Summary")
@@ -717,7 +702,6 @@ def _interactive_flow(sys_profile, mode="interactive"):
 
     if outdated:
         dep_critical = {n: cr for n, _, _, cr in REQUIRED}
-        dep_critical[LLAMA_CPP[0]] = LLAMA_CPP[3]
         outdated_critical = [o for o in outdated if dep_critical.get(o[0], False)]
         outdated_optional = [o for o in outdated if not dep_critical.get(o[0], False)]
         print()
@@ -728,11 +712,6 @@ def _interactive_flow(sys_profile, mode="interactive"):
             install_packages(outdated_critical, sys_profile.pip_path, upgrade=True)
         if outdated_optional and ask("Upgrade outdated optional packages?"):
             install_packages(outdated_optional, sys_profile.pip_path, upgrade=True)
-
-    # llama-cpp
-    section("Step 7/12: llama-cpp-python")
-    if ask("Install llama-cpp-python for local inference? (may take 5-10 min)"):
-        install_llama_cpp()
 
     # venv if no .venv yet
     if not Path(".venv").exists():
@@ -800,7 +779,6 @@ def main():
     parser.add_argument("--check-only",  action="store_true", help="Check without installing")
     parser.add_argument("--full",        action="store_true", help="Full non-interactive install")
     parser.add_argument("--silent",      action="store_true", help="Silent minimal install")
-    parser.add_argument("--no-llama",    action="store_true", help="Skip llama-cpp-python")
     args = parser.parse_args()
 
     mode = "silent" if args.silent else ("update" if args.update else "interactive")

@@ -5,6 +5,13 @@ import { ShieldCheck, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 
+const OAUTH_PROVIDERS = [
+  { name: "Google",      icon: "G",  color: "bg-white text-zinc-900 hover:bg-zinc-200",        url: "/api/v1/auth/oauth/google" },
+  { name: "GitHub",      icon: "GH", color: "bg-zinc-800 text-zinc-100 hover:bg-zinc-700",     url: "/api/v1/auth/oauth/github" },
+  { name: "HuggingFace", icon: "HF", color: "bg-amber-600 text-white hover:bg-amber-500",      url: "/api/v1/auth/oauth/huggingface" },
+  { name: "Microsoft",   icon: "MS", color: "bg-blue-600 text-white hover:bg-blue-500",        url: "/api/v1/auth/oauth/microsoft" },
+];
+
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
 
@@ -14,7 +21,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Already logged in — redirect handled by layout but guard here too
   if (isAuthenticated && typeof window !== "undefined") {
     window.location.href = "/dashboard";
     return null;
@@ -34,6 +40,11 @@ export default function LoginPage() {
     }
   }
 
+  function handleOAuth(providerUrl: string) {
+    const baseUrl = process.env.NEXT_PUBLIC_AEGIS_API_URL?.replace(/\/$/, "") ?? "";
+    window.location.href = `${baseUrl}${providerUrl}`;
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
       <div className="w-full max-w-sm">
@@ -46,6 +57,31 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-zinc-500">Sign in to your workspace</p>
         </div>
 
+        {/* OAuth Buttons */}
+        <div className="space-y-2">
+          {OAUTH_PROVIDERS.map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              onClick={() => handleOAuth(p.url)}
+              className={`flex w-full items-center justify-center gap-3 rounded-md px-4 py-2.5 text-sm font-medium transition-colors ${p.color}`}
+            >
+              <span className="flex size-6 items-center justify-center rounded-full bg-black/10 text-xs font-bold">
+                {p.icon}
+              </span>
+              Sign in with {p.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Divider */}
+        <div className="my-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-zinc-800" />
+          <span className="text-xs text-zinc-500">or sign in with email</span>
+          <div className="h-px flex-1 bg-zinc-800" />
+        </div>
+
+        {/* Email form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="flex items-start gap-2 rounded-md border border-red-800 bg-red-950/50 p-3 text-sm text-red-200">
@@ -102,7 +138,7 @@ export default function LoginPage() {
             className="flex w-full items-center justify-center gap-2 rounded-md bg-cyan-300 px-4 py-2 text-sm font-semibold text-zinc-950 transition-colors hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? <Loader2 className="size-4 animate-spin" /> : null}
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
