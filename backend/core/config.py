@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
     api_prefix: str = ""
-    auth_enabled: bool = False
+    auth_enabled: bool = True
     api_auth_token: str | None = None
     auth_allow_unauthenticated_health: bool = True
     tool_execution_mode: Literal["passive", "operator_assisted", "manual_review_only", "disabled"] = "passive"
@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     tool_execution_approval_token: str | None = None
 
     database_url: str = Field(
-        default="postgresql+asyncpg://aegis:aegis@localhost:5432/aegis",
-        description="SQLAlchemy async database URL for PostgreSQL.",
+        default="sqlite+aiosqlite:///./aegis.db",
+        description="SQLAlchemy async database URL for SQLite (fallback for development).",
     )
     llm_provider: Literal["openai", "anthropic", "gemini", "huggingface", "ollama", "disabled"] = "disabled"
 

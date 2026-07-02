@@ -47,12 +47,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Protected pages — redirect to login if not authenticated
   useEffect(() => {
-    if (!isAuthenticated && typeof window !== "undefined" && !publicPaths.includes(pathname)) {
+    if (!isAuthenticated && !publicPaths.includes(pathname)) {
       router.push("/login");
     }
   }, [isAuthenticated, pathname, router]);
 
-  if (!isAuthenticated && typeof window !== "undefined" && !publicPaths.includes(pathname)) {
+  if (!isAuthenticated && !publicPaths.includes(pathname)) {
     return null;
   }
 
