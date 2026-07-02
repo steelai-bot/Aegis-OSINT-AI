@@ -50,3 +50,6 @@ config.local.py
 
 # Temporary editor directories
 .kilo/
+
+# Root lockfiles (not part of this repo)
+package-lock.json
