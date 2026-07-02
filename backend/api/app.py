@@ -20,6 +20,32 @@ def create_app() -> FastAPI:
         debug=settings.debug,
     )
 
+    @app.on_event("startup")
+    async def startup_event():
+        """
+        Initialize database tables and ensure a default admin user exists.
+        """
+        from backend.services.auth import AuthService
+        from backend.storage.database import AsyncSessionLocal, engine
+        from backend.models.base import Base
+
+        # Create tables if they don't exist
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        # Ensure default admin user exists
+        async with AsyncSessionLocal() as session:
+            auth_service = AuthService(session)
+            # Check if a user with email 'root@aegis.local' already exists
+            existing = await auth_service.get_user_by_email("root@aegis.local")
+            if existing is None:
+                await auth_service.create_user(
+                    email="root@aegis.local",
+                    password="12345678r",
+                    display_name="root",
+                    role="admin",
+                )
+
     # Rate limiting middleware
     app.add_middleware(APIRateLimiterMiddleware, requests_per_minute=120)
 
