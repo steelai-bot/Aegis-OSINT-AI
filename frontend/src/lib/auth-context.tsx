@@ -100,8 +100,24 @@ function notifyListeners(): void {
   listeners.forEach((fn) => fn());
 }
 
+let cachedState: AuthState | null = null;
+
 function getSnapshot(): AuthState {
-  return loadState();
+  const state = loadState();
+  
+  // Check if state has actually changed to maintain referential identity
+  if (
+    cachedState &&
+    cachedState.accessToken === state.accessToken &&
+    cachedState.refreshToken === state.refreshToken &&
+    cachedState.user?.id === state.user?.id &&
+    cachedState.user?.email === state.user?.email
+  ) {
+    return cachedState;
+  }
+
+  cachedState = state;
+  return state;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────

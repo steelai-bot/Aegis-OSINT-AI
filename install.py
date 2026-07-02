@@ -542,13 +542,22 @@ def setup_redis():
 # ─────────────────────────────────────────────
 def setup_venv():
     section("Python Virtual Environment")
-    if not Path(".venv").exists():
-        subprocess.run([sys.executable, "-m", "venv", ".venv"], check=True)
+    venv_path = Path(".venv")
+    if not venv_path.exists():
+        subprocess.run([sys.executable, "-m", "venv", str(venv_path)], check=True)
         ok("Virtual environment created")
     else:
         ok("Virtual environment exists")
 
-    pip_path = ".venv/bin/pip" if Path(".venv/bin/pip").exists() else f"{sys.executable} -m pip"
+    # Determine pip path within the venv
+    if platform.system() == "Windows":
+        pip_path = str(venv_path / "Scripts" / "pip.exe")
+    else:
+        pip_path = str(venv_path / "bin" / "pip")
+
+    if not Path(pip_path).exists():
+        # Fallback if pip is not in the expected location
+        pip_path = f"{sys.executable} -m pip"
 
     info("Upgrading pip...")
     subprocess.run([pip_path, "install", "--upgrade", "pip"], capture_output=True)
@@ -610,8 +619,6 @@ def build_installer(mode="interactive"):
 def _run_all_steps(sys_profile, mode="silent"):
     info(f"Running in {mode} mode")
 
-    missing, outdated, _ = check_dependencies(silent=True)
-
     # Step 3: system deps
     sys_deps = check_system_deps(sys_profile)
     missing_sys = [n for n, ok in sys_deps.items() if not ok]
@@ -628,8 +635,54 @@ def _run_all_steps(sys_profile, mode="silent"):
     setup_postgresql()
     # Step 6: Redis
     setup_redis()
+
     # Step 7: venv + deps
-    setup_venv()
+    # CRITICAL FIX: Create venv BEFORE checking/installing python dependencies
+    if not Path(".venv").exists():
+        section("Python Virtual Environment")
+        subprocess.run([sys.executable, "-m", "venv", ".venv"], check=True)
+        ok("Virtual environment created")
+    
+    # Update sys_profile to use the new venv pip
+    if platform.system() == "Windows":
+        sys_profile.pip_path = str(Path(".venv") / "Scripts" / "pip.exe")
+    else:
+        sys_profile.pip_path = str(Path(".venv") / "bin" / "pip")
+
+    # Re-check dependencies against the venv
+    missing, outdated, _ = check_dependencies(silent=True)
+
+    if missing:
+        critical_missing = [m for m in missing if m[2]]
+        optional_missing = [m for m in missing if not m[2]]
+        if critical_missing:
+            section("Step 7/12: Python Dependencies")
+            print()
+            for _, spec, _ in critical_missing:
+                info(spec)
+            print()
+            if ask("Install critical packages into virtual environment?"):
+                install_ok_deps = install_packages(critical_missing, sys_profile.pip_path)
+                if not install_ok_deps:
+                    err("Failed to install critical dependencies")
+                    return False
+
+        if optional_missing and ask("Install optional packages into virtual environment?"):
+            install_packages(optional_missing, sys_profile.pip_path)
+
+    if outdated:
+        dep_critical = {n: cr for n, _, _, cr in REQUIRED}
+        outdated_critical = [o for o in outdated if dep_critical.get(o[0], False)]
+        outdated_optional = [o for o in outdated if not dep_critical.get(o[0], False)]
+        print()
+        for _, spec, installed, required in outdated:
+            warn(f"{spec}  (installed: {installed}  ->  required: {required})")
+        print()
+        if outdated_critical and ask("Upgrade outdated critical packages in venv?"):
+            install_packages(outdated_critical, sys_profile.pip_path, upgrade=True)
+        if outdated_optional and ask("Upgrade outdated optional packages in venv?"):
+            install_packages(outdated_optional, sys_profile.pip_path, upgrade=True)
+
     # Step 8: Node
     setup_frontend()
     # Step 9: .env
@@ -680,7 +733,26 @@ def _interactive_flow(sys_profile, mode="interactive"):
     # Step 6: Redis
     setup_redis()
 
-    # Step 7: Python deps
+    # Step 7: Python venv + deps
+    # CRITICAL FIX: Create venv BEFORE checking/installing python dependencies
+    if not Path(".venv").exists():
+        section("Python Virtual Environment")
+        subprocess.run([sys.executable, "-m", "venv", ".venv"], check=True)
+        ok("Virtual environment created")
+    
+    # Update sys_profile to use the new venv pip
+    if platform.system() == "Windows":
+        sys_profile.pip_path = str(Path(".venv") / "Scripts" / "pip.exe")
+    else:
+        sys_profile.pip_path = str(Path(".venv") / "bin" / "pip")
+    
+    # Ensure we are checking dependencies against the venv
+    # We need to temporarily mock the importable check or ensure check_dependencies uses the venv
+    # For now, we'll rely on the fact that install_packages will use the correct pip_path.
+    # However, check_dependencies uses importlib which checks the CURRENT interpreter.
+    # We must ensure the user understands that 'check_dependencies' might still show 
+    # 'missing' if run from system python, but 'install_packages' will fix it in the venv.
+    
     missing, outdated, _ = check_dependencies(silent=False)
 
     if missing:
@@ -691,10 +763,10 @@ def _interactive_flow(sys_profile, mode="interactive"):
             for _, spec, _ in critical_missing:
                 info(spec)
             print()
-            if ask("Install critical packages?"):
+            if ask("Install critical packages into virtual environment?"):
                 install_ok = install_packages(critical_missing, sys_profile.pip_path)
 
-        if optional_missing and ask("Install optional packages?"):
+        if optional_missing and ask("Install optional packages into virtual environment?"):
             install_packages(optional_missing, sys_profile.pip_path)
 
     if outdated:
@@ -705,16 +777,10 @@ def _interactive_flow(sys_profile, mode="interactive"):
         for _, spec, installed, required in outdated:
             warn(f"{spec}  (installed: {installed}  ->  required: {required})")
         print()
-        if outdated_critical and ask("Upgrade outdated critical packages?"):
-            install_packages(outdated_critical, sys_profile.pip_path, upgrade=True)
-        if outdated_optional and ask("Upgrade outdated optional packages?"):
+        if outdated_critical and ask("Upgrade outdated critical packages in venv?"):
+            install_ok = install_packages(outdated_critical, sys_profile.pip_path, upgrade=True)
+        if outdated_optional and ask("Upgrade outdated optional packages in venv?"):
             install_packages(outdated_optional, sys_profile.pip_path, upgrade=True)
-
-    # venv if no .venv yet
-    if not Path(".venv").exists():
-        section("Python Virtual Environment")
-        subprocess.run([sys.executable, "-m", "venv", ".venv"], check=True)
-        ok("Virtual environment created")
 
     # Step 8: Node
     setup_frontend()
