@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
 """
-setup_wizard.py — Aegis-OSINT-AI
-Automated installation wizard with system detection,
-dependency checking, version validation, and guided setup.
-
+setup_wizard.py — Aegis-OSINT-AI Kali-only installer
 Usage:
     python3 setup_wizard.py
     python3 setup_wizard.py --silent
     python3 setup_wizard.py --check-only
-    python3 setup_wizard.py --upgrade
-    python3 setup_wizard.py --full
-    python3 setup_wizard.py --skip-optional
 """
 
 import os
@@ -55,66 +49,52 @@ def banner():
 
 
 # ─────────────────────────────────────────────
-#  Dependency Registry
+#  Kali-only settings
+# ─────────────────────────────────────────────
+
+SYSTEM_DEPS = {
+    "tesseract": {"check": "tesseract --version", "install": {"apt": "tesseract-ocr"}},
+    "git":       {"check": "git --version", "install": {"apt": "git"}},
+}
+
 # ─────────────────────────────────────────────
 
 REQUIRED = [
-    # (import_name, pip_name, min_version, critical)
-    ("requests",        "requests>=2.31.0",          "2.31.0",  True),
-    ("httpx",           "httpx>=0.27.0",              "0.27.0",  True),
-    ("aiohttp",         "aiohttp>=3.9.0",             "3.9.0",   True),
-    ("bs4",             "beautifulsoup4>=4.12.0",     "4.12.0",  True),
-    ("lxml",            "lxml>=5.1.0",                "5.1.0",   True),
-    ("dotenv",          "python-dotenv>=1.0.1",       "1.0.1",   True),
-    ("rich",            "rich>=13.7.0",               "13.7.0",  True),
-    ("tqdm",            "tqdm>=4.66.0",               "4.66.0",  True),
-    ("click",           "click>=8.1.7",               "8.1.7",   True),
-    ("loguru",          "loguru>=0.7.2",              "0.7.2",   True),
-    ("tenacity",        "tenacity>=8.3.0",            "8.3.0",   True),
-    ("pandas",          "pandas>=2.2.0",              "2.2.0",   True),
-    ("numpy",           "numpy>=1.26.0",              "1.26.0",  True),
-    ("jinja2",          "jinja2>=3.1.4",              "3.1.4",   True),
-    ("openpyxl",        "openpyxl>=3.1.2",            "3.1.2",   True),
-    ("tabulate",        "tabulate>=0.9.0",            "0.9.0",   True),
-    ("dns",             "dnspython>=2.6.0",           "2.6.0",   True),
-    ("whois",           "python-whois>=0.9.4",        "0.9.4",   True),
-    ("psutil",          "psutil>=5.9.8",              "5.9.8",   True),
-    ("cpuinfo",         "py-cpuinfo>=9.0.0",          "9.0.0",   True),
-    # PDF
-    ("fitz",            "PyMuPDF>=1.24.0",            "1.24.0",  True),
-    ("pypdf",           "pypdf>=4.2.0",               "4.2.0",   False),
-    ("pdfminer",        "pdfminer.six>=20221105",     "20221105",False),
-    # Archives
-    ("py7zr",           "py7zr>=0.21.0",              "0.21.0",  False),
-    ("rarfile",         "rarfile>=4.1",               "4.1",     False),
-    # Crypto
-    ("cryptography",    "cryptography>=42.0.0",       "42.0.0",  True),
-    ("passlib",         "passlib>=1.7.4",             "1.7.4",   False),
-    # AI / HuggingFace
-    ("transformers",    "transformers>=4.41.0",       "4.41.0",  False),
-    ("huggingface_hub", "huggingface-hub>=0.23.0",    "0.23.0",  False),
-    ("accelerate",      "accelerate>=0.30.0",         "0.30.0",  False),
-    ("safetensors",     "safetensors>=0.4.3",         "0.4.3",   False),
-    ("sentencepiece",   "sentencepiece>=0.2.0",       "0.2.0",   False),
-    # GPU (optional)
-    ("GPUtil",          "GPUtil>=1.4.0",              "1.4.0",   False),
+    ("requests",        "requests>=2.31.0",      "2.31.0",  True),
+    ("httpx",           "httpx>=0.27.0",         "0.27.0",  True),
+    ("aiohttp",         "aiohttp>=3.9.0",        "3.9.0",   True),
+    ("bs4",             "beautifulsoup4>=4.12.0","4.12.0",  True),
+    ("lxml",            "lxml>=5.1.0",           "5.1.0",   True),
+    ("dotenv",          "python-dotenv>=1.0.1",  "1.0.1",   True),
+    ("rich",            "rich>=13.7.0",          "13.7.0",  True),
+    ("tqdm",            "tqdm>=4.66.0",          "4.66.0",  True),
+    ("click",           "click>=8.1.7",          "8.1.7",   True),
+    ("loguru",          "loguru>=0.7.2",         "0.7.2",   True),
+    ("tenacity",        "tenacity>=8.3.0",       "8.3.0",   True),
+    ("pandas",          "pandas>=2.2.0",         "2.2.0",   True),
+    ("numpy",           "numpy>=1.26.0",         "1.26.0",  True),
+    ("jinja2",          "jinja2>=3.1.4",         "3.1.4",   True),
+    ("openpyxl",        "openpyxl>=3.1.2",       "3.1.2",   True),
+    ("tabulate",        "tabulate>=0.9.0",       "0.9.0",   True),
+    ("dns",             "dnspython>=2.6.0",      "2.6.0",   True),
+    ("whois",           "python-whois>=0.9.4",   "0.9.4",   True),
+    ("psutil",          "psutil>=5.9.8",         "5.9.8",   True),
+    ("cpuinfo",         "py-cpuinfo>=9.0.0",     "9.0.0",   True),
+    ("fitz",            "PyMuPDF>=1.24.0",       "1.24.0",  True),
+    ("pypdf",           "pypdf>=4.2.0",          "4.2.0",   False),
+    ("pdfminer",        "pdfminer.six>=20221105","20221105",False),
+    ("py7zr",           "py7zr>=0.21.0",         "0.21.0",  False),
+    ("rarfile",         "rarfile>=4.1",          "4.1",     False),
+    ("cryptography",    "cryptography>=42.0.0",  "42.0.0",  True),
+    ("passlib",         "passlib>=1.7.4",        "1.7.4",   False),
 ]
-
-SYSTEM_DEPS = {
-    "tesseract": {"check": "tesseract --version", "install": {"apt": "tesseract-ocr", "brew": "tesseract", "yum": "tesseract"}},
-    "git":       {"check": "git --version", "install": {"apt": "git", "brew": "git", "yum": "git"}},
-}
 
 LLAMA_CPP = ("llama_cpp", "llama-cpp-python>=0.2.77", "0.2.77", False)
 
 
-# ─────────────────────────────────────────────
-#  System Detection
-# ─────────────────────────────────────────────
-
 class SystemProfile:
     def __init__(self):
-        self.os          = platform.system()          # Linux / Darwin / Windows
+        self.os          = "Linux"
         self.os_version  = platform.version()
         self.arch        = platform.machine()
         self.python_ver  = sys.version_info
@@ -125,7 +105,7 @@ class SystemProfile:
         self.disk_free   = 0.0
         self.gpu_name    = None
         self.gpu_vram    = 0.0
-        self.pkg_manager = self._detect_pkg_manager()
+        self.pkg_manager = "apt"
         self.venv        = self._in_venv()
         self.pip_path    = self._find_pip()
         self._detect_hardware()
@@ -153,12 +133,6 @@ class SystemProfile:
                 self.gpu_vram = round(gpus[0].memoryTotal / 1024, 1)
         except Exception:
             pass
-
-    def _detect_pkg_manager(self):
-        for mgr in ["apt", "apt-get", "yum", "dnf", "brew", "pacman"]:
-            if shutil.which(mgr):
-                return mgr
-        return None
 
     def _in_venv(self):
         return (
@@ -191,30 +165,20 @@ class SystemProfile:
             ok(f"GPU         : {self.gpu_name}  ({self.gpu_vram} GB VRAM)")
         else:
             info("GPU         : None detected — CPU inference mode")
-        ok(f"Pkg manager : {self.pkg_manager or 'not detected'}")
+        ok(f"Pkg manager : apt")
         ok(f"Virtual env : {'yes' if self.venv else 'no (consider using one)'}")
 
-
-# ─────────────────────────────────────────────
-#  Python Version Check
-# ─────────────────────────────────────────────
 
 def check_python_version():
     section("Python Version")
     major, minor = sys.version_info[:2]
     if major < 3 or (major == 3 and minor < 10):
         err(f"Python {major}.{minor} detected — Python 3.10+ required")
-        print(f"\n  Install Python 3.11: https://www.python.org/downloads/")
         sys.exit(1)
     ok(f"Python {major}.{minor} — OK")
 
 
-# ─────────────────────────────────────────────
-#  Package Version Helpers
-# ─────────────────────────────────────────────
-
 def _parse_version(v):
-    """Parse version string to comparable tuple."""
     try:
         return tuple(int(x) for x in re.findall(r"\d+", str(v))[:3])
     except Exception:
@@ -222,7 +186,6 @@ def _parse_version(v):
 
 
 def _installed_version(import_name):
-    """Get installed version of a package."""
     try:
         mod = importlib.import_module(import_name)
         for attr in ("__version__", "version", "VERSION"):
@@ -233,15 +196,13 @@ def _installed_version(import_name):
         pass
     try:
         import importlib.metadata
-        # Map import name to dist name
         dist_map = {
             "bs4": "beautifulsoup4", "fitz": "PyMuPDF", "dotenv": "python-dotenv",
             "dns": "dnspython", "whois": "python-whois", "cpuinfo": "py-cpuinfo",
             "pdfminer": "pdfminer.six", "huggingface_hub": "huggingface-hub",
             "llama_cpp": "llama-cpp-python",
         }
-        dist_name = dist_map.get(import_name, import_name)
-        return importlib.metadata.version(dist_name)
+        return importlib.metadata.version(dist_map.get(import_name, import_name))
     except Exception:
         return None
 
@@ -256,26 +217,16 @@ def _version_ok(installed, required_min):
     return _parse_version(installed) >= _parse_version(required_min)
 
 
-# ─────────────────────────────────────────────
-#  Dependency Checker
-# ─────────────────────────────────────────────
-
 def check_dependencies(silent=False):
-    """
-    Check all dependencies. Returns (missing, outdated, ok_list).
-    """
     section("Dependency Check")
-
-    missing  = []   # (import_name, pip_spec, critical)
-    outdated = []   # (import_name, pip_spec, installed_ver, required_ver)
+    missing  = []
+    outdated = []
     ok_list  = []
-
     all_deps = REQUIRED + [LLAMA_CPP]
 
     for import_name, pip_spec, min_ver, critical in all_deps:
         importable = _is_importable(import_name)
         installed  = _installed_version(import_name)
-
         if not importable:
             missing.append((import_name, pip_spec, critical))
             if not silent:
@@ -289,106 +240,76 @@ def check_dependencies(silent=False):
             ok_list.append(import_name)
             if not silent:
                 ok(f"{pip_spec:<45} {c(installed or 'ok', GREEN)}")
-
     return missing, outdated, ok_list
 
-
-# ─────────────────────────────────────────────
-#  System Dependency Checker
-# ─────────────────────────────────────────────
 
 def check_system_deps(sys_profile):
     section("System Dependencies")
     results = {}
     for name, cfg in SYSTEM_DEPS.items():
         try:
-            r = subprocess.run(
-                cfg["check"].split(), capture_output=True, text=True, timeout=5
-            )
+            r = subprocess.run(cfg["check"].split(), capture_output=True, text=True, timeout=5)
             ver = r.stdout.split("\n")[0].strip() or r.stderr.split("\n")[0].strip()
             ok(f"{name:<15} {ver[:50]}")
             results[name] = True
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            install_hint = cfg["install"].get(sys_profile.pkg_manager or "apt", "")
-            warn(f"{name:<15} not found  →  sudo {sys_profile.pkg_manager or 'apt'} install {install_hint}")
+            warn(f"{name:<15} not found  →  sudo apt install {cfg['install']['apt']}")
             results[name] = False
     return results
 
 
-# ─────────────────────────────────────────────
-#  Installer
-# ─────────────────────────────────────────────
-
 def install_packages(packages, pip_path, upgrade=False):
-    """Install or upgrade a list of pip specs."""
     if not packages:
         return True
-
     flag = "--upgrade" if upgrade else ""
-    specs = [p[1] for p in packages]  # pip_spec strings
-
+    specs = [p[1] for p in packages]
     print()
     info(f"Installing {len(specs)} package(s)...")
-
-    # Batch install
     cmd = f"{pip_path} install {flag} " + " ".join(f'"{s}"' for s in specs)
     result = subprocess.run(cmd, shell=True, capture_output=False, text=True)
-
     if result.returncode == 0:
-        ok(f"All packages installed successfully")
+        ok("All packages installed successfully")
         return True
-    else:
-        # Try one by one to identify failures
-        failed = []
-        for spec in specs:
-            r = subprocess.run(
-                f"{pip_path} install {flag} \"{spec}\"",
-                shell=True, capture_output=True, text=True
-            )
-            if r.returncode != 0:
-                failed.append(spec)
-                err(f"Failed: {spec}")
-            else:
-                ok(f"Installed: {spec}")
-        return len(failed) == 0
+    failed = []
+    for spec in specs:
+        r = subprocess.run(f"{pip_path} install {flag} \"{spec}\"", shell=True, capture_output=True, text=True)
+        if r.returncode != 0:
+            failed.append(spec)
+            err(f"Failed: {spec}")
+        else:
+            ok(f"Installed: {spec}")
+    return len(failed) == 0
 
 
 def install_llama_cpp(sys_profile):
-    """Install llama-cpp-python with correct flags for the system."""
     section("llama-cpp-python (CPU Inference)")
-
     if _is_importable("llama_cpp"):
         v = _installed_version("llama_cpp")
         ok(f"Already installed: {v}")
         return True
-
     info("llama-cpp-python enables GGUF model inference on CPU")
     info("This may take 5-10 minutes to compile")
-
-    if sys_profile.os == "Darwin":
-        # Apple Silicon — Metal acceleration
-        env = "CMAKE_ARGS=\"-DLLAMA_METAL=on\""
-        info("Detected macOS — enabling Metal GPU acceleration")
-    else:
-        env = ""
-        info("Installing CPU-only build (no CUDA required)")
-
-    cmd = f"{env} {sys_profile.pip_path} install llama-cpp-python --no-cache-dir"
+    info("Installing CPU-only build (no CUDA required)")
+    cmd = f"{sys_profile.pip_path} install llama-cpp-python --no-cache-dir"
     result = subprocess.run(cmd, shell=True)
     return result.returncode == 0
 
 
-# ─────────────────────────────────────────────
-#  .env Setup
-# ─────────────────────────────────────────────
+def setup_env_file(silent=False):
+    section(".env Configuration")
+    env_path = Path(".env")
+    if env_path.exists():
+        ok(".env already exists")
+        if not silent:
+            ans = input("  Overwrite? [y/N]: ").strip().lower()
+            if ans != "y":
+                info("Keeping existing .env")
+                return
+    else:
+        info(".env not found — creating template")
 
-ENV_TEMPLATE = """\
-# ══════════════════════════════════════════════════════════════
-#  Aegis-OSINT-AI — Environment Configuration
-#  Generated by setup_wizard.py on {date}
-# ══════════════════════════════════════════════════════════════
-
-# ── Breach APIs ──────────────────────────────────────────────
+    ENV_TEMPLATE = ENV_TEMPLATE = """\
+# Aegis-OSINT-AI — Environment Configuration
 HIBP_API_KEY=
 DEHASHED_API_KEY=
 DEHASHED_EMAIL=
@@ -396,17 +317,9 @@ LEAKCHECK_API_KEY=
 INTELX_API_KEY=
 SNUSBASE_API_KEY=
 RAPIDAPI_KEY=
-
-# ── Telegram ─────────────────────────────────────────────────
-
-# ── Network ──────────────────────────────────────────────────
 HTTP_PROXY=
-
-# ── AI / HuggingFace ─────────────────────────────────────────
 HF_TOKEN=
 HF_CACHE_DIR=./models
-
-# ── OAuth2 Providers ─────────────────────────────────────────
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 MICROSOFT_CLIENT_ID=
@@ -427,8 +340,6 @@ DROPBOX_CLIENT_ID=
 DROPBOX_CLIENT_SECRET=
 REDDIT_CLIENT_ID=
 REDDIT_CLIENT_SECRET=
-
-# ── Search APIs ───────────────────────────────────────────────
 GITHUB_TOKEN=
 GOOGLE_CSE_API_KEY=
 GOOGLE_CSE_CX=
@@ -447,29 +358,10 @@ SECURITYTRAILS_API_KEY=
 WHOISXML_API_KEY=
 GREYNOISE_API_KEY=
 """
-
-def setup_env_file(silent=False):
-    section(".env Configuration")
-    env_path = Path(".env")
-
-    if env_path.exists():
-        ok(".env already exists")
-        if not silent:
-            ans = input(f"  Overwrite? [y/N]: ").strip().lower()
-            if ans != "y":
-                info("Keeping existing .env")
-                return
-    else:
-        info(".env not found — creating template")
-
-    env_path.write_text(ENV_TEMPLATE.format(date=datetime.now().strftime("%Y-%m-%d %H:%M")))
+    env_path.write_text(ENV_TEMPLATE)
     ok(".env created — fill in your API keys")
     info("Edit .env and add your keys before running scans")
 
-
-# ─────────────────────────────────────────────
-#  Directory Setup
-# ─────────────────────────────────────────────
 
 def setup_directories():
     section("Directory Structure")
@@ -479,14 +371,9 @@ def setup_directories():
         ok(f"Created: {d}/")
 
 
-# ─────────────────────────────────────────────
-#  Post-Install Verification
-# ─────────────────────────────────────────────
-
 def verify_install():
     section("Post-Install Verification")
     all_ok = True
-
     critical_imports = [
         ("requests",  "HTTP client"),
         ("bs4",       "HTML parser"),
@@ -498,7 +385,6 @@ def verify_install():
         ("jinja2",    "Report templates"),
         ("cryptography", "Crypto"),
     ]
-
     for import_name, label in critical_imports:
         try:
             importlib.import_module(import_name)
@@ -507,123 +393,89 @@ def verify_install():
         except ImportError:
             err(f"{label:<25} FAILED")
             all_ok = False
-
     return all_ok
 
-
-# ─────────────────────────────────────────────
-#  AI Model Recommendation
-# ─────────────────────────────────────────────
 
 def show_ai_recommendations(sys_profile):
     section("AI Model Recommendations")
     ram = sys_profile.ram_gb
-
     info(f"Available RAM: {ram} GB  [{sys_profile.ram_tier()}]")
     print()
-
     models = [
-        (64,  "llama-3.1-70b-instruct-GGUF",     "38 GB", "High quality local analysis"),
-        (32,  "mixtral-8x7b-instruct-GGUF",      "26 GB", "Large local analysis model"),
-        (16,  "mistral-7b-instruct-v0.3-GGUF",    "5 GB", "Fast local analysis"),
-        (8,   "openhermes-2.5-mistral-7b-GGUF",   "5 GB", "General local analysis"),
-        (4,   "Phi-3-mini-4k-instruct-gguf",      "3 GB", "Minimal footprint"),
-        (0,   "tinyllama-1.1b-chat-v1.0-GGUF",   "1 GB", "Last resort, very limited"),
+        (64,  "llama-3.1-70b-instruct-GGUF",   "38 GB", "High quality local analysis"),
+        (32,  "mixtral-8x7b-instruct-GGUF",    "26 GB", "Large local analysis model"),
+        (16,  "mistral-7b-instruct-v0.3-GGUF", "5 GB",  "Fast local analysis"),
+        (8,   "openhermes-2.5-mistral-7b-GGUF","5 GB",  "General local analysis"),
+        (4,   "Phi-3-mini-4k-instruct-gguf",   "3 GB",  "Minimal footprint"),
+        (0,   "tinyllama-1.1b-chat-v1.0-GGUF","1 GB",  "Last resort, very limited"),
     ]
-
     print(f"  {'Model':<42} {'RAM':>6}  Description")
     print(f"  {'─'*42} {'─'*6}  {'─'*30}")
     for min_ram, name, size, desc in models:
         fits = ram >= min_ram
         marker = c("✓", GREEN) if fits else c("✗", DIM)
         print(f"  {marker} {name:<40} {size:>6}  {desc}")
-
     print()
     info("Run: python3 scripts/ai_modules.py --detect-hardware --select-model")
 
 
-# ─────────────────────────────────────────────
-#  Summary Report
-# ─────────────────────────────────────────────
-
 def print_summary(missing, outdated, sys_deps, install_ok):
     section("Setup Summary")
-
     critical_missing = [m for m in missing if m[2]]
     optional_missing = [m for m in missing if not m[2]]
-
     if not critical_missing and not outdated:
-        ok(f"All critical dependencies installed")
+        ok("All critical dependencies installed")
     else:
         if critical_missing:
             err(f"{len(critical_missing)} critical packages missing")
         if outdated:
             warn(f"{len(outdated)} packages need upgrading")
-
     if optional_missing:
         info(f"{len(optional_missing)} optional packages not installed (run with --full to include)")
-
-    info("Quarantined legacy network modules are not part of the v2 runtime")
-
     print()
     if install_ok and not critical_missing:
         print(f"  {c('✓ Setup complete!', GREEN)}")
         print(f"\n  {c('Quick start:', BOLD)}")
-        print(f"  uvicorn backend.api.app:create_app --factory --reload")
+        print(f"  bash scripts/start.sh")
         print(f"  python3 scripts/kali_compatibility.py --json")
-        print(f"  python3 scripts/ai_modules.py --detect-hardware")
     else:
         print(f"  {c('⚠ Setup incomplete — fix errors above', YELLOW)}")
         print(f"  Re-run: python3 setup_wizard.py")
     print()
 
 
-# ─────────────────────────────────────────────
-#  Interactive Prompt
-# ─────────────────────────────────────────────
-
 def ask(prompt, default="y"):
-    ans = input(f"  {prompt} [{default.upper() if default=='y' else default}/{default.upper() if default=='n' else default}]: ").strip().lower()
-    return ans == "y" or (ans == "" and default == "y")
+    ans = input(f"  {prompt} [Y/n]: ").strip().lower()
+    return ans != "n"
 
-
-# ─────────────────────────────────────────────
-#  Main
-# ─────────────────────────────────────────────
 
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Aegis-OSINT-AI Setup Wizard")
-    parser.add_argument("--silent",        action="store_true", help="Non-interactive mode, install core dependencies only")
-    parser.add_argument("--check-only",    action="store_true", help="Check deps without installing")
-    parser.add_argument("--upgrade",       action="store_true", help="Upgrade all packages to min versions")
-    parser.add_argument("--full",          action="store_true", help="Include optional packages (AI, archives, etc.)")
-    parser.add_argument("--skip-optional", action="store_true", help="Skip optional packages like AI, archives, and llama")
-    parser.add_argument("--no-llama",      action="store_true", help="Skip llama-cpp-python compilation")
+    parser.add_argument("--silent",     action="store_true", help="Non-interactive mode, install core dependencies only")
+    parser.add_argument("--check-only", action="store_true", help="Check deps without installing")
+    parser.add_argument("--upgrade",    action="store_true", help="Upgrade all packages to min versions")
+    parser.add_argument("--full",       action="store_true", help="Include optional packages")
+    parser.add_argument("--skip-optional", action="store_true", help="Skip optional packages")
+    parser.add_argument("--no-llama",   action="store_true", help="Skip llama-cpp-python compilation")
     args = parser.parse_args()
 
     banner()
 
-    # 1. Python version
     check_python_version()
 
-    # 2. System profile
     sys_profile = SystemProfile()
     sys_profile.print()
 
-    # 3. System deps (tesseract, git)
     sys_deps = check_system_deps(sys_profile)
 
-    # 4. Python deps
     missing, outdated, ok_list = check_dependencies(silent=False)
 
     if args.check_only:
         print_summary(missing, outdated, sys_deps, True)
         sys.exit(0 if not [m for m in missing if m[2]] else 1)
 
-    # 5. Offer to install
     install_ok = True
-
     critical_missing = [m for m in missing if m[2]]
     optional_missing = [m for m in missing if not m[2]]
 
@@ -636,91 +488,58 @@ def main():
             install_ok = install_packages(critical_missing, sys_profile.pip_path)
 
     if optional_missing and not args.skip_optional:
-        if args.full:
-            section("Install Missing (Optional)")
-            for _, spec, _ in optional_missing:
-                info(spec)
-            print()
+        section("Install Missing (Optional)")
+        for _, spec, _ in optional_missing:
+            info(spec)
+        print()
+        if args.full or ask("Install optional packages?"):
             install_packages(optional_missing, sys_profile.pip_path)
-        elif not args.silent:
-            section("Install Missing (Optional)")
-            for _, spec, _ in optional_missing:
-                info(spec)
-            print()
-            if ask("Install optional packages?"):
-                install_packages(optional_missing, sys_profile.pip_path)
-    elif args.skip_optional and optional_missing:
-        info("Skipping optional packages.")
 
     if outdated:
         section("Upgrade Outdated Packages")
         dep_critical = {import_name: critical for import_name, _, _, critical in REQUIRED}
         outdated_critical = [o for o in outdated if dep_critical.get(o[0], False)]
         outdated_optional = [o for o in outdated if not dep_critical.get(o[0], False)]
-
         for import_name, spec, installed, required in outdated:
-            warn(f"{spec}  (installed: {installed}  →  required: {required})")
+            warn(f"{spec}  (installed: {installed}  ->  required: {required})")
         print()
-
         if outdated_critical and (args.upgrade or args.silent or ask("Upgrade outdated critical packages?")):
             install_packages(outdated_critical, sys_profile.pip_path, upgrade=True)
+        if outdated_optional and (args.full or ask("Upgrade outdated optional packages?")):
+            install_packages(outdated_optional, sys_profile.pip_path, upgrade=True)
 
-        if outdated_optional:
-            if args.full:
-                install_packages(outdated_optional, sys_profile.pip_path, upgrade=True)
-            elif not args.silent and ask("Upgrade outdated optional packages?"):
-                install_packages(outdated_optional, sys_profile.pip_path, upgrade=True)
-
-    # 6. llama-cpp-python
-    if args.no_llama or (args.silent and not args.full) or args.skip_optional:
-        info("Skipping llama-cpp-python installation.")
-    else:
+    if not args.no_llama and not (args.silent and not args.full) and not args.skip_optional:
         section("llama-cpp-python")
         if _is_importable("llama_cpp"):
             ok(f"Already installed: {_installed_version('llama_cpp')}")
         else:
             info("llama-cpp-python enables local GGUF model inference (CPU-only, no GPU needed)")
-            if args.full or (not args.silent and ask("Install llama-cpp-python? (may take 5-10 min to compile)")):
+            if args.full or ask("Install llama-cpp-python? (may take 5-10 min to compile)"):
                 install_llama_cpp(sys_profile)
 
-    # 7. .env setup
     setup_env_file(silent=args.silent)
-
-    # 8. Directories
     setup_directories()
 
-    # 8.5 Frontend Setup
     section("Frontend Setup (Node.js)")
     if shutil.which("npm"):
         info("Installing frontend dependencies...")
-        npm_cmd = "npm install"
-        if sys.platform == "win32":
-            npm_cmd = "npm.cmd install"
-        result = subprocess.run(npm_cmd, cwd="frontend", shell=True)
+        result = subprocess.run("npm install", cwd="frontend", shell=True)
         if result.returncode == 0:
             ok("Frontend dependencies installed.")
         else:
             err("Frontend installation failed.")
     else:
-        warn("npm not found. Please install Node.js to run the frontend.")
+        err("npm not found. Install Node.js on Kali: sudo apt install nodejs npm")
 
-
-    # 9. Re-check after install
     if critical_missing or outdated:
         section("Re-checking After Install")
         missing2, outdated2, _ = check_dependencies(silent=True)
         install_ok = not [m for m in missing2 if m[2]]
 
-    # 10. Verify
     verify_install()
-
-    # 11. AI recommendations
     show_ai_recommendations(sys_profile)
-
-    # 12. Summary
     print_summary(missing, outdated, sys_deps, install_ok)
 
-    # 13. Save install log
     log = {
         "timestamp": datetime.now().isoformat(),
         "os": sys_profile.os,

@@ -23,11 +23,10 @@ class ScanRequest(BaseModel):
 @app.post("/api/scan")
 async def start_scan(request: ScanRequest):
     if request.target_type == "email":
-        # Run holehe for email OSINT
-        # Running as a subprocess to capture its output directly
+        # Run holehe for email OSINT (Kali Linux native tool)
         try:
             process = await asyncio.create_subprocess_exec(
-                "python", "-m", "holehe", request.target, "--only-used", "--no-color",
+                "holehe", request.target, "--only-used", "--no-color",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
