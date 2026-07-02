@@ -19,6 +19,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useEffect } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -45,8 +46,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   // Protected pages — redirect to login if not authenticated
-  if (!isAuthenticated && typeof window !== "undefined") {
-    router.push("/login");
+  useEffect(() => {
+    if (!isAuthenticated && typeof window !== "undefined" && !publicPaths.includes(pathname)) {
+      router.push("/login");
+    }
+  }, [isAuthenticated, pathname, router]);
+
+  if (!isAuthenticated && typeof window !== "undefined" && !publicPaths.includes(pathname)) {
     return null;
   }
 
