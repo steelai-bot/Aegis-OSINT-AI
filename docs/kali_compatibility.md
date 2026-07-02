@@ -1,9 +1,8 @@
 # Kali Linux Compatibility
 
-Aegis v2 is compatible with Kali Linux 2026.1 or newer for the Python backend
-runtime and operator-guided security tooling. Kali is a rolling distribution, so
-operators should update before an engagement and avoid upgrading during active
-work unless a specific package fix is required.
+Aegis v2 is built for Kali Linux 2026.1 or newer only. The project no longer
+supports Docker, Windows, or macOS. It runs directly on Kali using native
+services and Kali tools.
 
 Authoritative release sources:
 
@@ -13,11 +12,12 @@ Authoritative release sources:
 
 ## Baseline
 
+- Kali Linux 2026.1 or newer, fully updated
 - Python 3.12+
-- Kali 2026.1 or newer
-- `kali-rolling` apt source enabled
-- `sudo apt update && sudo apt -y full-upgrade` completed
-- A project virtual environment for Python dependencies
+- Project virtual environment for Python dependencies
+- PostgreSQL + pgvector
+- Redis
+- Node.js + npm
 
 Check the host:
 
@@ -26,6 +26,21 @@ grep VERSION /etc/os-release
 uname -r
 python3 --version
 python3 scripts/kali_compatibility.py
+```
+
+## Native Kali Setup
+
+Use the Kali-only setup flow:
+
+```bash
+sudo bash scripts/setup-kali.sh
+bash scripts/start.sh
+```
+
+For updates:
+
+```bash
+sudo bash scripts/install_or_update.sh
 ```
 
 ## Recent Kali Tool Registry
