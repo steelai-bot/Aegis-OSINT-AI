@@ -1,1 +1,0 @@
-"""Passive phishing infrastructure monitoring plugins."""

@@ -1,1 +1,0 @@
-"""Passive cloud exposure monitoring plugins."""

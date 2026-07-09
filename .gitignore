@@ -3,60 +3,40 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-.Python
-*.egg-info/
 dist/
 build/
-.eggs/
 
 # Virtual environments
-venv/
 .venv/
 env/
-
-# Models (large GGUF files)
-models/
-!backend/models/
-!backend/models/*.py
-*.gguf
-*.bin
-*.safetensors
-
-# Reports output
-reports/
-!backend/reports/
-!backend/reports/*.py
 
 # Environment / secrets
 .env
 *.env
-config.local.py
+
+# Reports output
+reports/
 
 # Runtime logs
 logs/
-!.gitkeep
-!.gitignore
 
-# Aegis local runtime state
-.aegis/
-
-# Tor
-*.pid
+# Database
+aegis.db
+data/aegis.db
 
 # Temp
-/tmp/
 *.log
 *.tmp
+*.pid
 
 # IDE
 .vscode/
 .idea/
 *.swp
 
+# Node (legacy)
+node_modules/
+package-lock.json
+
 # Temporary editor directories
 .kilo/
-
-# Root lockfiles (not part of this repo)
-package-lock.json
-node_modules/
-aegis.db

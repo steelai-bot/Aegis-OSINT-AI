@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aegis OSINT AI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1>Aegis OSINT AI</h1>
+                <p class="subtitle">OSINT Investigation Framework</p>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="chat">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>Chat</span>
+                </a>
+                <a href="#" class="nav-item" data-page="search">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <span>OSINT Search</span>
+                </a>
+                <a href="#" class="nav-item" data-page="reports">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <span>Reports</span>
+                </a>
+                <a href="#" class="nav-item" data-page="settings">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="version">v1.0.0</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content" id="main-content">
+            <!-- Chat Page -->
+            <section class="page active" id="page-chat">
+                <header class="page-header">
+                    <h2>AI Assistant</h2>
+                    <p>Ask questions about your OSINT findings or get analysis help</p>
+                </header>
+                <div class="chat-container">
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="message assistant">
+                            <div class="message-avatar">AI</div>
+                            <div class="message-content">
+                                <p>Welcome to Aegis OSINT AI! I can help you analyze findings, generate reports, or answer questions about your investigations. What would you like to do?</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <select id="chat-provider" class="provider-select">
+                            <option value="openrouter">OpenRouter (Free models)</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic</option>
+                            <option value="gemini">Google Gemini</option>
+                            <option value="nvidia">Nvidia</option>
+                        </select>
+                        <input type="text" id="chat-input" placeholder="Type your message..." class="chat-input">
+                        <button id="chat-send" class="btn btn-primary">Send</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- OSINT Search Page -->
+            <section class="page" id="page-search">
+                <header class="page-header">
+                    <h2>OSINT Search</h2>
+                    <p>Search Australian, New Zealand, and global intelligence sources</p>
+                </header>
+                <div class="search-container">
+                    <div class="search-form">
+                        <div class="form-group">
+                            <label>Search Query</label>
+                            <input type="text" id="search-query" placeholder="Enter ABN, domain, phone, IP, company name..." class="form-input">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Target Type</label>
+                                <select id="search-type" class="form-select">
+                                    <option value="auto">Auto-detect</option>
+                                    <option value="abn">Australian ABN</option>
+                                    <option value="domain">Domain (.au/.com/etc)</option>
+                                    <option value="nz_domain">NZ Domain (.nz)</option>
+                                    <option value="phone">Australian Phone</option>
+                                    <option value="ip">IP Address</option>
+                                    <option value="company">Australian Company</option>
+                                    <option value="nz_company">NZ Company</option>
+                                    <option value="custom">Custom Search</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="custom-search-group" style="display:none;">
+                                <label>Search Engine</label>
+                                <select id="custom-search-engine" class="form-select">
+                                    <option value="duckduckgo">DuckDuckGo</option>
+                                    <option value="bing">Bing</option>
+                                    <option value="google">Google</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button id="search-btn" class="btn btn-primary">Search</button>
+                    </div>
+                    <div class="search-results" id="search-results">
+                        <div class="results-placeholder">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <p>Enter a query to start searching</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports Page -->
+            <section class="page" id="page-reports">
+                <header class="page-header">
+                    <h2>Reports</h2>
+                    <p>View and manage generated investigation reports</p>
+                </header>
+                <div class="reports-container">
+                    <div class="reports-toolbar">
+                        <button id="generate-report-btn" class="btn btn-primary">Generate Report</button>
+                        <select id="report-format" class="form-select" style="width:auto;">
+                            <option value="html">HTML</option>
+                            <option value="json">JSON</option>
+                            <option value="markdown">Markdown</option>
+                            <option value="csv">CSV</option>
+                        </select>
+                    </div>
+                    <div class="reports-list" id="reports-list">
+                        <div class="reports-placeholder">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                            </svg>
+                            <p>No reports generated yet</p>
+                            <button id="first-report-btn" class="btn btn-secondary">Generate First Report</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Page -->
+            <section class="page" id="page-settings">
+                <header class="page-header">
+                    <h2>Settings</h2>
+                    <p>Configure API keys and application preferences</p>
+                </header>
+                <div class="settings-container">
+                    <div class="settings-section">
+                        <h3>AI Provider API Keys</h3>
+                        <p class="settings-hint">Add API keys to enable AI analysis. OpenRouter offers free models.</p>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <label>OpenRouter API Key</label>
+                                <input type="password" id="key-openrouter" placeholder="sk-or-..." class="form-input">
+                                <span class="hint">Free models available at openrouter.ai</span>
+                            </div>
+                            <div class="setting-item">
+                                <label>OpenAI API Key</label>
+                                <input type="password" id="key-openai" placeholder="sk-..." class="form-input">
+                            </div>
+                            <div class="setting-item">
+                                <label>Anthropic API Key</label>
+                                <input type="password" id="key-anthropic" placeholder="sk-ant-..." class="form-input">
+                            </div>
+                            <div class="setting-item">
+                                <label>Google Gemini API Key</label>
+                                <input type="password" id="key-gemini" placeholder="..." class="form-input">
+                            </div>
+                            <div class="setting-item">
+                                <label>Nvidia API Key</label>
+                                <input type="password" id="key-nvidia" placeholder="..." class="form-input">
+                            </div>
+                        </div>
+                        <button id="save-keys-btn" class="btn btn-primary">Save API Keys</button>
+                    </div>
+                    <div class="settings-section">
+                        <h3>OSINT Configuration</h3>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <label>ABR GUID (Australian Business Register)</label>
+                                <input type="text" id="key-abr" placeholder="Optional GUID for ABR API" class="form-input">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h3>Application</h3>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <label>Database Path</label>
+                                <input type="text" id="db-path" value="data/aegis.db" class="form-input" readonly>
+                            </div>
+                            <div class="setting-item">
+                                <label>Reports Directory</label>
+                                <input type="text" id="reports-dir" value="reports" class="form-input" readonly>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
