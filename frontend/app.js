@@ -28,6 +28,7 @@ document.getElementById('chat-send').addEventListener('click', async () => {
     if (!message) return;
     
     const provider = document.getElementById('chat-provider').value;
+    const model = document.getElementById('chat-model').value;
     
     // Add user message to chat
     addChatMessage(message, 'user');
@@ -40,14 +41,23 @@ document.getElementById('chat-send').addEventListener('click', async () => {
         const response = await fetch(`${API_BASE}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message, provider })
+            body: JSON.stringify({ 
+                message, 
+                provider, 
+                model: model === 'openrouter/auto' ? 'openrouter/auto' : model 
+            })
         });
         
         const data = await response.json();
         
         // Remove typing indicator and show response
         removeLastTypingIndicator();
-        addChatMessage(data.response || 'No response received', 'assistant');
+        
+        if (data.error === 'no_api_key') {
+            addChatMessage(`API Key missing: ${data.response}`, 'assistant');
+        } else {
+            addChatMessage(data.response || 'No response received', 'assistant');
+        }
     } catch (error) {
         removeLastTypingIndicator();
         addChatMessage('Error: ' + error.message, 'assistant');
@@ -218,7 +228,7 @@ function generateReport(targetId) {
 }
 
 // Settings functionality
-document.getElementById('save-keys-btn').addEventListener('click', () => {
+document.getElementById('save-keys-btn').addEventListener('click', async () => {
     const keys = {
         openrouter: document.getElementById('key-openrouter').value,
         openai: document.getElementById('key-openai').value,
@@ -227,19 +237,42 @@ document.getElementById('save-keys-btn').addEventListener('click', () => {
         nvidia: document.getElementById('key-nvidia').value
     };
     
-    // Save to localStorage (in production, this would go to the backend)
-    localStorage.setItem('api_keys', JSON.stringify(keys));
-    alert('API keys saved locally. Note: These are not persisted across sessions in this demo.');
+    try {
+        const response = await fetch(`${API_BASE}/api/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(keys)
+        });
+        
+        if (response.ok) {
+            alert('API keys saved to server successfully!');
+        } else {
+            const errorData = await response.json();
+            alert('Error saving keys: ' + errorData.detail);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
 });
 
 // Load saved settings
+async function loadSettings() {
+    try {
+        const response = await fetch(`${API_BASE}/api/settings`);
+        const keys = await response.json();
+        
+        if (keys.openrouter) document.getElementById('key-openrouter').value = keys.openrouter;
+        if (keys.openai) document.getElementById('key-openai').value = keys.openai;
+        if (keys.anthropic) document.getElementById('key-anthropic').value = keys.anthropic;
+        if (keys.gemini) document.getElementById('key-gemini').value = keys.gemini;
+        if (keys.nvidia) document.getElementById('key-nvidia').value = keys.nvidia;
+    } catch (error) {
+        console.error('Error loading settings:', error);
+    }
+}
+
 window.addEventListener('load', () => {
-    const savedKeys = JSON.parse(localStorage.getItem('api_keys') || '{}');
-    if (savedKeys.openrouter) document.getElementById('key-openrouter').value = savedKeys.openrouter;
-    if (savedKeys.openai) document.getElementById('key-openai').value = savedKeys.openai;
-    if (savedKeys.anthropic) document.getElementById('key-anthropic').value = savedKeys.anthropic;
-    if (savedKeys.gemini) document.getElementById('key-gemini').value = savedKeys.gemini;
-    if (savedKeys.nvidia) document.getElementById('key-nvidia').value = savedKeys.nvidia;
+    loadSettings();
 });
 
 // Toggle custom search engine field

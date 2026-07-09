@@ -118,6 +118,48 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 async def health():
     return {"status": "healthy", "database": "connected"}
 
+@app.get("/api/settings")
+async def get_settings():
+    """Retrieve API keys from .env or config."""
+    # For now, we read from environment variables
+    providers = ["openrouter", "openai", "anthropic", "gemini", "nvidia"]
+    settings = {}
+    for p in providers:
+        settings[p] = os.getenv(f"{p.upper()}_API_KEY", "")
+    return settings
+
+@app.post("/api/settings")
+async def save_settings(payload: Dict[str, str]):
+    """Save API keys to .env file."""
+    try:
+        # Read existing .env
+        lines = []
+        if os.path.exists(".env"):
+            with open(".env", "r") as f:
+                lines = f.readlines()
+
+        # Update or add keys
+        for key, value in payload.items():
+            env_key = f"{key.upper()}_API_KEY"
+            found = False
+            for i, line in enumerate(lines):
+                if line.startswith(f"{env_key}="):
+                    lines[i] = f"{env_key}={value}\n"
+                    found = True
+                    break
+            if not found:
+                lines.append(f"{env_key}={value}\n")
+
+        with open(".env", "w") as f:
+            f.writelines(lines)
+        
+        # Reload environment variables
+        load_dotenv(".env", override=True)
+        
+        return {"status": "success", "message": "Settings saved successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/targets", response_model=TargetRead)
 async def create_target(payload: TargetCreate):
     conn = sqlite3.connect(DATABASE_PATH)

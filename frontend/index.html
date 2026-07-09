@@ -68,17 +68,28 @@
                             </div>
                         </div>
                     </div>
-                    <div class="chat-input-area">
-                        <select id="chat-provider" class="provider-select">
-                            <option value="openrouter">OpenRouter (Free models)</option>
-                            <option value="openai">OpenAI</option>
-                            <option value="anthropic">Anthropic</option>
-                            <option value="gemini">Google Gemini</option>
-                            <option value="nvidia">Nvidia</option>
-                        </select>
-                        <input type="text" id="chat-input" placeholder="Type your message..." class="chat-input">
-                        <button id="chat-send" class="btn btn-primary">Send</button>
-                    </div>
+                     <div class="chat-input-area">
+                         <div class="model-selector-container">
+                             <select id="chat-provider" class="provider-select">
+                                 <option value="openrouter">OpenRouter</option>
+                                 <option value="openai">OpenAI</option>
+                                 <option value="anthropic">Anthropic</option>
+                                 <option value="gemini">Google Gemini</option>
+                                 <option value="nvidia">Nvidia</option>
+                             </select>
+                             <select id="chat-model" class="model-select">
+                                 <option value="openrouter/auto">Auto (Best Free)</option>
+                                 <option value="meta-llama/llama-3.1-8b-instruct:free">Llama 3.1 8B (Free)</option>
+                                 <option value="google/gemma-2-9b-it:free">Gemma 2 9B (Free)</option>
+                                 <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
+                                 <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                 <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                                 <option value="gemini-pro">Gemini Pro</option>
+                             </select>
+                         </div>
+                         <input type="text" id="chat-input" placeholder="Type your message..." class="chat-input">
+                         <button id="chat-send" class="btn btn-primary">Send</button>
+                     </div>
                 </div>
             </section>
 
