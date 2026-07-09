@@ -121,8 +121,10 @@ async def health():
 @app.get("/api/settings")
 async def get_settings():
     """Retrieve API keys from .env or config."""
-    # For now, we read from environment variables
-    providers = ["openrouter", "openai", "anthropic", "gemini", "nvidia"]
+    providers = [
+        "openrouter", "openai", "anthropic", "gemini", "nvidia",
+        "virustotal", "shodan", "hunter", "intelx", "censys", "abuseipdb", "urlscan"
+    ]
     settings = {}
     for p in providers:
         settings[p] = os.getenv(f"{p.upper()}_API_KEY", "")
@@ -192,50 +194,90 @@ async def list_targets():
 
 @app.post("/api/search", response_model=Dict[str, Any])
 async def search(payload: SearchRequest):
-    findings = []
+    """
+    Initiates an investigation via the InvestigationEngine.
+    """
+    # 1. Determine target type
+    target_type_str = payload.target_type or "auto"
     
-    target_type = payload.target_type or "auto"
-    if target_type == "auto":
-        target_type = "company"  # default
-    
-    # Simple OSINT simulation
-    if target_type == "abn":
-        findings.append({"source": "ABR", "category": "business", "severity": "info", "confidence": 0.9, "data": {"abn": payload.query}})
-    elif target_type == "domain":
-        findings.append({"source": "DNS", "category": "dns", "severity": "info", "confidence": 0.95, "data": {"domain": payload.query}})
-    else:
-        findings.append({"source": "OSINT", "category": "general", "severity": "medium", "confidence": 0.7, "data": {"query": payload.query}})
-    
+    # Map string to TargetType enum
+    from backend.models import TargetType
+    try:
+        if target_type_str == "auto":
+            # Simple auto-detection logic
+            import re
+            if re.match(r'^\d{11}$', payload.query):
+                target_type = TargetType.ABN
+            elif re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', payload.query):
+                target_type = TargetType.DOMAIN
+            elif re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', payload.query):
+                target_type = TargetType.IP
+            else:
+                target_type = TargetType.COMPANY
+        else:
+            target_type = TargetType(target_type_str)
+    except ValueError:
+        target_type = TargetType.COMPANY
+
+    # 2. Create target in DB
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT id FROM targets WHERE query = ?", (payload.query,))
-    row = cursor.fetchone()
-    target_id = row[0] if row else None
-    
-    if not target_id:
-        cursor.execute(
-            "INSERT INTO targets (query, target_type) VALUES (?, ?)",
-            (payload.query, target_type)
-        )
-        target_id = cursor.lastrowid
-    
-    for finding in findings:
-        cursor.execute(
-            "INSERT INTO findings (target_id, source, category, severity, confidence, data) VALUES (?, ?, ?, ?, ?, ?)",
-            (target_id, finding.get("source", "unknown"), finding.get("category", "osint"),
-             finding.get("severity", "medium"), finding.get("confidence", 0.5), json.dumps(finding.get("data", {})))
-        )
-    
+    cursor.execute(
+        "INSERT INTO targets (query, target_type, status) VALUES (?, ?, ?)",
+        (payload.query, target_type.value, "pending")
+    )
+    target_id = cursor.lastrowid
     conn.commit()
     conn.close()
+
+    # 3. Run investigation
+    from backend.engine import InvestigationEngine
+    engine = InvestigationEngine(DATABASE_PATH)
+    
+    # For MVP, we await it. In production, this should be a background task.
+    result = await engine.run_investigation(target_id, target_type, payload.query)
+    
+    # Fetch entities, relationships, timeline for response
+    from backend.storage import SQLiteStorage
+    storage = SQLiteStorage(DATABASE_PATH)
+    entities = [e.dict() for e in storage.get_entities_for_target(target_id)]
+    relationships = [r.dict() for r in storage.get_relationships_for_target(target_id)]
+    timeline = [t.dict() for t in storage.get_timeline(target_id)]
     
     return {
         "target_id": target_id,
         "query": payload.query,
-        "findings_count": len(findings),
-        "findings": findings
+        "findings_count": result.get("findings_count", 0),
+        "findings": [f.dict() if hasattr(f, 'dict') else f for f in result.get("results", [])],
+        "entities": entities,
+        "relationships": relationships,
+        "timeline": timeline
     }
+
+@app.get("/api/targets/{target_id}/entities")
+async def get_target_entities(target_id: int):
+    from backend.storage import SQLiteStorage
+    storage = SQLiteStorage(DATABASE_PATH)
+    return [e.dict() for e in storage.get_entities_for_target(target_id)]
+
+@app.get("/api/targets/{target_id}/relationships")
+async def get_target_relationships(target_id: int):
+    from backend.storage import SQLiteStorage
+    storage = SQLiteStorage(DATABASE_PATH)
+    return [r.dict() for r in storage.get_relationships_for_target(target_id)]
+
+@app.get("/api/targets/{target_id}/timeline")
+async def get_target_timeline(target_id: int):
+    from backend.storage import SQLiteStorage
+    storage = SQLiteStorage(DATABASE_PATH)
+    return [t.dict() for t in storage.get_timeline(target_id)]
+
+@app.get("/api/plugins")
+async def list_plugins():
+    from backend.plugin_manager import PluginManager
+    pm = PluginManager()
+    pm.discover_plugins()
+    return [p.dict() for p in pm.list_plugins()]
 
 @app.get("/api/findings", response_model=List[Finding])
 async def list_findings(target_id: Optional[int] = None):
@@ -286,8 +328,15 @@ async def create_report(payload: ReportRequest):
     ]
     
     from backend.report import ReportGenerator
+    from backend.storage import SQLiteStorage
+    storage = SQLiteStorage(DATABASE_PATH)
+    
+    entities = [e.dict() for e in storage.get_entities_for_target(payload.target_id)]
+    relationships = [r.dict() for r in storage.get_relationships_for_target(payload.target_id)]
+    timeline = [t.dict() for t in storage.get_timeline(payload.target_id)]
+    
     generator = ReportGenerator()
-    report_content = generator.generate(payload.format, target, findings)
+    report_content = generator.generate(payload.format, target, findings, entities, relationships, timeline)
     
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()

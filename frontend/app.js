@@ -1,282 +1,417 @@
-// Aegis OSINT AI - Frontend Application
+document.addEventListener('DOMContentLoaded', () => {
+    // --- State Management ---
+    const state = {
+        currentPage: 'dashboard',
+        investigations: [],
+        findings: [],
+        entities: [],
+        relationships: [],
+        timeline: [],
+        plugins: [],
+        settings: {},
+        selectedInvestigationId: null
+    };
 
-const API_BASE = 'http://localhost:8000';
+    // --- DOM Elements ---
+    const navItems = document.querySelectorAll('.nav-item');
+    const pages = document.querySelectorAll('.page');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput = document.getElementById('chat-input');
+    const chatSend = document.getElementById('chat-send');
+    const chatProvider = document.getElementById('chat-provider');
+    const chatModel = document.getElementById('chat-model');
+    const searchBtn = document.getElementById('search-btn');
+    const searchQuery = document.getElementById('search-query');
+    const searchType = document.getElementById('search-type');
+    const searchResults = document.getElementById('search-results');
+    const reportsList = document.getElementById('reports-list');
+    const saveKeysBtn = document.getElementById('save-keys-btn');
+    const pluginsGrid = document.getElementById('plugins-grid');
+    const resultsContent = document.getElementById('results-content');
+    const tabBtns = document.querySelectorAll('.tab-btn');
 
-// Page navigation
-document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', function(e) {
-        e.preventDefault();
-        
-        // Update active state
-        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        this.classList.add('active');
-        
-        // Show corresponding page
-        const pageId = this.getAttribute('data-page');
-        document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-        document.getElementById(`page-${pageId}`).classList.add('active');
-        
-        // Load page-specific data
-        if (pageId === 'reports') loadReports();
+    // --- Navigation ---
+    navItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const pageId = item.getAttribute('data-page');
+            navigateTo(pageId);
+        });
     });
-});
 
-// Chat functionality
-document.getElementById('chat-send').addEventListener('click', async () => {
-    const input = document.getElementById('chat-input');
-    const message = input.value.trim();
-    if (!message) return;
-    
-    const provider = document.getElementById('chat-provider').value;
-    const model = document.getElementById('chat-model').value;
-    
-    // Add user message to chat
-    addChatMessage(message, 'user');
-    input.value = '';
-    
-    // Show typing indicator
-    addChatMessage('...', 'assistant', true);
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                message, 
-                provider, 
-                model: model === 'openrouter/auto' ? 'openrouter/auto' : model 
-            })
+    function navigateTo(pageId) {
+        state.currentPage = pageId;
+        navItems.forEach(item => {
+            item.classList.toggle('active', item.getAttribute('data-page') === pageId);
+        });
+        pages.forEach(page => {
+            page.classList.toggle('active', page.id === `page-${pageId}`);
         });
         
-        const data = await response.json();
-        
-        // Remove typing indicator and show response
-        removeLastTypingIndicator();
-        
-        if (data.error === 'no_api_key') {
-            addChatMessage(`API Key missing: ${data.response}`, 'assistant');
-        } else {
-            addChatMessage(data.response || 'No response received', 'assistant');
+        if (pageId === 'dashboard') updateDashboard();
+        if (pageId === 'plugins') loadPlugins();
+        if (pageId === 'settings') loadSettings();
+    }
+
+    // --- Dashboard ---
+    async function updateDashboard() {
+        try {
+            const resp = await fetch('/api/targets');
+            const targets = await resp.json();
+            state.investigations = targets;
+            
+            document.getElementById('stat-investigations').textContent = targets.length;
+            
+            const recentList = document.getElementById('recent-investigations');
+            if (targets.length === 0) {
+                recentList.innerHTML = '<p class="empty-msg">No recent investigations</p>';
+            } else {
+                recentList.innerHTML = targets.slice(0, 5).map(t => `
+                    <div class="recent-item" onclick="viewInvestigation(${t.id})">
+                        <div class="recent-info">
+                            <div class="recent-query">${t.query}</div>
+                            <div class="recent-meta">${t.target_type} • ${t.status}</div>
+                        </div>
+                        <div class="recent-date">${new Date(t.created_at).toLocaleDateString()}</div>
+                    </div>
+                `).join('');
+            }
+        } catch (e) {
+            console.error('Failed to update dashboard', e);
         }
-    } catch (error) {
-        removeLastTypingIndicator();
-        addChatMessage('Error: ' + error.message, 'assistant');
     }
-});
 
-function addChatMessage(content, sender, isTyping = false) {
-    const messages = document.getElementById('chat-messages');
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${sender}`;
-    
-    if (isTyping) {
-        messageDiv.id = 'typing-indicator';
-    }
-    
-    messageDiv.innerHTML = `
-        <div class="message-avatar">${sender === 'user' ? 'U' : 'AI'}</div>
-        <div class="message-content"><p>${escapeHtml(content)}</p></div>
-    `;
-    
-    messages.appendChild(messageDiv);
-    messages.scrollTop = messages.scrollHeight;
-}
+    // --- Search / Investigations ---
+    searchBtn.addEventListener('click', async () => {
+        const query = searchQuery.value.trim();
+        const type = searchType.value;
+        if (!query) return;
 
-function removeLastTypingIndicator() {
-    const indicator = document.getElementById('typing-indicator');
-    if (indicator) indicator.remove();
-}
+        searchBtn.disabled = true;
+        searchBtn.textContent = 'Searching...';
+        searchResults.innerHTML = '<div class="loading-spinner"></div>';
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+        try {
+            const resp = await fetch('/api/search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, target_type: type })
+            });
+            const result = await resp.json();
 
-// OSINT Search functionality
-document.getElementById('search-btn').addEventListener('click', async () => {
-    const query = document.getElementById('search-query').value.trim();
-    const targetType = document.getElementById('search-type').value;
-    const customSearch = document.getElementById('search-type').value === 'custom' 
-        ? document.getElementById('custom-search-engine').value 
-        : null;
-    
-    if (!query) return;
-    
-    const resultsDiv = document.getElementById('search-results');
-    resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/search`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, target_type: targetType, custom_search: customSearch })
-        });
-        
-        const data = await response.json();
-        displaySearchResults(data);
-    } catch (error) {
-        resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
-    }
-});
+            if (result.error) {
+                throw new Error(result.error);
+            }
 
-function displaySearchResults(data) {
-    const resultsDiv = document.getElementById('search-results');
-    
-    if (!data.findings || data.findings.length === 0) {
-        resultsDiv.innerHTML = '<div class="results-placeholder"><p>No findings found.</p></div>';
-        return;
-    }
-    
-    let html = `
-        <div class="results-header">
-            <h3>Found ${data.findings.length} findings for "${data.query}"</h3>
-            <p>Target type: ${data.target_type}</p>
-        </div>
-        <div class="findings-list">
-    `;
-    
-    data.findings.forEach(finding => {
-        html += `
-            <div class="finding-item">
-                <div class="finding-header">
-                    <span class="finding-source">${finding.source}</span>
-                    <span class="finding-severity ${finding.severity}">${finding.severity.toUpperCase()}</span>
+            // Update local state
+            state.selectedInvestigationId = result.target_id;
+            state.findings = result.findings || [];
+            state.entities = result.entities || [];
+            state.relationships = result.relationships || [];
+            state.timeline = result.timeline || [];
+
+            searchResults.innerHTML = `
+                <div class="search-success">
+                    <div class="success-icon">✓</div>
+                    <h3>Investigation Complete</h3>
+                    <p>${result.findings_count} findings discovered</p>
+                    <button class="btn btn-primary" onclick="viewResults(${result.target_id})">View Results</button>
                 </div>
-                <div class="finding-data">
-                    <pre>${JSON.stringify(finding.data, null, 2)}</pre>
+            `;
+        } catch (e) {
+            searchResults.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+        } finally {
+            searchBtn.disabled = false;
+            searchBtn.textContent = 'Search';
+        }
+    });
+
+    // --- Results ---
+    window.viewResults = async (targetId) => {
+        state.selectedInvestigationId = targetId;
+        navigateTo('results');
+        await loadResults(targetId);
+    };
+
+    async function loadResults(targetId) {
+        resultsContent.innerHTML = '<div class="loading-spinner"></div>';
+        try {
+            // We already have some data from the search response, but let's refresh to be sure
+            const [findingsResp, entitiesResp, relsResp, timelineResp] = await Promise.all([
+                fetch(`/api/findings?target_id=${targetId}`).then(r => r.json()),
+                fetch(`/api/targets/${targetId}/entities`).then(r => r.json()),
+                fetch(`/api/targets/${target_id}/relationships`).then(r => r.json()),
+                fetch(`/api/targets/${target_id}/timeline`).then(r => r.json())
+            ]);
+
+            state.findings = findingsResp;
+            state.entities = entitiesResp;
+            state.relationships = relsResp;
+            state.timeline = timelineResp;
+
+            renderFindings();
+            renderEntities();
+            renderTimeline();
+            renderGraph();
+        } catch (e) {
+            resultsContent.innerHTML = `<div class="error-msg">Failed to load results: ${e.message}</div>`;
+        }
+    }
+
+    function renderFindings() {
+        const container = document.createElement('div');
+        container.className = 'findings-list';
+        
+        if (state.findings.length === 0) {
+            container.innerHTML = '<p class="empty-msg">No findings found for this investigation.</p>';
+        } else {
+            state.findings.forEach(f => {
+                const div = document.createElement('div');
+                div.className = `finding-card severity-${f.severity}`;
+                div.innerHTML = `
+                    <div class="finding-header">
+                        <span class="finding-source">${f.source}</span>
+                        <span class="finding-category">${f.category}</span>
+                        <span class="finding-confidence">${(f.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <div class="finding-body">
+                        <pre>${JSON.stringify(f.data, null, 2)}</pre>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+        resultsContent.innerHTML = '';
+        resultsContent.appendChild(container);
+    }
+
+    function renderEntities() {
+        const container = document.createElement('div');
+        container.className = 'entities-grid';
+        
+        if (state.entities.length === 0) {
+            container.innerHTML = '<p class="empty-msg">No entities discovered.</p>';
+        } else {
+            state.entities.forEach(e => {
+                const div = document.createElement('div');
+                div.className = 'entity-card';
+                div.innerHTML = `
+                    <div class="entity-type">${e.type.toUpperCase()}</div>
+                    <div class="entity-value">${e.value}</div>
+                    <div class="entity-meta">${e.display_name || ''}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+        resultsContent.innerHTML = '';
+        resultsContent.appendChild(container);
+    }
+
+    function renderTimeline() {
+        const container = document.createElement('div');
+        container.className = 'timeline-container';
+        
+        if (state.timeline.length === 0) {
+            container.innerHTML = '<p class="empty-msg">No timeline events recorded.</p>';
+        } else {
+            state.timeline.forEach(t => {
+                const div = document.createElement('div');
+                div.className = 'timeline-item';
+                div.innerHTML = `
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-time">${new Date(t.timestamp).toLocaleString()}</div>
+                        <div class="timeline-desc">${t.description}</div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+        resultsContent.innerHTML = '';
+        resultsContent.appendChild(container);
+    }
+
+    function renderGraph() {
+        resultsContent.innerHTML = `
+            <div class="graph-placeholder">
+                <p>Graph visualization is coming soon in the next update.</p>
+                <div class="graph-mockup">
+                    <div class="node" style="top: 50%; left: 50%;">Target</div>
+                    ${state.entities.slice(0, 5).map((e, i) => `
+                        <div class="node" style="top: ${20 + i*15}%; left: ${20 + i*10}%;">${e.value}</div>
+                    `).join('')}
                 </div>
             </div>
         `;
+    }
+
+    // Tabs
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const tab = btn.getAttribute('data-tab');
+            
+            if (tab === 'findings') renderFindings();
+            if (tab === 'entities') renderEntities();
+            if (tab === 'timeline') renderTimeline();
+            if (tab === 'graph') renderGraph();
+        });
     });
-    
-    html += '</div>';
-    resultsDiv.innerHTML = html;
-}
 
-// Reports functionality
-document.getElementById('generate-report-btn').addEventListener('click', async () => {
-    const format = document.getElementById('report-format').value;
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/reports`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target_id: 1, format })
-        });
-        
-        const data = await response.json();
-        alert(`Report generated: ${data.report_id}`);
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-});
-
-async function loadReports() {
-    const reportsList = document.getElementById('reports-list');
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/targets`);
-        const targets = await response.json();
-        
-        if (targets.length === 0) {
-            reportsList.innerHTML = `
-                <div class="reports-placeholder">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                    <p>No targets found. Run a search first.</p>
+    // --- Plugins ---
+    async function loadPlugins() {
+        try {
+            const resp = await fetch('/api/plugins');
+            const plugins = await resp.json();
+            state.plugins = plugins;
+            
+            pluginsGrid.innerHTML = plugins.map(p => `
+                <div class="plugin-card">
+                    <div class="plugin-name">${p.name}</div>
+                    <div class="plugin-desc">${p.description}</div>
+                    <div class="plugin-tags">
+                        ${p.tags.map(t => `<span class="tag">${t}</span>`).join('')}
+                    </div>
                 </div>
-            `;
-            return;
+            `).join('');
+        } catch (e) {
+            pluginsGrid.innerHTML = '<p class="error-msg">Failed to load plugins.</p>';
         }
-        
-        let html = '<div class="reports-grid">';
-        targets.forEach(target => {
-            html += `
-                <div class="report-card" data-target-id="${target.id}">
-                    <h4>${escapeHtml(target.query)}</h4>
-                    <p>Type: ${target.target_type}</p>
-                    <p>Status: ${target.status}</p>
-                    <button class="btn btn-primary" onclick="generateReport(${target.id})">Generate Report</button>
-                </div>
-            `;
-        });
-        html += '</div>';
-        reportsList.innerHTML = html;
-    } catch (error) {
-        reportsList.innerHTML = `<div class="error">Error: ${error.message}</div>`;
     }
-}
 
-function generateReport(targetId) {
-    const format = document.getElementById('report-format').value;
-    
-    fetch(`${API_BASE}/api/reports`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_id: targetId, format })
-    })
-    .then(response => response.json())
-    .then(data => {
-        alert(`Report generated: ${data.report_id}`);
-    })
-    .catch(error => {
-        alert('Error: ' + error.message);
+    // --- Settings ---
+    async function loadSettings() {
+        try {
+            const resp = await fetch('/api/settings');
+            state.settings = await resp.json();
+            
+            // Map settings to inputs
+            const mapping = {
+                'openrouter': 'key-openrouter',
+                'openai': 'key-openai',
+                'anthropic': 'key-anthropic',
+                'gemini': 'key-gemini',
+                'nvidia': 'key-nvidia',
+                'virustotal': 'key-virustotal',
+                'shodan': 'key-shodan',
+                'hunter': 'key-hunter',
+                'intelx': 'key-intelx',
+                'censys': 'key-censys',
+                'abuseipdb': 'key-abuseipdb',
+                'urlscan': 'key-urlscan',
+                'googlesearch': 'key-googlesearch',
+                'googlecx': 'key-googlecx',
+                'github': 'key-github'
+            };
+
+            for (const [key, id] of Object.entries(mapping)) {
+                const el = document.getElementById(id);
+                if (el) el.value = state.settings[key.toUpperCase()] || '';
+            }
+        } catch (e) {
+            console.error('Failed to load settings', e);
+        }
+    }
+
+    saveKeysBtn.addEventListener('click', async () => {
+        const payload = {};
+        const mapping = {
+            'openrouter': 'key-openrouter',
+            'openai': 'key-openai',
+            'anthropic': 'key-anthropic',
+            'gemini': 'key-gemini',
+            'nvidia': 'key-nvidia',
+            'virustotal': 'key-virustotal',
+            'shodan': 'key-shodan',
+            'hunter': 'key-hunter',
+            'intelx': 'key-intelx',
+            'censys': 'key-censys',
+            'abuseipdb': 'key-abuseipdb',
+            'urlscan': 'key-urlscan',
+            'googlesearch': 'key-googlesearch',
+            'googlecx': 'key-googlecx',
+            'github': 'key-github'
+        };
+
+        for (const [key, id] of Object.entries(mapping)) {
+            const el = document.getElementById(id);
+            if (el && el.value) {
+                payload[key] = el.value;
+            }
+        }
+
+        try {
+            const resp = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await resp.json();
+            if (result.status === 'success') {
+                alert('Settings saved successfully!');
+            }
+        } catch (e) {
+            alert('Error saving settings: ' + e.message);
+        }
     });
-}
 
-// Settings functionality
-document.getElementById('save-keys-btn').addEventListener('click', async () => {
-    const keys = {
-        openrouter: document.getElementById('key-openrouter').value,
-        openai: document.getElementById('key-openai').value,
-        anthropic: document.getElementById('key-anthropic').value,
-        gemini: document.getElementById('key-gemini').value,
-        nvidia: document.getElementById('key-nvidia').value
-    };
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/settings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(keys)
-        });
-        
-        if (response.ok) {
-            alert('API keys saved to server successfully!');
-        } else {
-            const errorData = await response.json();
-            alert('Error saving keys: ' + errorData.detail);
+    // --- Chat ---
+    chatSend.addEventListener('click', async () => {
+        const message = chatInput.value.trim();
+        if (!message) return;
+
+        appendChatMessage('user', message);
+        chatInput.value = '';
+
+        try {
+            const resp = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message,
+                    provider: chatProvider.value,
+                    model: chatModel.value
+                })
+            });
+            const result = await resp.json();
+            appendChatMessage('assistant', result.response);
+        } catch (e) {
+            appendChatMessage('assistant', 'Error: ' + e.message);
         }
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-});
+    });
 
-// Load saved settings
-async function loadSettings() {
-    try {
-        const response = await fetch(`${API_BASE}/api/settings`);
-        const keys = await response.json();
-        
-        if (keys.openrouter) document.getElementById('key-openrouter').value = keys.openrouter;
-        if (keys.openai) document.getElementById('key-openai').value = keys.openai;
-        if (keys.anthropic) document.getElementById('key-anthropic').value = keys.anthropic;
-        if (keys.gemini) document.getElementById('key-gemini').value = keys.gemini;
-        if (keys.nvidia) document.getElementById('key-nvidia').value = keys.nvidia;
-    } catch (error) {
-        console.error('Error loading settings:', error);
+    function appendChatMessage(role, text) {
+        const div = document.createElement('div');
+        div.className = `message ${role}`;
+        div.innerHTML = `
+            <div class="message-avatar">${role === 'user' ? 'U' : 'AI'}</div>
+            <div class="message-content"><p>${text}</p></div>
+        `;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-}
 
-window.addEventListener('load', () => {
+    // --- Initialization ---
+    updateDashboard();
+    loadPlugins();
     loadSettings();
 });
 
-// Toggle custom search engine field
-document.getElementById('search-type').addEventListener('change', function() {
-    const customGroup = document.getElementById('custom-search-group');
-    customGroup.style.display = this.value === 'custom' ? 'block' : 'none';
-});
+// Global helper for dashboard clicks
+window.viewInvestigation = async (id) => {
+    // This is a bit hacky for a single-page app without a router, 
+    // but works for our MVP structure.
+    // We'll simulate a click on the 'Investigations' nav item and then the result.
+    document.querySelector('[data-page="investigations"]').click();
+    // In a real app, we'd have a dedicated view for a single investigation.
+    // For now, we'll just show the results page.
+    // We need to trigger the search results view.
+    // This is a limitation of the current simple architecture.
+    alert('Investigation details view coming soon. Use the Search page to start new ones.');
+};
+
+window.viewResults = async (id) => {
+    document.querySelector('[data-page="results"]').click();
+    // We'll rely on the state being updated by the search function.
+};

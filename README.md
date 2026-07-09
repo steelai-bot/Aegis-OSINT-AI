@@ -1,140 +1,104 @@
 # Aegis OSINT AI
 
-A lightweight Windows-first OSINT investigation framework for defensive security research.
+A lightweight, modular, and extensible OSINT (Open Source Intelligence) investigation framework designed for rapid intelligence gathering and entity relationship mapping.
 
-## Features
+## 🚀 Key Features
 
-- **OSINT Search**: Australian ABN, domains, phone lookup, IP geolocation, company search
-- **New Zealand Support**: NZ company and domain lookups
-- **Custom Search**: DuckDuckGo, Bing, Google searches
-- **AI Analysis**: OpenRouter, OpenAI, Anthropic, Gemini, Nvidia integration
-- **Report Generation**: HTML, JSON, CSV, Markdown formats
-- **Simple Deployment**: One-click setup and run
+- **Modular Plugin Architecture**: Easily add new intelligence sources by implementing the `BasePlugin` interface.
+- **Entity Graph Backend**: Automatically extracts and maps relationships between discovered entities (domains, emails, IPs, etc.) using a SQLite-based relational graph.
+- **Automatic Investigation Timeline**: Every step of the investigation is logged, providing a clear audit trail of discovery.
+- **Professional Reporting**: Generate structured reports in Markdown, JSON, and HTML formats.
+- **AI-Powered Planning**: Uses LLMs to dynamically determine the most effective sequence of plugins for any given target.
+- **Centralized Management**: Manage all API keys and configuration through a unified web interface.
 
-## Requirements
+## 🛠️ Tech Stack
 
-- Windows 10/11
-- Python 3.10+ (download from python.org)
-- Internet connection for API calls
+- **Backend**: FastAPI (Python)
+- **Database**: SQLite (Relational Graph Implementation)
+- **Frontend**: Vanilla JavaScript, HTML5, CSS3 (SPA Architecture)
+- **AI Integration**: Support for OpenRouter, OpenAI, Anthropic, Gemini, and Nvidia.
 
-## Quick Start
+## 📂 Project Structure
 
-```cmd
-setup.bat    # Install everything
-run.bat      # Start the application
-```
-
-That's it! Open http://localhost:8000 in your browser.
-
-## Installation
-
-1. Double-click `setup.bat` or run from Command Prompt
-2. The script will:
-   - Check Python installation
-   - Create virtual environment (`.venv/`)
-   - Install Python dependencies
-   - Create configuration files
-   - Initialize the database
-
-## Configuration
-
-Edit `.env` to add your API keys:
-
-```env
-# AI Providers (OpenRouter recommended - has free models)
-OPENROUTER_API_KEY=sk-or-...
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-GEMINI_API_KEY=...
-NVIDIA_API_KEY=...
-```
-
-## Usage
-
-### OSINT Search
-- Enter an ABN (Australian Business Number)
-- Enter a domain name
-- Enter an Australian phone number
-- Enter the name of an Australian or NZ company
-- Enter an IP address for geolocation
-
-### AI Chat
-- Configure API keys in Settings
-- Select your preferred provider
-- Ask questions or request analysis
-
-### Reports
-- View previous searches
-- Generate reports in HTML, JSON, or Markdown format
-
-## Updating
-
-```cmd
-update.bat   # Pull latest changes, update dependencies
-```
-
-Your `.env` and database will be preserved.
-
-## Project Structure
-
-```
-Aegis-OSINT-AI/
+```text
+.
 ├── backend/
-│   ├── main.py       # FastAPI application
-│   ├── osint.py      # OSINT search functions
-│   ├── providers.py  # AI API clients
-│   └── report.py     # Report generation
-├── frontend/
-│   ├── index.html    # Main UI
-│   ├── style.css     # Dark theme styles
-│   └── app.js        # Frontend logic
+│   ├── engine.py          # Orchestration logic
+│   ├── main.py            # FastAPI application & endpoints
+│   ├── models.py          # Pydantic data models
+│   ├── planner.py         # AI-driven investigation planning
+│   ├── plugin_manager.py  # Plugin discovery and execution
+│   ├── report.py          # Modular report generation
+│   ├── storage.py         # Database abstraction layer
+│   └── plugins/           # OSINT plugin implementations
 ├── config/
-│   └── .env.example  # Configuration template
-├── data/
-│   └── aegis.db      # SQLite database (created on first run)
-├── reports/          # Generated reports directory
-├── setup.bat         # Installation script
-├── run.bat           # Startup script
-├── update.bat        # Update script
-├── requirements.txt  # Python dependencies
-└── README.md         # This file
+│   └── .env.example       # API key templates
+├── data/                  # SQLite database storage
+├── frontend/
+│   ├── app.js             # Frontend logic
+│   ├── index.html         # Main application shell
+│   └── style.css          # Application styling
+├── reports/               # Generated report storage
+└── requirements.txt       # Python dependencies
 ```
 
-## Supported OSINT Sources
+## ⚙️ Setup & Installation
 
-| Source | Type | Description |
-|--------|------|-------------|
-| ABR | Australian | Business Register lookup |
-| DNS-Google | Global | DNS records via Google DNS |
-| CertTransparency | Global | Subdomain enumeration |
-| ASIC | Australian | Company search |
-| IP-API | Global | IP geolocation |
-| NZ Companies Office | New Zealand | NZ company search |
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/steelai-bot/Aegis-OSINT-AI.git
+   cd Aegis-OSINT-AI
+   ```
 
-## AI Providers
+2. **Set up a virtual environment**:
+   ```bash
+   python -m venv .venv
+   # Windows
+   .venv\Scripts\activate
+   # Linux/macOS
+   source .venv/bin/activate
+   ```
 
-| Provider | Free Models | Notes |
-|----------|-------------|-------|
-| OpenRouter | Yes | Recommended for testing |
-| OpenAI | No | GPT models |
-| Anthropic | No | Claude models |
-| Gemini | Yes | Google's models |
-| Nvidia | No | Enterprise models |
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Troubleshooting
+4. **Configure API Keys**:
+   Copy the example configuration to a `.env` file and add your keys:
+   ```bash
+   cp config/.env.example .env
+   ```
 
-**Python not found**
-- Download Python from python.org
-- Ensure "Add to PATH" is checked during installation
+5. **Run the application**:
+   ```bash
+   python -m backend.main
+   ```
+   The application will be available at `http://localhost:8000`.
 
-**API calls failing**
-- Check your `.env` file has valid API keys
-- Verify internet connection
-- Check API provider status pages
+## 🧩 Developing Plugins
 
-**Database errors**
-- Delete `data/aegis.db` and restart (will recreate)
+To add a new plugin, create a new file in `backend/plugins/` that inherits from `BasePlugin`.
 
-## License
+```python
+from backend.plugins.base import BasePlugin
+from backend.models import PluginMetadata, PluginResponse, TargetType
 
-MIT License - See LICENSE file
+class MyNewPlugin(BasePlugin):
+    @property
+    def metadata(self) -> PluginMetadata:
+        return PluginMetadata(
+            name="my_plugin",
+            description="Does something cool",
+            supported_entity_types=[TargetType.DOMAIN],
+            tags=["new"]
+        )
+
+    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+        # Your logic here
+        return []
+```
+
+## 📄 License
+
+This project is licensed under the MIT License.
