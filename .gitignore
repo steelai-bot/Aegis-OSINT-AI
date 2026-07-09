@@ -39,4 +39,5 @@ node_modules/
 package-lock.json
 
 # Temporary editor directories
-.kilo/
+.kilo/data/test_engine.db  
+data/test_storage.db  

@@ -76,9 +76,10 @@ A lightweight, modular, and extensible OSINT (Open Source Intelligence) investig
    ```
    The application will be available at `http://localhost:8000`.
 
-## 🧩 Developing Plugins
+## 🧩 Developing Plugins (Plugin Development Guide)
 
 To add a new plugin, create a new file in `backend/plugins/` that inherits from `BasePlugin`.
+Your plugin must define `supported_authentication`. 
 
 ```python
 from backend.plugins.base import BasePlugin
@@ -91,6 +92,7 @@ class MyNewPlugin(BasePlugin):
             name="my_plugin",
             description="Does something cool",
             supported_entity_types=[TargetType.DOMAIN],
+            supported_authentication=["api_key"],
             tags=["new"]
         )
 
@@ -98,6 +100,45 @@ class MyNewPlugin(BasePlugin):
         # Your logic here
         return []
 ```
+
+## 🏗️ Architecture
+
+- **Backend**: FastAPI with SQLite for Entity Graph storage.
+- **ProviderManager**: Centralized credential storage and status tracking.
+- **InvestigationEngine**: Orchestrates plugin execution safely, isolating failures.
+- **PluginManager**: Validates and discovers plugins dynamically.
+
+## 🔌 Provider Management
+
+The Provider Management system abstracts `.env` file management. Users interact with the Provider UI to set API keys, Username/Passwords, or OAuth flows.
+Plugins MUST use `ProviderManager.get_credentials()` instead of reading `os.getenv` directly.
+
+## 🌍 Environment Variables
+
+Aegis creates `.env` automatically from `.env.example` if it doesn't exist.
+- `DATABASE`: Path to SQLite database.
+- `{PLUGIN_NAME}_API_KEY`: Secrets managed by Provider UI.
+
+## 📡 API Reference
+
+- `GET /api/providers`: List all providers.
+- `GET /api/providers/{provider}`: Get specific provider details.
+- `POST /api/providers/{provider}/configure`: Set credentials.
+- `POST /api/providers/{provider}/test`: Validate connection.
+- `DELETE /api/providers/{provider}`: Remove credentials.
+
+- `POST /api/search`: Start an investigation.
+- `GET /api/targets/{id}/timeline`: Retrieve investigation timeline.
+- `GET /api/targets/{id}/entities`: Retrieve extracted entities.
+
+## 🔍 Investigation Flow
+
+1. **Target Submission**: User enters query via `/api/search`.
+2. **Planning**: AI Planner determines necessary plugins.
+3. **Execution**: Investigation Engine runs plugins concurrently.
+4. **Extraction**: Raw data is parsed into Entities and Relationships.
+5. **Timeline**: Every step, error, and discovery is logged to the Timeline database.
+6. **Reporting**: Results are compiled into HTML/JSON/Markdown.
 
 ## 📄 License
 

@@ -30,6 +30,7 @@ class PluginMetadata(BaseModel):
     description: str = Field(..., description="Brief description of what the plugin does")
     supported_entity_types: List[TargetType] = Field(..., description="Types of targets this plugin can process")
     required_api_keys: List[str] = Field(default_factory=list, description="List of environment variable names for required API keys")
+    supported_authentication: List[str] = Field(default_factory=lambda: ["none"], description="Supported auth methods (e.g., api_key, oauth, username_password, session_cookie, none)")
     tags: List[str] = Field(default_factory=list, description="Tags for categorization (e.g., 'dns', 'passive')")
     execution_cost: float = Field(default=1.0, description="Relative weight/cost of execution")
     estimated_time: int = Field(default=5, description="Estimated execution time in seconds")

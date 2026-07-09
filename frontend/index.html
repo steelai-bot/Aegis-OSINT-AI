@@ -162,89 +162,44 @@
                 </div>
             </section>
 
-            <!-- Settings Page -->
+            <!-- Settings Page (Provider Management) -->
             <section class="page" id="page-settings">
                 <header class="page-header">
-                    <h2>Settings</h2>
-                    <p>Configure API keys and application preferences</p>
+                    <h2>Provider Manager</h2>
+                    <p>Configure plugins and AI models credentials</p>
                 </header>
                 <div class="settings-container">
-                    <div class="settings-section">
-                        <h3>AI Provider API Keys</h3>
-                        <div class="settings-grid">
-                            <div class="setting-item">
-                                <label>OpenRouter API Key</label>
-                                <input type="password" id="key-openrouter" placeholder="sk-or-..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>OpenAI API Key</label>
-                                <input type="password" id="key-openai" placeholder="sk-..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>Anthropic API Key</label>
-                                <input type="password" id="key-anthropic" placeholder="sk-ant-..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>Google Gemini API Key</label>
-                                <input type="password" id="key-gemini" placeholder="..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>Nvidia API Key</label>
-                                <input type="password" id="key-nvidia" placeholder="..." class="form-input">
-                            </div>
+                    <div id="provider-grid" class="plugins-grid">
+                        <div class="results-placeholder">
+                            <p>Loading providers...</p>
                         </div>
                     </div>
-                    <div class="settings-section">
-                        <h3>OSINT Provider API Keys</h3>
-                        <div class="settings-grid">
-                            <div class="setting-item">
-                                <label>VirusTotal API Key</label>
-                                <input type="password" id="key-virustotal" placeholder="..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>Shodan API Key</label>
-                                <input type="password" id="key-shodan" placeholder="..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>Hunter.io API Key</label>
-                                <input type="password" id="key-hunter" placeholder="..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>IntelX API Key</label>
-                                <input type="password" id="key-intelx" placeholder="..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>Censys API Key</label>
-                                <input type="password" id="key-censys" placeholder="..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>AbuseIPDB API Key</label>
-                                <input type="password" id="key-abuseipdb" placeholder="..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>URLScan API Key</label>
-                                <input type="password" id="key-urlscan" placeholder="..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>Google Search API Key</label>
-                                <input type="password" id="key-googlesearch" placeholder="..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>Google Search CX</label>
-                                <input type="password" id="key-googlecx" placeholder="..." class="form-input">
-                            </div>
-                            <div class="setting-item">
-                                <label>GitHub Token</label>
-                                <input type="password" id="key-github" placeholder="..." class="form-input">
-                            </div>
+                </div>
+
+                <!-- Provider Configuration Modal -->
+                <div id="provider-modal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <h3 id="modal-provider-name">Configure Provider</h3>
+                        <div id="modal-provider-desc" style="margin-bottom: 1rem; color: #aaa;"></div>
+                        <div id="modal-auth-container" class="form-group">
+                            <!-- Dynamically injected based on supported_authentication -->
                         </div>
+                        <div class="modal-actions" style="display: flex; gap: 1rem; margin-top: 1rem;">
+                            <button id="modal-save-btn" class="btn btn-primary">Save</button>
+                            <button id="modal-test-btn" class="btn btn-secondary">Test Connection</button>
+                            <button id="modal-disconnect-btn" class="btn btn-danger" style="background-color: #d9534f; color: white;">Disconnect</button>
+                            <button id="modal-cancel-btn" class="btn btn-secondary">Cancel</button>
+                        </div>
+                        <div id="modal-feedback" style="margin-top: 1rem;"></div>
                     </div>
-                    <button id="save-keys-btn" class="btn btn-primary">Save API Keys</button>
                 </div>
             </section>
         </main>
     </div>
 
+    <!-- vis-network for Graph Visualization -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    
     <script src="app.js"></script>
 </body>
 </html>

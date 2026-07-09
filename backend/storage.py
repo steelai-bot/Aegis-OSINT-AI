@@ -248,17 +248,3 @@ class SQLiteStorage(StorageInterface):
                     (target_id, provider, "osint_discovery", "info", confidence, json.dumps(item))
                 )
             conn.commit()
-</write_to_file>
-<task_progress>
-- [x] Read implementation_plan.md
-- [x] Step 1: Update models.py with Entity/Relationship/TimelineEvent
-- [x] Step 2: Create backend/storage.py (StorageInterface + SQLiteStorage)
-- [ ] Step 3: Refactor engine.py for storage, timeline, entities
-- [ ] Step 4: Create MVP plugins (email, github, username, google, metadata)
-- [ ] Step 5: Update planner.py templates
-- [ ] Step 6: Refactor report.py to modular sections
-- [ ] Step 7: Extend main.py endpoints and settings
-- [ ] Step 8: Update frontend (index.html, app.js, style.css)
-- [ ] Step 9: Update .env.example and README.md
-- [ ] Step 10: Verify build and test investigation cycle
-</task_progress>

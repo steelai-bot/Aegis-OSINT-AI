@@ -8,8 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
         relationships: [],
         timeline: [],
         plugins: [],
-        settings: {},
-        selectedInvestigationId: null
+        providers: [],
+        selectedInvestigationId: null,
+        currentProviderId: null
     };
 
     // --- DOM Elements ---
@@ -24,11 +25,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchQuery = document.getElementById('search-query');
     const searchType = document.getElementById('search-type');
     const searchResults = document.getElementById('search-results');
-    const reportsList = document.getElementById('reports-list');
-    const saveKeysBtn = document.getElementById('save-keys-btn');
     const pluginsGrid = document.getElementById('plugins-grid');
+    const providerGrid = document.getElementById('provider-grid');
     const resultsContent = document.getElementById('results-content');
     const tabBtns = document.querySelectorAll('.tab-btn');
+
+    // Modal elements
+    const providerModal = document.getElementById('provider-modal');
+    const modalProviderName = document.getElementById('modal-provider-name');
+    const modalProviderDesc = document.getElementById('modal-provider-desc');
+    const modalAuthContainer = document.getElementById('modal-auth-container');
+    const modalSaveBtn = document.getElementById('modal-save-btn');
+    const modalTestBtn = document.getElementById('modal-test-btn');
+    const modalDisconnectBtn = document.getElementById('modal-disconnect-btn');
+    const modalCancelBtn = document.getElementById('modal-cancel-btn');
+    const modalFeedback = document.getElementById('modal-feedback');
+
+    // --- Helper for API Fetching ---
+    async function apiFetch(url, options = {}) {
+        const resp = await fetch(url, options);
+        if (!resp.ok) {
+            let errorMsg = `HTTP Error ${resp.status}`;
+            try {
+                const errData = await resp.json();
+                if (errData.errors && errData.errors.length > 0) {
+                    errorMsg = errData.errors.join(', ');
+                }
+            } catch(e) {}
+            throw new Error(errorMsg);
+        }
+        const data = await resp.json();
+        if (data.success === false) {
+            throw new Error(data.errors.join(', '));
+        }
+        return data.data; // unwrap standardized response
+    }
 
     // --- Navigation ---
     navItems.forEach(item => {
@@ -50,14 +81,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (pageId === 'dashboard') updateDashboard();
         if (pageId === 'plugins') loadPlugins();
-        if (pageId === 'settings') loadSettings();
+        if (pageId === 'settings') loadProviders();
     }
 
     // --- Dashboard ---
     async function updateDashboard() {
         try {
-            const resp = await fetch('/api/targets');
-            const targets = await resp.json();
+            const targets = await apiFetch('/api/targets');
             state.investigations = targets;
             
             document.getElementById('stat-investigations').textContent = targets.length;
@@ -92,18 +122,12 @@ document.addEventListener('DOMContentLoaded', () => {
         searchResults.innerHTML = '<div class="loading-spinner"></div>';
 
         try {
-            const resp = await fetch('/api/search', {
+            const result = await apiFetch('/api/search', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query, target_type: type })
             });
-            const result = await resp.json();
 
-            if (result.error) {
-                throw new Error(result.error);
-            }
-
-            // Update local state
             state.selectedInvestigationId = result.target_id;
             state.findings = result.findings || [];
             state.entities = result.entities || [];
@@ -115,19 +139,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="success-icon">✓</div>
                     <h3>Investigation Complete</h3>
                     <p>${result.findings_count} findings discovered</p>
-                    <button class="btn btn-primary" onclick="viewResults(${result.target_id})">View Results</button>
+                    <button class="btn btn-primary" onclick="viewInvestigation(${result.target_id})">View Results</button>
                 </div>
             `;
         } catch (e) {
             searchResults.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
         } finally {
             searchBtn.disabled = false;
-            searchBtn.textContent = 'Search';
+            searchBtn.textContent = 'Start Investigation';
         }
     });
 
     // --- Results ---
-    window.viewResults = async (targetId) => {
+    window.viewInvestigation = async (targetId) => {
         state.selectedInvestigationId = targetId;
         navigateTo('results');
         await loadResults(targetId);
@@ -136,23 +160,20 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadResults(targetId) {
         resultsContent.innerHTML = '<div class="loading-spinner"></div>';
         try {
-            // We already have some data from the search response, but let's refresh to be sure
-            const [findingsResp, entitiesResp, relsResp, timelineResp] = await Promise.all([
-                fetch(`/api/findings?target_id=${targetId}`).then(r => r.json()),
-                fetch(`/api/targets/${targetId}/entities`).then(r => r.json()),
-                fetch(`/api/targets/${target_id}/relationships`).then(r => r.json()),
-                fetch(`/api/targets/${target_id}/timeline`).then(r => r.json())
+            const [findings, entities, rels, timeline] = await Promise.all([
+                apiFetch(`/api/findings?target_id=${targetId}`),
+                apiFetch(`/api/targets/${targetId}/entities`),
+                apiFetch(`/api/targets/${targetId}/relationships`),
+                apiFetch(`/api/targets/${targetId}/timeline`)
             ]);
 
-            state.findings = findingsResp;
-            state.entities = entitiesResp;
-            state.relationships = relsResp;
-            state.timeline = timelineResp;
+            state.findings = findings;
+            state.entities = entities;
+            state.relationships = rels;
+            state.timeline = timeline;
 
-            renderFindings();
-            renderEntities();
-            renderTimeline();
-            renderGraph();
+            // Default to findings tab
+            document.querySelector('.tab-btn[data-tab="findings"]').click();
         } catch (e) {
             resultsContent.innerHTML = `<div class="error-msg">Failed to load results: ${e.message}</div>`;
         }
@@ -221,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="timeline-marker"></div>
                     <div class="timeline-content">
                         <div class="timeline-time">${new Date(t.timestamp).toLocaleString()}</div>
-                        <div class="timeline-desc">${t.description}</div>
+                        <div class="timeline-desc ${t.severity === 'error' ? 'error-text' : ''}">${t.description}</div>
                     </div>
                 `;
                 container.appendChild(div);
@@ -232,17 +253,53 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderGraph() {
-        resultsContent.innerHTML = `
-            <div class="graph-placeholder">
-                <p>Graph visualization is coming soon in the next update.</p>
-                <div class="graph-mockup">
-                    <div class="node" style="top: 50%; left: 50%;">Target</div>
-                    ${state.entities.slice(0, 5).map((e, i) => `
-                        <div class="node" style="top: ${20 + i*15}%; left: ${20 + i*10}%;">${e.value}</div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
+        resultsContent.innerHTML = '<div id="vis-network" style="width: 100%; height: 500px; border: 1px solid #333; border-radius: 8px;"></div>';
+        
+        if (state.entities.length === 0) {
+            resultsContent.innerHTML += '<p class="empty-msg">No data for graph visualization.</p>';
+            return;
+        }
+
+        const nodes = state.entities.map(e => ({
+            id: e.id,
+            label: e.value,
+            group: e.type,
+            title: e.type
+        }));
+
+        const edges = state.relationships.map(r => ({
+            from: r.source_entity_id,
+            to: r.target_entity_id,
+            label: r.relationship_type,
+            arrows: 'to'
+        }));
+
+        const container = document.getElementById('vis-network');
+        const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+        const options = {
+            nodes: {
+                shape: 'dot',
+                size: 16,
+                font: { size: 12, color: '#e0e0e0' },
+                borderWidth: 2
+            },
+            edges: {
+                width: 2,
+                font: { size: 10, align: 'middle', color: '#aaa' }
+            },
+            groups: {
+                domain: { color: { background: '#4CAF50', border: '#388E3C' } },
+                email: { color: { background: '#2196F3', border: '#1976D2' } },
+                ip: { color: { background: '#F44336', border: '#D32F2F' } },
+                company: { color: { background: '#FF9800', border: '#F57C00' } }
+            },
+            physics: {
+                stabilization: false,
+                barnesHut: { gravitationalConstant: -2000, springConstant: 0.04, springLength: 95 }
+            }
+        };
+
+        new vis.Network(container, data, options);
     }
 
     // Tabs
@@ -262,12 +319,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Plugins ---
     async function loadPlugins() {
         try {
-            const resp = await fetch('/api/plugins');
-            const plugins = await resp.json();
+            const plugins = await apiFetch('/api/plugins');
             state.plugins = plugins;
             
             pluginsGrid.innerHTML = plugins.map(p => `
-                <div class="plugin-card">
+                <div class="plugin-card ${p.status === 'disabled' ? 'disabled' : ''}">
                     <div class="plugin-name">${p.name}</div>
                     <div class="plugin-desc">${p.description}</div>
                     <div class="plugin-tags">
@@ -280,106 +336,175 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Settings ---
-    async function loadSettings() {
+    // --- Provider Management ---
+    async function loadProviders() {
         try {
-            const resp = await fetch('/api/settings');
-            state.settings = await resp.json();
+            const providers = await apiFetch('/api/providers');
+            state.providers = providers;
             
-            // Map settings to inputs
-            const mapping = {
-                'openrouter': 'key-openrouter',
-                'openai': 'key-openai',
-                'anthropic': 'key-anthropic',
-                'gemini': 'key-gemini',
-                'nvidia': 'key-nvidia',
-                'virustotal': 'key-virustotal',
-                'shodan': 'key-shodan',
-                'hunter': 'key-hunter',
-                'intelx': 'key-intelx',
-                'censys': 'key-censys',
-                'abuseipdb': 'key-abuseipdb',
-                'urlscan': 'key-urlscan',
-                'googlesearch': 'key-googlesearch',
-                'googlecx': 'key-googlecx',
-                'github': 'key-github'
-            };
-
-            for (const [key, id] of Object.entries(mapping)) {
-                const el = document.getElementById(id);
-                if (el) el.value = state.settings[key.toUpperCase()] || '';
-            }
+        providerGrid.innerHTML = providers.map(p => `
+            <div class="plugin-card provider-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="provider-icon">🔌</span>
+                        <div class="plugin-name">${p.name}</div>
+                    </div>
+                    <span class="tag" style="background-color: ${p.status === 'connected' ? '#4CAF50' : '#f44336'};">${p.status.toUpperCase()}</span>
+                </div>
+                <div class="plugin-desc" style="margin-bottom: 0.5rem;">${p.description}</div>
+                <div class="provider-meta" style="font-size: 0.8rem; color: #888; margin-bottom: 1rem;">
+                    <div><strong>Auth:</strong> ${p.supported_authentication.join(', ')}</div>
+                    <div><strong>Connection:</strong> ${p.status === 'connected' ? 'Active' : 'Disconnected'}</div>
+                    <div><strong>Last Validation:</strong> ${new Date().toLocaleDateString()}</div>
+                </div>
+                <div class="provider-actions" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" style="flex: 1;" onclick="openProviderModal('${p.id}')">Configure</button>
+                    <button class="btn btn-primary" style="flex: 1;" onclick="testProvider('${p.id}')">Test</button>
+                    <button class="btn btn-danger" style="flex: 1;" onclick="disconnectProvider('${p.id}')">Disconnect</button>
+                    <a href="https://example.com/docs/${p.id}" target="_blank" class="btn btn-secondary" style="flex: 1; text-align: center; text-decoration: none;">Docs</a>
+                </div>
+            </div>
+        `).join('');
         } catch (e) {
-            console.error('Failed to load settings', e);
+            providerGrid.innerHTML = `<p class="error-msg">Failed to load providers: ${e.message}</p>`;
         }
     }
 
-    saveKeysBtn.addEventListener('click', async () => {
-        const payload = {};
-        const mapping = {
-            'openrouter': 'key-openrouter',
-            'openai': 'key-openai',
-            'anthropic': 'key-anthropic',
-            'gemini': 'key-gemini',
-            'nvidia': 'key-nvidia',
-            'virustotal': 'key-virustotal',
-            'shodan': 'key-shodan',
-            'hunter': 'key-hunter',
-            'intelx': 'key-intelx',
-            'censys': 'key-censys',
-            'abuseipdb': 'key-abuseipdb',
-            'urlscan': 'key-urlscan',
-            'googlesearch': 'key-googlesearch',
-            'googlecx': 'key-googlecx',
-            'github': 'key-github'
-        };
+    window.openProviderModal = (id) => {
+        const p = state.providers.find(x => x.id === id);
+        if (!p) return;
 
-        for (const [key, id] of Object.entries(mapping)) {
-            const el = document.getElementById(id);
-            if (el && el.value) {
-                payload[key] = el.value;
-            }
+        state.currentProviderId = p.id;
+        modalProviderName.textContent = p.name;
+        modalProviderDesc.textContent = p.description;
+        modalFeedback.innerHTML = '';
+        modalFeedback.className = '';
+        
+        let html = '';
+        if (p.supported_authentication.includes('api_key')) {
+            html += `
+                <label>API Key</label>
+                <input type="password" id="modal-api-key" placeholder="Enter API Key" class="form-input">
+            `;
+        } else if (p.supported_authentication.includes('username_password')) {
+            html += `
+                <label>Username</label>
+                <input type="text" id="modal-username" placeholder="Username" class="form-input" style="margin-bottom: 0.5rem;">
+                <label>Password</label>
+                <input type="password" id="modal-password" placeholder="Password" class="form-input">
+            `;
+        } else if (p.supported_authentication.includes('oauth')) {
+            html += `<p>OAuth configuration requires backend redirect flow (Not Implemented in MVP).</p>`;
+        } else {
+            html += `<p>No configuration needed.</p>`;
+        }
+        
+        modalAuthContainer.innerHTML = html;
+        providerModal.style.display = 'flex';
+    };
+
+    modalCancelBtn.addEventListener('click', () => {
+        providerModal.style.display = 'none';
+    });
+
+    modalSaveBtn.addEventListener('click', async () => {
+        const id = state.currentProviderId;
+        const p = state.providers.find(x => x.id === id);
+        
+        const payload = {};
+        if (p.supported_authentication.includes('api_key')) {
+            const val = document.getElementById('modal-api-key').value;
+            if (val) payload['api_key'] = val;
         }
 
         try {
-            const resp = await fetch('/api/settings', {
+            const res = await apiFetch(`/api/providers/${id}/configure`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            const result = await resp.json();
-            if (result.status === 'success') {
-                alert('Settings saved successfully!');
-            }
+            showModalFeedback(res.message, 'success');
+            await loadProviders(); // refresh
         } catch (e) {
-            alert('Error saving settings: ' + e.message);
+            showModalFeedback(e.message, 'error');
         }
     });
+
+    modalTestBtn.addEventListener('click', async () => {
+        const id = state.currentProviderId;
+        try {
+            const res = await apiFetch(`/api/providers/${id}/test`, { method: 'POST' });
+            showModalFeedback(res.message, 'success');
+        } catch (e) {
+            showModalFeedback(e.message, 'error');
+        }
+    });
+
+    modalDisconnectBtn.addEventListener('click', async () => {
+        const id = state.currentProviderId;
+        try {
+            const res = await apiFetch(`/api/providers/${id}`, { method: 'DELETE' });
+            showModalFeedback(res.message, 'success');
+            await loadProviders(); // refresh
+        } catch (e) {
+            showModalFeedback(e.message, 'error');
+        }
+    });
+
+    window.testProvider = async (id) => {
+        try {
+            const res = await apiFetch(`/api/providers/${id}/test`, { method: 'POST' });
+            alert(res.message || "Test successful!");
+            await loadProviders();
+        } catch (e) {
+            alert(e.message || "Test failed.");
+        }
+    };
+
+    window.disconnectProvider = async (id) => {
+        if (!confirm('Are you sure you want to disconnect this provider?')) return;
+        try {
+            const res = await apiFetch(`/api/providers/${id}`, { method: 'DELETE' });
+            alert(res.message || "Disconnected!");
+            await loadProviders();
+        } catch (e) {
+            alert(e.message || "Failed to disconnect.");
+        }
+    };
+
+    function showModalFeedback(msg, type) {
+        modalFeedback.textContent = msg;
+        modalFeedback.className = type === 'success' ? 'success-text' : 'error-text';
+        if (type === 'success') modalFeedback.style.color = '#4CAF50';
+        if (type === 'error') modalFeedback.style.color = '#F44336';
+    }
 
     // --- Chat ---
-    chatSend.addEventListener('click', async () => {
-        const message = chatInput.value.trim();
-        if (!message) return;
+    // (Optional for MVP, disabled if not implemented properly, but I'll update it to use apiFetch)
+    if (chatSend) {
+        chatSend.addEventListener('click', async () => {
+            const message = chatInput.value.trim();
+            if (!message) return;
 
-        appendChatMessage('user', message);
-        chatInput.value = '';
+            appendChatMessage('user', message);
+            chatInput.value = '';
 
-        try {
-            const resp = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message,
-                    provider: chatProvider.value,
-                    model: chatModel.value
-                })
-            });
-            const result = await resp.json();
-            appendChatMessage('assistant', result.response);
-        } catch (e) {
-            appendChatMessage('assistant', 'Error: ' + e.message);
-        }
-    });
+            try {
+                const result = await apiFetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message,
+                        provider: chatProvider.value,
+                        model: chatModel.value
+                    })
+                });
+                appendChatMessage('assistant', result.response);
+            } catch (e) {
+                appendChatMessage('assistant', 'Error: ' + e.message);
+            }
+        });
+    }
 
     function appendChatMessage(role, text) {
         const div = document.createElement('div');
@@ -395,23 +520,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialization ---
     updateDashboard();
     loadPlugins();
-    loadSettings();
 });
-
-// Global helper for dashboard clicks
-window.viewInvestigation = async (id) => {
-    // This is a bit hacky for a single-page app without a router, 
-    // but works for our MVP structure.
-    // We'll simulate a click on the 'Investigations' nav item and then the result.
-    document.querySelector('[data-page="investigations"]').click();
-    // In a real app, we'd have a dedicated view for a single investigation.
-    // For now, we'll just show the results page.
-    // We need to trigger the search results view.
-    // This is a limitation of the current simple architecture.
-    alert('Investigation details view coming soon. Use the Search page to start new ones.');
-};
-
-window.viewResults = async (id) => {
-    document.querySelector('[data-page="results"]').click();
-    // We'll rely on the state being updated by the search function.
-};

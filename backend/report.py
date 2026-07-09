@@ -175,8 +175,38 @@ class ReportGenerator:
         return "\n".join(lines)
 
     def _assemble_html(self, target, report_data, risk) -> str:
-        # Simplified HTML assembly for MVP
-        return f"<html><body><h1>Report for {target.get('query')}</h1><p>Risk Score: {risk.get('score')}</p></body></html>"
+        html = [
+            "<html>",
+            "<head>",
+            f"<title>Report for {target.get('query')}</title>",
+            "<style>body{font-family:sans-serif; margin:20px; line-height:1.6;} h1,h2{color:#333;} .risk{font-weight:bold;}</style>",
+            "</head>",
+            "<body>",
+            f"<h1>Report for {target.get('query')}</h1>",
+            f"<p class='risk'>Risk Grade: {risk.get('grade')} | Score: {risk.get('score')}/100</p>"
+        ]
+        
+        exec_s = report_data["executive"]
+        html.append("<h2>Executive Summary</h2>")
+        html.append(f"<p>{exec_s['summary_text']}</p>")
+        
+        html.append("<h2>Key Findings</h2><ul>")
+        for f in report_data["key_findings"]:
+            html.append(f"<li><b>{f.get('source')}</b>: {f.get('category')} ({f.get('severity')})</li>")
+        html.append("</ul>")
+        
+        html.append("<h2>Timeline</h2><ul>")
+        for t in report_data["timeline"]:
+            html.append(f"<li>{t.get('timestamp', 'N/A')}: {t.get('description')}</li>")
+        html.append("</ul>")
+        
+        html.append("<h2>Entity Relationships</h2><ul>")
+        for r in report_data["relationships"]:
+            html.append(f"<li>Entity {r.get('source_entity_id')} -> {r.get('relationship_type')} -> Entity {r.get('target_entity_id')}</li>")
+        html.append("</ul>")
+        
+        html.append("</body></html>")
+        return "\n".join(html)
 
     # --- Helpers ---
 

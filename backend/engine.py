@@ -67,43 +67,53 @@ class InvestigationEngine:
                     description=f"Plugin {plugin_name} started"
                 ))
                 
-                results = await self.plugin_manager.execute_plugin(plugin_name, query, target_type)
-                
-                for res in results:
-                    all_results.append(res)
-                    self.storage.save_finding(target_id, res.provider, res.confidence, res.evidence)
+                try:
+                    results = await self.plugin_manager.execute_plugin(plugin_name, query, target_type)
                     
-                    # Extract entities and relationships
-                    entities = self.extract_entities(res, target_id)
-                    saved_entities = []
-                    for entity in entities:
-                        entity_id = self.storage.save_entity(entity)
-                        entity.id = entity_id
-                        saved_entities.append(entity)
-                        self.storage.log_timeline_event(TimelineEvent(
-                            target_id=target_id,
-                            event_type=TimelineEventType.ENTITY_DISCOVERED,
-                            plugin=res.provider,
-                            entity_id=entity_id,
-                            description=f"Entity discovered: {entity.type.value} = {entity.value}"
-                        ))
+                    for res in results:
+                        all_results.append(res)
+                        self.storage.save_finding(target_id, res.provider, res.confidence, res.evidence)
+                        
+                        # Extract entities and relationships
+                        entities = self.extract_entities(res, target_id)
+                        saved_entities = []
+                        for entity in entities:
+                            entity_id = self.storage.save_entity(entity)
+                            entity.id = entity_id
+                            saved_entities.append(entity)
+                            self.storage.log_timeline_event(TimelineEvent(
+                                target_id=target_id,
+                                event_type=TimelineEventType.ENTITY_DISCOVERED,
+                                plugin=res.provider,
+                                entity_id=entity_id,
+                                description=f"Entity discovered: {entity.type.value} = {entity.value}"
+                            ))
+                        
+                        relationships = self.build_relationships(saved_entities, res.provider)
+                        for rel in relationships:
+                            self.storage.save_relationship(rel)
+                            self.storage.log_timeline_event(TimelineEvent(
+                                target_id=target_id,
+                                event_type=TimelineEventType.RELATIONSHIP_DISCOVERED,
+                                plugin=res.provider,
+                                description=f"Relationship: {rel.relationship_type.value}"
+                            ))
                     
-                    relationships = self.build_relationships(saved_entities, res.provider)
-                    for rel in relationships:
-                        self.storage.save_relationship(rel)
-                        self.storage.log_timeline_event(TimelineEvent(
-                            target_id=target_id,
-                            event_type=TimelineEventType.RELATIONSHIP_DISCOVERED,
-                            plugin=res.provider,
-                            description=f"Relationship: {rel.relationship_type.value}"
-                        ))
-                
-                self.storage.log_timeline_event(TimelineEvent(
-                    target_id=target_id,
-                    event_type=TimelineEventType.PLUGIN_COMPLETED,
-                    plugin=plugin_name,
-                    description=f"Plugin {plugin_name} completed"
-                ))
+                    self.storage.log_timeline_event(TimelineEvent(
+                        target_id=target_id,
+                        event_type=TimelineEventType.PLUGIN_COMPLETED,
+                        plugin=plugin_name,
+                        description=f"Plugin {plugin_name} completed"
+                    ))
+                except Exception as plugin_exc:
+                    logger.error(f"Plugin {plugin_name} failed: {plugin_exc}")
+                    self.storage.log_timeline_event(TimelineEvent(
+                        target_id=target_id,
+                        event_type=TimelineEventType.ERROR,
+                        plugin=plugin_name,
+                        severity="error",
+                        description=f"Plugin {plugin_name} failed: {str(plugin_exc)}"
+                    ))
             
             # 3. Mark as completed
             self.storage.update_target_status(target_id, InvestigationStatus.COMPLETED.value)
@@ -215,18 +225,3 @@ class InvestigationEngine:
                     ))
         
         return relationships
-</write_to_file>
-<task_progress>
-- [x] Read implementation_plan.md
-- [x] Step 1: Update models.py with Entity/Relationship/TimelineEvent
-- [x] Step 2: Create backend/storage.py (StorageInterface + SQLiteStorage)
-- [x] Step 3: Refactor engine.py for storage, timeline, entities
-- [ ] Step 4: Create MVP plugins (email, github, username, google, metadata)
-- [ ] Step 5: Update planner.py templates
-- [ ] Step 6: Refactor report.py to modular sections
-- [ ] Step 7: Extend main.py endpoints and settings
-- [ ] Step 8: Update frontend (index.html, app.js, style.css)
-- [ ] Step 9: Update .env.example and README.md
-- [ ] Step 10: Verify build and test investigation cycle
-</task_progress>
-</write_file>
