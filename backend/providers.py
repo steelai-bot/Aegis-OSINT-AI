@@ -102,16 +102,30 @@ class GeminiProvider(AIProvider):
 
 class NvidiaProvider(AIProvider):
     async def chat(self, prompt: str, model: str) -> AIResponse:
-        url = "https://infer.nvidia.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {self.api_key}"}
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Accept": "application/json"
+        }
         payload = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}]
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 8192,
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "chat_template_kwargs": {"thinking_mode": "disabled"}
         }
         async with httpx.AsyncClient() as client:
             resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
             resp.raise_for_status()
             data = resp.json()
+            # Handle empty choices (model not provisioned for account)
+            if not data.get("choices"):
+                return AIResponse(
+                    content=f"NVIDIA API returned empty response. The model '{model}' may not be provisioned for this account.",
+                    provider="nvidia",
+                    model=model
+                )
             return AIResponse(
                 content=data["choices"][0]["message"]["content"],
                 provider="nvidia",

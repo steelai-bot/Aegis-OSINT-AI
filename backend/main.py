@@ -4,13 +4,19 @@ Lightweight Windows-first OSINT investigation framework
 """
 
 import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import sqlite3
 import json
 import httpx
+
+# Load environment variables from .env
+load_dotenv(".env")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -102,7 +108,11 @@ class ReportRequest(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"name": "Aegis OSINT AI", "version": "1.0.0", "status": "running"}
+    return FileResponse("frontend/index.html")
+
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
+# Also mount the frontend directory at the root for assets like app.js and style.css
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 @app.get("/health")
 async def health():
@@ -275,15 +285,34 @@ async def get_report(report_id: int):
 
 @app.post("/api/chat")
 async def chat(payload: Dict[str, Any]):
-    """Simple chat endpoint using AI providers."""
+    """Chat endpoint using AI providers."""
+    from backend.providers import AIProviderFactory, AIResponse
+    
     message = payload.get("message", "")
     provider = payload.get("provider", "openrouter")
+    model = payload.get("model", "gpt-3.5-turbo")
     
-    # For now, return a placeholder response
-    return {
-        "response": f"Received your message via {provider}: {message[:100]}... [Full AI integration coming soon]",
-        "provider": provider
-    }
+    provider_inst = AIProviderFactory.get_provider(provider)
+    if not provider_inst:
+        return {
+            "response": f"'{provider}' API key not configured. Please set {provider.upper()}_API_KEY in .env",
+            "provider": provider,
+            "error": "no_api_key"
+        }
+    
+    try:
+        ai_response = await provider_inst.chat(message, model)
+        return {
+            "response": ai_response.content,
+            "provider": provider,
+            "model": model
+        }
+    except Exception as e:
+        return {
+            "response": f"Error calling {provider}: {str(e)}",
+            "provider": provider,
+            "error": str(e)
+        }
 
 if __name__ == "__main__":
     import uvicorn
