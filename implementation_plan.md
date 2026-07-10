@@ -1,6 +1,21 @@
 # Implementation Plan - COMPLETED
 
-## Status: ✅ All Phases Complete
+## Status: ✅ All Phases Complete + Phase 2 (Censys + Scheduled Scans + PDF)
+
+## Phase 2: Censys + Scheduled Scans + PDF Export ✅
+- Added `CensysPlugin` (`backend/plugins/censys_plugin.py`) – supports IP/Domain with `CENSYS_API_ID` + `CENSYS_API_SECRET`
+- Added PDF report generation in `ReportGenerator` using ReportLab (`format="pdf"`)
+- Implemented **Scheduled Scans** using APScheduler:
+  - New DB table `scheduled_scans`
+  - New Pydantic models: `ScheduleCreate`, `ScheduleResponse`
+  - New endpoints:
+    - `POST /api/schedules` – create scheduled scan (cron expression)
+    - `GET /api/schedules` – list all scheduled scans
+    - `DELETE /api/schedules/{id}` – delete scheduled scan
+  - Automatic job execution + `last_run` tracking
+- Updated `requirements.txt` with `reportlab` and `apscheduler`
+- Updated `README.md` with new features
+- All changes committed and pushed to `arena/019f4b6d-aegis-osint-ai` branch
 
 ## Phase 1: Frontend Migration to React + TypeScript + Vite + Tailwind ✅
 - Migrated from vanilla JS/CSS to React 18 + TypeScript + Vite + Tailwind CSS v4

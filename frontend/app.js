@@ -82,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pageId === 'dashboard') updateDashboard();
         if (pageId === 'plugins') loadPlugins();
         if (pageId === 'settings') loadProviders();
+        if (pageId === 'schedules') loadSchedules();
     }
 
     // --- Dashboard ---
@@ -515,6 +516,64 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         chatMessages.appendChild(div);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // --- Scheduled Scans (Phase 2) ---
+    const scheduleCreateBtn = document.getElementById('schedule-create-btn');
+    if (scheduleCreateBtn) {
+        scheduleCreateBtn.addEventListener('click', async () => {
+            const query = document.getElementById('schedule-query').value.trim();
+            const type = document.getElementById('schedule-type').value;
+            const cron = document.getElementById('schedule-cron').value.trim();
+            if (!query || !cron) return alert('Query and cron are required');
+
+            try {
+                await apiFetch('/api/schedules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, target_type: type, schedule: cron })
+                });
+                alert('Schedule created successfully!');
+                loadSchedules();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+    }
+
+    window.deleteSchedule = async (id) => {
+        if (!confirm('Delete this scheduled scan?')) return;
+        try {
+            await apiFetch(`/api/schedules/${id}`, { method: 'DELETE' });
+            loadSchedules();
+        } catch (e) {
+            alert(e.message);
+        }
+    };
+
+    async function loadSchedules() {
+        const container = document.getElementById('schedules-list');
+        if (!container) return;
+        try {
+            const schedules = await apiFetch('/api/schedules');
+            if (schedules.length === 0) {
+                container.innerHTML = '<p class="empty-msg">No scheduled scans yet.</p>';
+                return;
+            }
+            container.innerHTML = schedules.map(s => `
+                <div class="recent-item">
+                    <div class="recent-info">
+                        <div class="recent-query">${s.query}</div>
+                        <div class="recent-meta">${s.schedule} • ${s.enabled ? 'Active' : 'Disabled'}</div>
+                    </div>
+                    <div>
+                        <button class="btn btn-danger btn-sm" onclick="deleteSchedule(${s.id})">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            container.innerHTML = `<p class="error-msg">Failed to load schedules: ${e.message}</p>`;
+        }
     }
 
     // --- Initialization ---
