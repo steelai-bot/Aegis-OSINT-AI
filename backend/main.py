@@ -160,6 +160,11 @@ class SearchRequest(BaseModel):
     target_type: Optional[str] = "auto"
 
 
+class BulkSearchRequest(BaseModel):
+    queries: List[str] = Field(..., min_items=1, max_items=50)
+    target_type: Optional[str] = "auto"
+
+
 class ReportRequest(BaseModel):
     target_id: int = Field(..., gt=0)
     format: str = "html"
@@ -340,6 +345,27 @@ async def list_targets():
     
     targets = [{"id": r[0], "query": r[1], "target_type": r[2], "status": r[3], "created_at": r[4]} for r in rows]
     return format_response(targets)
+
+
+@app.post("/api/search/bulk")
+@limiter.limit("3/minute")
+async def bulk_search(payload: BulkSearchRequest):
+    """Bulk investigation endpoint - processes multiple queries."""
+    results = []
+    
+    for query in payload.queries:
+        try:
+            # Reuse the same logic as single search
+            single_payload = SearchRequest(query=query, target_type=payload.target_type)
+            result = await search(single_payload)
+            results.append(result)
+        except Exception as e:
+            results.append(format_response(success=False, errors=[str(e)]))
+    
+    return format_response({
+        "total_queries": len(payload.queries),
+        "results": results
+    })
 
 
 @app.post("/api/search")
