@@ -34,9 +34,10 @@ data/aegis.db
 .idea/
 *.swp
 
-# Node (legacy)
+# Node / Frontend
 node_modules/
 package-lock.json
+frontend_dist/
 
 # Temporary editor directories
 .kilo/data/test_engine.db  

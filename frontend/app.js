@@ -41,6 +41,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalCancelBtn = document.getElementById('modal-cancel-btn');
     const modalFeedback = document.getElementById('modal-feedback');
 
+    // --- XSS Prevention: Escape HTML in user-controlled data ---
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(String(str)));
+        return div.innerHTML;
+    }
+
+    function escapeJson(obj) {
+        return escapeHtml(JSON.stringify(obj, null, 2));
+    }
+
+    // --- Toast Notification System ---
+    function showToast(message, type = 'info') {
+        const existing = document.querySelector('.toast-container');
+        let container = existing;
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'toast-container';
+            document.body.appendChild(container);
+        }
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add('toast-fade');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
     // --- Helper for API Fetching ---
     async function apiFetch(url, options = {}) {
         const resp = await fetch(url, options);
@@ -51,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (errData.errors && errData.errors.length > 0) {
                     errorMsg = errData.errors.join(', ');
                 }
-            } catch(e) {}
+            } catch (e) { }
             throw new Error(errorMsg);
         }
         const data = await resp.json();
@@ -78,10 +109,11 @@ document.addEventListener('DOMContentLoaded', () => {
         pages.forEach(page => {
             page.classList.toggle('active', page.id === `page-${pageId}`);
         });
-        
+
         if (pageId === 'dashboard') updateDashboard();
         if (pageId === 'plugins') loadPlugins();
         if (pageId === 'settings') loadProviders();
+        if (pageId === 'chat') { /* chat is always ready */ }
     }
 
     // --- Dashboard ---
@@ -89,9 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const targets = await apiFetch('/api/targets');
             state.investigations = targets;
-            
+
             document.getElementById('stat-investigations').textContent = targets.length;
-            
+
             const recentList = document.getElementById('recent-investigations');
             if (targets.length === 0) {
                 recentList.innerHTML = '<p class="empty-msg">No recent investigations</p>';
@@ -99,10 +131,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 recentList.innerHTML = targets.slice(0, 5).map(t => `
                     <div class="recent-item" onclick="viewInvestigation(${t.id})">
                         <div class="recent-info">
-                            <div class="recent-query">${t.query}</div>
-                            <div class="recent-meta">${t.target_type} • ${t.status}</div>
+                            <div class="recent-query">${escapeHtml(t.query)}</div>
+                            <div class="recent-meta">${escapeHtml(t.target_type)} • ${escapeHtml(t.status)}</div>
                         </div>
-                        <div class="recent-date">${new Date(t.created_at).toLocaleDateString()}</div>
+                        <div class="recent-date">${escapeHtml(new Date(t.created_at).toLocaleDateString())}</div>
                     </div>
                 `).join('');
             }
@@ -138,12 +170,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="search-success">
                     <div class="success-icon">✓</div>
                     <h3>Investigation Complete</h3>
-                    <p>${result.findings_count} findings discovered</p>
+                    <p>${escapeHtml(result.findings_count)} findings discovered</p>
                     <button class="btn btn-primary" onclick="viewInvestigation(${result.target_id})">View Results</button>
                 </div>
             `;
         } catch (e) {
-            searchResults.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+            searchResults.innerHTML = `<div class="error-msg">Error: ${escapeHtml(e.message)}</div>`;
         } finally {
             searchBtn.disabled = false;
             searchBtn.textContent = 'Start Investigation';
@@ -175,14 +207,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Default to findings tab
             document.querySelector('.tab-btn[data-tab="findings"]').click();
         } catch (e) {
-            resultsContent.innerHTML = `<div class="error-msg">Failed to load results: ${e.message}</div>`;
+            resultsContent.innerHTML = `<div class="error-msg">Failed to load results: ${escapeHtml(e.message)}</div>`;
         }
     }
 
     function renderFindings() {
         const container = document.createElement('div');
         container.className = 'findings-list';
-        
+
         if (state.findings.length === 0) {
             container.innerHTML = '<p class="empty-msg">No findings found for this investigation.</p>';
         } else {
@@ -191,12 +223,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.className = `finding-card severity-${f.severity}`;
                 div.innerHTML = `
                     <div class="finding-header">
-                        <span class="finding-source">${f.source}</span>
-                        <span class="finding-category">${f.category}</span>
-                        <span class="finding-confidence">${(f.confidence * 100).toFixed(0)}%</span>
+                        <span class="finding-source">${escapeHtml(f.source)}</span>
+                        <span class="finding-category">${escapeHtml(f.category)}</span>
+                        <span class="finding-confidence">${escapeHtml((f.confidence * 100).toFixed(0))}%</span>
                     </div>
                     <div class="finding-body">
-                        <pre>${JSON.stringify(f.data, null, 2)}</pre>
+                        <pre>${escapeJson(f.data)}</pre>
                     </div>
                 `;
                 container.appendChild(div);
@@ -209,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderEntities() {
         const container = document.createElement('div');
         container.className = 'entities-grid';
-        
+
         if (state.entities.length === 0) {
             container.innerHTML = '<p class="empty-msg">No entities discovered.</p>';
         } else {
@@ -217,9 +249,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const div = document.createElement('div');
                 div.className = 'entity-card';
                 div.innerHTML = `
-                    <div class="entity-type">${e.type.toUpperCase()}</div>
-                    <div class="entity-value">${e.value}</div>
-                    <div class="entity-meta">${e.display_name || ''}</div>
+                    <div class="entity-type">${escapeHtml(e.type.toUpperCase())}</div>
+                    <div class="entity-value">${escapeHtml(e.value)}</div>
+                    <div class="entity-meta">${escapeHtml(e.display_name || '')}</div>
                 `;
                 container.appendChild(div);
             });
@@ -231,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTimeline() {
         const container = document.createElement('div');
         container.className = 'timeline-container';
-        
+
         if (state.timeline.length === 0) {
             container.innerHTML = '<p class="empty-msg">No timeline events recorded.</p>';
         } else {
@@ -241,8 +273,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 div.innerHTML = `
                     <div class="timeline-marker"></div>
                     <div class="timeline-content">
-                        <div class="timeline-time">${new Date(t.timestamp).toLocaleString()}</div>
-                        <div class="timeline-desc ${t.severity === 'error' ? 'error-text' : ''}">${t.description}</div>
+                        <div class="timeline-time">${escapeHtml(new Date(t.timestamp).toLocaleString())}</div>
+                        <div class="timeline-desc ${t.severity === 'error' ? 'error-text' : ''}">${escapeHtml(t.description)}</div>
                     </div>
                 `;
                 container.appendChild(div);
@@ -254,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderGraph() {
         resultsContent.innerHTML = '<div id="vis-network" style="width: 100%; height: 500px; border: 1px solid #333; border-radius: 8px;"></div>';
-        
+
         if (state.entities.length === 0) {
             resultsContent.innerHTML += '<p class="empty-msg">No data for graph visualization.</p>';
             return;
@@ -308,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const tab = btn.getAttribute('data-tab');
-            
+
             if (tab === 'findings') renderFindings();
             if (tab === 'entities') renderEntities();
             if (tab === 'timeline') renderTimeline();
@@ -318,16 +350,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Plugins ---
     async function loadPlugins() {
+        pluginsGrid.innerHTML = '<div class="loading-spinner"></div>';
         try {
             const plugins = await apiFetch('/api/plugins');
             state.plugins = plugins;
-            
+
+            if (plugins.length === 0) {
+                pluginsGrid.innerHTML = '<p class="empty-msg">No plugins installed.</p>';
+                return;
+            }
+
             pluginsGrid.innerHTML = plugins.map(p => `
                 <div class="plugin-card ${p.status === 'disabled' ? 'disabled' : ''}">
-                    <div class="plugin-name">${p.name}</div>
-                    <div class="plugin-desc">${p.description}</div>
+                    <div class="plugin-name">${escapeHtml(p.name)}</div>
+                    <div class="plugin-desc">${escapeHtml(p.description)}</div>
                     <div class="plugin-tags">
-                        ${p.tags.map(t => `<span class="tag">${t}</span>`).join('')}
+                        ${(p.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
                     </div>
                 </div>
             `).join('');
@@ -338,35 +376,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Provider Management ---
     async function loadProviders() {
+        providerGrid.innerHTML = '<div class="loading-spinner"></div>';
         try {
             const providers = await apiFetch('/api/providers');
             state.providers = providers;
-            
-        providerGrid.innerHTML = providers.map(p => `
+
+            if (providers.length === 0) {
+                providerGrid.innerHTML = '<p class="empty-msg">No providers configured.</p>';
+                return;
+            }
+
+            providerGrid.innerHTML = providers.map(p => `
             <div class="plugin-card provider-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <span class="provider-icon">🔌</span>
-                        <div class="plugin-name">${p.name}</div>
+                        <div class="plugin-name">${escapeHtml(p.name)}</div>
                     </div>
-                    <span class="tag" style="background-color: ${p.status === 'connected' ? '#4CAF50' : '#f44336'};">${p.status.toUpperCase()}</span>
+                    <span class="tag" style="background-color: ${p.status === 'connected' ? '#4CAF50' : '#f44336'};">${escapeHtml(p.status.toUpperCase())}</span>
                 </div>
-                <div class="plugin-desc" style="margin-bottom: 0.5rem;">${p.description}</div>
+                <div class="plugin-desc" style="margin-bottom: 0.5rem;">${escapeHtml(p.description)}</div>
                 <div class="provider-meta" style="font-size: 0.8rem; color: #888; margin-bottom: 1rem;">
-                    <div><strong>Auth:</strong> ${p.supported_authentication.join(', ')}</div>
+                    <div><strong>Auth:</strong> ${escapeHtml((p.supported_authentication || []).join(', '))}</div>
                     <div><strong>Connection:</strong> ${p.status === 'connected' ? 'Active' : 'Disconnected'}</div>
-                    <div><strong>Last Validation:</strong> ${new Date().toLocaleDateString()}</div>
+                    <div><strong>Last Validation:</strong> ${escapeHtml(new Date().toLocaleDateString())}</div>
                 </div>
                 <div class="provider-actions" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button class="btn btn-secondary" style="flex: 1;" onclick="openProviderModal('${p.id}')">Configure</button>
-                    <button class="btn btn-primary" style="flex: 1;" onclick="testProvider('${p.id}')">Test</button>
-                    <button class="btn btn-danger" style="flex: 1;" onclick="disconnectProvider('${p.id}')">Disconnect</button>
-                    <a href="https://example.com/docs/${p.id}" target="_blank" class="btn btn-secondary" style="flex: 1; text-align: center; text-decoration: none;">Docs</a>
+                    <button class="btn btn-secondary" style="flex: 1;" onclick="openProviderModal('${escapeHtml(p.id)}')">Configure</button>
+                    <button class="btn btn-primary" style="flex: 1;" onclick="testProvider('${escapeHtml(p.id)}')">Test</button>
+                    <button class="btn btn-danger" style="flex: 1;" onclick="disconnectProvider('${escapeHtml(p.id)}')">Disconnect</button>
+                    <a href="https://example.com/docs/${escapeHtml(p.id)}" target="_blank" class="btn btn-secondary" style="flex: 1; text-align: center; text-decoration: none;">Docs</a>
                 </div>
             </div>
         `).join('');
         } catch (e) {
-            providerGrid.innerHTML = `<p class="error-msg">Failed to load providers: ${e.message}</p>`;
+            providerGrid.innerHTML = `<p class="error-msg">Failed to load providers: ${escapeHtml(e.message)}</p>`;
         }
     }
 
@@ -379,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalProviderDesc.textContent = p.description;
         modalFeedback.innerHTML = '';
         modalFeedback.className = '';
-        
+
         let html = '';
         if (p.supported_authentication.includes('api_key')) {
             html += `
@@ -398,7 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             html += `<p>No configuration needed.</p>`;
         }
-        
+
         modalAuthContainer.innerHTML = html;
         providerModal.style.display = 'flex';
     };
@@ -410,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modalSaveBtn.addEventListener('click', async () => {
         const id = state.currentProviderId;
         const p = state.providers.find(x => x.id === id);
-        
+
         const payload = {};
         if (p.supported_authentication.includes('api_key')) {
             const val = document.getElementById('modal-api-key').value;
@@ -454,10 +498,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.testProvider = async (id) => {
         try {
             const res = await apiFetch(`/api/providers/${id}/test`, { method: 'POST' });
-            alert(res.message || "Test successful!");
+            showToast(res.message || "Test successful!", 'success');
             await loadProviders();
         } catch (e) {
-            alert(e.message || "Test failed.");
+            showToast(e.message || "Test failed.", 'error');
         }
     };
 
@@ -465,10 +509,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm('Are you sure you want to disconnect this provider?')) return;
         try {
             const res = await apiFetch(`/api/providers/${id}`, { method: 'DELETE' });
-            alert(res.message || "Disconnected!");
+            showToast(res.message || "Disconnected!", 'success');
             await loadProviders();
         } catch (e) {
-            alert(e.message || "Failed to disconnect.");
+            showToast(e.message || "Failed to disconnect.", 'error');
         }
     };
 
@@ -480,30 +524,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Chat ---
-    // (Optional for MVP, disabled if not implemented properly, but I'll update it to use apiFetch)
     if (chatSend) {
-        chatSend.addEventListener('click', async () => {
-            const message = chatInput.value.trim();
-            if (!message) return;
+        chatSend.addEventListener('click', sendChatMessage);
+    }
 
-            appendChatMessage('user', message);
-            chatInput.value = '';
-
-            try {
-                const result = await apiFetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message,
-                        provider: chatProvider.value,
-                        model: chatModel.value
-                    })
-                });
-                appendChatMessage('assistant', result.response);
-            } catch (e) {
-                appendChatMessage('assistant', 'Error: ' + e.message);
+    if (chatInput) {
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage();
             }
         });
+    }
+
+    async function sendChatMessage() {
+        const message = chatInput.value.trim();
+        if (!message) return;
+
+        appendChatMessage('user', message);
+        chatInput.value = '';
+
+        // Show typing indicator
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'message assistant typing';
+        typingDiv.innerHTML = '<div class="message-avatar">AI</div><div class="message-content"><div class="typing-indicator"><span></span><span></span><span></span></div></div>';
+        chatMessages.appendChild(typingDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        try {
+            const result = await apiFetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message,
+                    provider: chatProvider.value,
+                    model: chatModel.value
+                })
+            });
+            // Remove typing indicator
+            typingDiv.remove();
+            appendChatMessage('assistant', result.response);
+        } catch (e) {
+            typingDiv.remove();
+            appendChatMessage('assistant', 'Error: ' + e.message);
+        }
     }
 
     function appendChatMessage(role, text) {
@@ -511,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
         div.className = `message ${role}`;
         div.innerHTML = `
             <div class="message-avatar">${role === 'user' ? 'U' : 'AI'}</div>
-            <div class="message-content"><p>${text}</p></div>
+            <div class="message-content"><p>${escapeHtml(text)}</p></div>
         `;
         chatMessages.appendChild(div);
         chatMessages.scrollTop = chatMessages.scrollHeight;
