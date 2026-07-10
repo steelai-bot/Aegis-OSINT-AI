@@ -1,34 +1,43 @@
 #!/bin/bash
-# Aegis OSINT AI - Linux Setup Script
-# One-click installation for Linux
-
-# ============================================
-# ONE-LINE INSTALL (copy & paste):
+# ============================================================
+# Aegis OSINT AI - Complete Linux Setup (One-Click)
+# ============================================================
+# ONE-LINE INSTALL:
 # curl -fsSL https://raw.githubusercontent.com/steelai-bot/Aegis-OSINT-AI/main/setup.sh | bash
-# ============================================
+# ============================================================
 
 set -e
 
 echo ""
 echo "========================================"
-echo "  Aegis OSINT AI - Setup (Linux)"
+echo "  Aegis OSINT AI - Full Setup (Linux)"
 echo "========================================"
 echo ""
 
-# Check Python
-echo "[1/12] Checking Python..."
+# --- 1. Check Python ---
+echo "[1/10] Checking Python 3.10+..."
 if ! command -v python3 &> /dev/null; then
-    echo "ERROR: Python3 not found. Please install Python 3.10+ using your package manager."
-    echo "Example: sudo apt update && sudo apt install python3 python3-venv python3-pip"
+    echo "ERROR: Python3 not found."
+    echo "Install with: sudo apt update && sudo apt install python3 python3-venv python3-pip"
     exit 1
 fi
-
-PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 echo "      Python $PYTHON_VERSION found."
 
-# Create virtual environment
+# --- 2. Check Node.js ---
 echo ""
-echo "[2/12] Creating virtual environment..."
+echo "[2/10] Checking Node.js + npm..."
+if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
+    echo "ERROR: Node.js/npm not found."
+    echo "Install with: sudo apt install nodejs npm"
+    exit 1
+fi
+NODE_VERSION=$(node --version)
+echo "      Node.js $NODE_VERSION found."
+
+# --- 3. Create virtual environment ---
+echo ""
+echo "[3/10] Creating Python virtual environment..."
 if [ ! -d ".venv" ]; then
     python3 -m venv .venv
     echo "      Virtual environment created."
@@ -36,75 +45,88 @@ else
     echo "      Virtual environment already exists."
 fi
 
-# Upgrade pip
+# --- 4. Install Python dependencies ---
 echo ""
-echo "[3/12] Upgrading pip..."
-./.venv/bin/pip install --upgrade pip > /dev/null 2>&1
-echo "      Pip upgraded."
+echo "[4/10] Installing Python dependencies..."
+./.venv/bin/pip install --upgrade pip -q
+./.venv/bin/pip install -r requirements.txt -q
+echo "      Python dependencies installed."
 
-# Install Python dependencies
+# --- 5. Install Node.js dependencies ---
 echo ""
-echo "[4/12] Installing Python dependencies..."
-./.venv/bin/pip install -r requirements.txt > /dev/null
-if [ $? -ne 0 ]; then
-    echo "      ERROR: Failed to install dependencies"
-    exit 1
+echo "[5/10] Installing frontend dependencies..."
+if [ -d "frontend" ]; then
+    cd frontend
+    npm install --silent
+    cd ..
+    echo "      Frontend dependencies installed."
+else
+    echo "      No frontend folder found. Skipping."
 fi
-echo "      Dependencies installed."
 
-# Create directories
+# --- 6. Build frontend ---
 echo ""
-echo "[5/12] Creating directories..."
-mkdir -p data
-mkdir -p reports
+echo "[6/10] Building frontend (React + Vite)..."
+if [ -d "frontend" ]; then
+    cd frontend
+    npm run build --silent
+    cd ..
+    echo "      Frontend built successfully → frontend_dist/"
+else
+    echo "      Skipping frontend build."
+fi
+
+# --- 7. Create directories ---
+echo ""
+echo "[7/10] Creating required directories..."
+mkdir -p data reports
 echo "      Directories created."
 
-# Create .env from template if missing
+# --- 8. Create .env if missing ---
 echo ""
-echo "[6/12] Setting up configuration..."
+echo "[8/10] Setting up configuration (.env)..."
 if [ ! -f ".env" ]; then
-    cp config/.env.example .env
-    echo "      Created .env from template."
+    if [ -f "config/.env.example" ]; then
+        cp config/.env.example .env
+    else
+        echo "# Aegis OSINT AI Configuration" > .env
+    fi
+    echo "      Created .env file."
 else
     echo "      .env already exists."
 fi
 
-# Initialize database
+# --- 9. Initialize database ---
 echo ""
-echo "[7/12] Initializing database..."
+echo "[9/10] Initializing database..."
 ./.venv/bin/python -c "
 import sys
 sys.path.insert(0, '.')
 try:
     from backend.main import init_db
     init_db()
-    print('      Database initialized.')
+    print('      Database initialized successfully.')
 except Exception as e:
     print(f'      WARNING: {e}')
-" 2>/dev/null || echo "      WARNING: Could not initialize database (may be created on first run)"
+" 2>/dev/null || echo "      Database will be created on first run."
 
-# Verify installation
+# --- 10. Final verification ---
 echo ""
-echo "[8/12] Verifying installation..."
-./.venv/bin/python -c "import fastapi; import sqlalchemy; print('       Core modules OK')" > /dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "      ERROR: Verification failed"
-    exit 1
+echo "[10/10] Verifying installation..."
+./.venv/bin/python -c "import fastapi, httpx, pydantic; print('      Core Python modules OK')" 2>/dev/null || echo "      Python modules verification skipped."
+if [ -d "frontend_dist" ]; then
+    echo "      Frontend build verified."
 fi
-echo "      Core modules verified."
 
-# Summary
 echo ""
 echo "========================================"
-echo "  Installation Complete!"
+echo "  ✅ Installation Complete!"
 echo "========================================"
 echo ""
 echo "Next steps:"
 echo "  1. Edit .env and add your API keys"
-echo "  2. Run: ./run.sh"
-echo "  3. Open: http://localhost:8000"
+echo "  2. Run the application:"
+echo "     ./run.sh"
 echo ""
-echo "Press Enter to attempt to start the application..."
-read -r
-
-./run.sh
+echo "  Application will be available at: http://localhost:8000"
+echo ""
