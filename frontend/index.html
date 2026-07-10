@@ -58,6 +58,12 @@
                     </svg>
                     <span>Schedules</span>
                 </a>
+                <a href="#" class="nav-item" data-page="chat">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>Chat</span>
+                </a>
             </nav>
             <div class="sidebar-footer">
                 <div class="version">v1.0.0</div>
@@ -204,6 +210,47 @@
                 <div style="margin-top: 2rem;">
                     <h3>Active Schedules</h3>
                     <div id="schedules-list" class="recent-list"></div>
+                </div>
+            </section>
+
+            <!-- Chat Page (Local Models + Ollama) -->
+            <section class="page" id="page-chat">
+                <header class="page-header">
+                    <h2>AI Chat</h2>
+                    <p>Chat with local models (Ollama) or cloud providers</p>
+                </header>
+                
+                <div class="chat-container" style="max-width: 900px; margin: 0 auto;">
+                    <div class="form-row" style="margin-bottom: 1rem; gap: 1rem;">
+                        <div class="form-group" style="flex: 1;">
+                            <label>Provider</label>
+                            <select id="chat-provider" class="form-select">
+                                <option value="ollama">Ollama (Local)</option>
+                                <option value="openrouter">OpenRouter</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="groq">Groq</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 2;">
+                            <label>Model</label>
+                            <input type="text" id="chat-model" class="form-input" 
+                                   placeholder="phi3:mini  or  qwen2.5:3b  or  llama3.2:3b" 
+                                   value="phi3:mini">
+                            <small style="color:#888">Local examples: phi3:mini, qwen2.5:3b, llama3.2:3b</small>
+                        </div>
+                    </div>
+
+                    <div id="chat-messages" 
+                         style="height: 420px; overflow-y: auto; border: 1px solid #333; border-radius: 8px; padding: 1rem; background: #1a1a1a; margin-bottom: 1rem;">
+                        <!-- Messages will be appended here -->
+                    </div>
+
+                    <div class="chat-input-area" style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="chat-input" class="form-input" 
+                               placeholder="Ask about your investigation or OSINT..." 
+                               style="flex: 1;">
+                        <button id="chat-send" class="btn btn-primary">Send</button>
+                    </div>
                 </div>
             </section>
 

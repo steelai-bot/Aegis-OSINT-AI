@@ -83,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pageId === 'plugins') loadPlugins();
         if (pageId === 'settings') loadProviders();
         if (pageId === 'schedules') loadSchedules();
+        if (pageId === 'chat') initChatPage();
     }
 
     // --- Dashboard ---
@@ -573,6 +574,72 @@ document.addEventListener('DOMContentLoaded', () => {
             `).join('');
         } catch (e) {
             container.innerHTML = `<p class="error-msg">Failed to load schedules: ${e.message}</p>`;
+        }
+    }
+
+    // --- Chat Page (Local + Cloud) ---
+    let chatInitialized = false;
+
+    function initChatPage() {
+        if (chatInitialized) return;
+        chatInitialized = true;
+
+        const chatSend = document.getElementById('chat-send');
+        const chatInput = document.getElementById('chat-input');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatProvider = document.getElementById('chat-provider');
+        const chatModel = document.getElementById('chat-model');
+
+        if (!chatSend || !chatInput) return;
+
+        chatSend.addEventListener('click', sendChatMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendChatMessage();
+        });
+
+        function sendChatMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            appendChatMessage('user', message);
+            chatInput.value = '';
+
+            const provider = chatProvider.value;
+            const model = chatModel.value || 'phi3:mini';
+
+            apiFetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message, provider, model })
+            })
+            .then(result => {
+                appendChatMessage('assistant', result.response || 'No response');
+            })
+            .catch(err => {
+                appendChatMessage('assistant', 'Error: ' + err.message);
+            });
+        }
+
+        function appendChatMessage(role, text) {
+            const div = document.createElement('div');
+            div.style.marginBottom = '12px';
+            div.style.display = 'flex';
+            div.style.gap = '8px';
+            div.innerHTML = `
+                <div style="width:28px;height:28px;border-radius:50%;background:${role === 'user' ? '#3b82f6' : '#22c55e'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;flex-shrink:0;">
+                    ${role === 'user' ? 'U' : 'AI'}
+                </div>
+                <div style="flex:1; background:#2a2a2a; padding:10px 14px; border-radius:8px; white-space:pre-wrap;">
+                    ${text}
+                </div>
+            `;
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Welcome message
+        if (chatMessages.children.length === 0) {
+            appendChatMessage('assistant', 'Hello! I can help with OSINT questions or analyze investigation results. Using local model: phi3:mini (recommended).');
         }
     }
 
