@@ -8,5 +8,9 @@ python-dotenv>=1.0.1
 pydantic-settings>=2.5.0
 slowapi>=0.1.9
 
+# Phase 2 additions: Censys + Scheduled Scans + PDF Export
+reportlab>=4.0.0
+apscheduler>=3.10.0
+
 # Development dependencies (optional, for testing & linting)
 # pip install pytest pytest-asyncio respx mypy ruff

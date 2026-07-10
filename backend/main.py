@@ -24,6 +24,14 @@ from backend.provider_manager import ProviderManager
 from backend.config.settings import settings, get_settings
 import logging
 
+# APScheduler for scheduled scans (Phase 2)
+try:
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
+    HAS_SCHEDULER = True
+except ImportError:
+    HAS_SCHEDULER = False
+
 logger = logging.getLogger(__name__)
 
 # Initialize provider manager (non-async init)
@@ -85,6 +93,19 @@ def init_db():
             FOREIGN KEY (target_id) REFERENCES targets (id)
         )
     ''')
+
+    # Scheduled scans table (Phase 2)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS scheduled_scans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            query TEXT NOT NULL,
+            target_type TEXT,
+            schedule TEXT NOT NULL,
+            enabled INTEGER DEFAULT 1,
+            last_run TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     
     conn.commit()
     conn.close()
@@ -98,7 +119,17 @@ async def lifespan(app: FastAPI):
     from backend.plugin_manager import PluginManager
     pm = PluginManager()
     pm.discover_plugins()
+
+    # Initialize APScheduler (Phase 2)
+    global scheduler
+    if HAS_SCHEDULER:
+        scheduler = AsyncIOScheduler()
+        scheduler.start()
+        logger.info("APScheduler started for scheduled scans")
     yield
+
+    if scheduler:
+        scheduler.shutdown()
 
 
 # Initialize FastAPI app
@@ -108,6 +139,9 @@ app = FastAPI(
     description="Lightweight OSINT investigation framework",
     lifespan=lifespan
 )
+
+# Global scheduler instance
+scheduler: Optional[AsyncIOScheduler] = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -188,6 +222,24 @@ class SaveSettingsRequest(BaseModel):
     api_key: Optional[str] = None
 
 
+# --- Scheduled Scans Models (Phase 2) ---
+
+class ScheduleCreate(BaseModel):
+    query: str = Field(..., min_length=1, max_length=1000)
+    target_type: Optional[str] = "auto"
+    schedule: str = Field(..., description="Cron expression, e.g. '0 9 * * *' (daily at 9:00)")
+
+
+class ScheduleResponse(BaseModel):
+    id: int
+    query: str
+    target_type: str
+    schedule: str
+    enabled: bool
+    last_run: Optional[str] = None
+    created_at: str
+
+
 # --- Static File Routes ---
 
 @app.get("/")
@@ -201,7 +253,34 @@ app.mount("/assets", StaticFiles(directory="frontend_dist"), name="assets")
 
 @app.get("/health")
 async def health():
-    return format_response({"status": "healthy", "database": "connected"})
+    return format_response({"status": "healthy", "database": "connected", "scheduler": "active" if scheduler else "disabled"})
+
+
+# --- Scheduled Scans Helper ---
+
+async def run_scheduled_investigation(query: str, target_type: str, schedule_id: int):
+    """Function executed by the scheduler."""
+    try:
+        logger.info(f"Running scheduled scan #{schedule_id}: {query}")
+        
+        # Reuse the search logic
+        payload = SearchRequest(query=query, target_type=target_type)
+        await search(payload)
+        
+        # Update last_run timestamp
+        conn_gen = get_db()
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE scheduled_scans SET last_run = ? WHERE id = ?",
+            (datetime.now(timezone.utc).isoformat(), schedule_id)
+        )
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Scheduled scan #{schedule_id} completed successfully")
+    except Exception as e:
+        logger.error(f"Scheduled scan #{schedule_id} failed: {e}")
 
 
 # --- PROVIDER MANAGEMENT ENDPOINTS ---
@@ -576,6 +655,102 @@ async def get_report(report_id: int):
         "content": row[3],
         "created_at": row[4]
     })
+
+
+# --- SCHEDULED SCANS ENDPOINTS (Phase 2) ---
+
+@app.post("/api/schedules")
+async def create_schedule(payload: ScheduleCreate):
+    if not HAS_SCHEDULER or scheduler is None:
+        raise HTTPException(status_code=503, detail="Scheduler not available (install apscheduler)")
+
+    conn_gen = get_db()
+    conn = None
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO scheduled_scans (query, target_type, schedule) VALUES (?, ?, ?)",
+            (payload.query, payload.target_type, payload.schedule)
+        )
+        schedule_id = cursor.lastrowid
+        conn.commit()
+    finally:
+        if conn:
+            conn.close()
+
+    # Add job to scheduler
+    try:
+        trigger = CronTrigger.from_crontab(payload.schedule)
+        scheduler.add_job(
+            run_scheduled_investigation,
+            trigger=trigger,
+            args=[payload.query, payload.target_type, schedule_id],
+            id=f"schedule_{schedule_id}",
+            replace_existing=True
+        )
+    except Exception as e:
+        logger.warning(f"Failed to schedule job: {e}")
+
+    return format_response({
+        "schedule_id": schedule_id,
+        "query": payload.query,
+        "schedule": payload.schedule,
+        "message": "Scheduled scan created successfully"
+    })
+
+
+@app.get("/api/schedules")
+async def list_schedules():
+    conn_gen = get_db()
+    conn = None
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, query, target_type, schedule, enabled, last_run, created_at FROM scheduled_scans ORDER BY created_at DESC"
+        )
+        rows = cursor.fetchall()
+    finally:
+        if conn:
+            conn.close()
+
+    schedules = [
+        {
+            "id": r[0],
+            "query": r[1],
+            "target_type": r[2],
+            "schedule": r[3],
+            "enabled": bool(r[4]),
+            "last_run": r[5],
+            "created_at": r[6]
+        }
+        for r in rows
+    ]
+    return format_response(schedules)
+
+
+@app.delete("/api/schedules/{schedule_id}")
+async def delete_schedule(schedule_id: int):
+    conn_gen = get_db()
+    conn = None
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM scheduled_scans WHERE id = ?", (schedule_id,))
+        conn.commit()
+    finally:
+        if conn:
+            conn.close()
+
+    # Remove from scheduler
+    if scheduler:
+        try:
+            scheduler.remove_job(f"schedule_{schedule_id}")
+        except:
+            pass
+
+    return format_response({"message": f"Schedule {schedule_id} deleted"})
 
 
 @app.post("/api/chat")

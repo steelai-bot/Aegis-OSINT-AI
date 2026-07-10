@@ -7,7 +7,8 @@ A lightweight, modular, and extensible OSINT (Open Source Intelligence) investig
 - **Modular Plugin Architecture**: Easily add new intelligence sources by implementing the `BasePlugin` interface.
 - **Entity Graph Backend**: Automatically extracts and maps relationships between discovered entities (domains, emails, IPs, etc.) using a SQLite-based relational graph.
 - **Automatic Investigation Timeline**: Every step of the investigation is logged, providing a clear audit trail of discovery.
-- **Professional Reporting**: Generate structured reports in Markdown, JSON, and HTML formats.
+- **Professional Reporting**: Generate structured reports in Markdown, JSON, HTML, and **PDF** formats.
+- **Scheduled Scans**: Automate recurring investigations using cron expressions (requires APScheduler).
 - **AI-Powered Planning**: Uses LLMs to dynamically determine the most effective sequence of plugins for any given target.
 - **Centralized Management**: Manage all API keys and configuration through a unified web interface.
 - **Hot Reload Plugins**: Plugin system automatically detects changes without restart.

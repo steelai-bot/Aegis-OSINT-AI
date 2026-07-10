@@ -8,6 +8,17 @@ from datetime import datetime, timezone
 from typing import Dict, List, Any, Callable
 from pathlib import Path
 
+# PDF support (optional)
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import inch
+    HAS_PDF = True
+except ImportError:
+    HAS_PDF = False
+
 class ReportGenerator:
     """
     Generate professional OSINT reports using modular section generators.
@@ -51,6 +62,8 @@ class ReportGenerator:
             return self._assemble_markdown(target, report_data, risk)
         elif format == "html":
             return self._assemble_html(target, report_data, risk)
+        elif format == "pdf":
+            return self._assemble_pdf(target, report_data, risk)
         else:
             raise ValueError(f"Unsupported format: {format}")
 
@@ -207,6 +220,46 @@ class ReportGenerator:
         
         html.append("</body></html>")
         return "\n".join(html)
+
+    def _assemble_pdf(self, target, report_data, risk) -> str:
+        """Generate PDF report using ReportLab (if available)."""
+        if not HAS_PDF:
+            raise RuntimeError("PDF generation requires reportlab. Install with: pip install reportlab")
+        
+        filename = self.output_dir / f"aegis_report_{target.get('query', 'unknown').replace('.', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        doc = SimpleDocTemplate(str(filename), pagesize=letter)
+        styles = getSampleStyleSheet()
+        story = []
+        
+        # Title
+        title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=18, spaceAfter=20)
+        story.append(Paragraph(f"Aegis OSINT Report: {target.get('query')}", title_style))
+        story.append(Spacer(1, 12))
+        
+        # Risk
+        story.append(Paragraph(f"Risk Grade: {risk.get('grade')} | Score: {risk.get('score')}/100", styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # Executive Summary
+        exec_s = report_data["executive"]
+        story.append(Paragraph("Executive Summary", styles['Heading2']))
+        story.append(Paragraph(exec_s['summary_text'], styles['Normal']))
+        story.append(Spacer(1, 12))
+        
+        # Key Findings
+        story.append(Paragraph("Key Findings", styles['Heading2']))
+        for f in report_data["key_findings"][:10]:
+            story.append(Paragraph(f"• {f.get('source')}: {f.get('category')} ({f.get('severity')})", styles['Normal']))
+        story.append(Spacer(1, 12))
+        
+        # Timeline
+        story.append(Paragraph("Investigation Timeline", styles['Heading2']))
+        for t in report_data["timeline"][:15]:
+            story.append(Paragraph(f"• {t.get('timestamp', 'N/A')}: {t.get('description')}", styles['Normal']))
+        
+        doc.build(story)
+        return str(filename)
 
     # --- Helpers ---
 
