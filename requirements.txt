@@ -12,5 +12,8 @@ slowapi>=0.1.9
 reportlab>=4.0.0
 apscheduler>=3.10.0
 
-# Development dependencies (optional, for testing & linting)
-# pip install pytest pytest-asyncio respx mypy ruff
+# Development / CI dependencies
+mypy>=1.10.0
+
+# Optional local testing / linting helpers
+# pip install pytest pytest-asyncio respx ruff
