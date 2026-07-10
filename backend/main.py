@@ -16,6 +16,10 @@ import sqlite3
 import json
 import httpx
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from backend.provider_manager import ProviderManager
 from backend.config.settings import settings, get_settings
 import logging
@@ -113,6 +117,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Rate limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 def format_response(data: Any = None, success: bool = True, errors: List[str] = None, metadata: Dict = None):
     return {
@@ -148,6 +157,11 @@ class TargetCreate(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
+    target_type: Optional[str] = "auto"
+
+
+class BulkSearchRequest(BaseModel):
+    queries: List[str] = Field(..., min_items=1, max_items=50)
     target_type: Optional[str] = "auto"
 
 
@@ -333,7 +347,29 @@ async def list_targets():
     return format_response(targets)
 
 
+@app.post("/api/search/bulk")
+@limiter.limit("3/minute")
+async def bulk_search(payload: BulkSearchRequest):
+    """Bulk investigation endpoint - processes multiple queries."""
+    results = []
+    
+    for query in payload.queries:
+        try:
+            # Reuse the same logic as single search
+            single_payload = SearchRequest(query=query, target_type=payload.target_type)
+            result = await search(single_payload)
+            results.append(result)
+        except Exception as e:
+            results.append(format_response(success=False, errors=[str(e)]))
+    
+    return format_response({
+        "total_queries": len(payload.queries),
+        "results": results
+    })
+
+
 @app.post("/api/search")
+@limiter.limit("10/minute")
 async def search(payload: SearchRequest):
     # 1. Determine target type
     target_type_str = payload.target_type or "auto"

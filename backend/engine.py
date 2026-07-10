@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -166,23 +167,29 @@ class InvestigationEngine:
         for ev in response.evidence:
             if not isinstance(ev, dict):
                 continue
-            
+
             # Common patterns
             for key, val in ev.items():
-                if isinstance(val, str):
-                    # Email
-                    if '@' in val and '.' in val.split('@')[-1]:
-                        add_entity(EntityType.EMAIL, val, response.confidence)
-                    # Domain
-                    elif '.' in val and ' ' not in val and not val.startswith('http'):
-                        if any(tld in val.lower() for tld in ['.com', '.net', '.org', '.io', '.co', '.dev']):
-                            add_entity(EntityType.DOMAIN, val, response.confidence)
-                    # GitHub
-                    elif 'github.com/' in val:
-                        add_entity(EntityType.GITHUB, val, response.confidence)
-                    # IP
-                    elif val.replace('.', '').isdigit() and val.count('.') == 3:
-                        add_entity(EntityType.IP, val, response.confidence)
+                        if isinstance(val, str):
+                            # Email
+                            if '@' in val and '.' in val.split('@')[-1]:
+                                add_entity(EntityType.EMAIL, val, response.confidence)
+                            # Domain
+                            elif '.' in val and ' ' not in val and not val.startswith('http'):
+                                if any(tld in val.lower() for tld in ['.com', '.net', '.org', '.io', '.co', '.dev']):
+                                    add_entity(EntityType.DOMAIN, val, response.confidence)
+                            # GitHub
+                            elif 'github.com/' in val:
+                                add_entity(EntityType.GITHUB, val, response.confidence)
+                            # IP
+                            elif val.replace('.', '').isdigit() and val.count('.') == 3:
+                                add_entity(EntityType.IP, val, response.confidence)
+                            # Phone numbers (basic)
+                            elif re.match(r'^\+?[\d\s-]{8,15}$', val):
+                                add_entity(EntityType.PHONE, val, response.confidence)
+                            # ABN (Australian Business Number)
+                            elif re.match(r'^\d{11}$', val):
+                                add_entity(EntityType.ABN, val, response.confidence)
                 
                 # Handle lists of values
                 if isinstance(val, list):
@@ -209,7 +216,7 @@ class InvestigationEngine:
         """Infer relationships between discovered entities."""
         relationships: List[Relationship] = []
         
-        # Simple heuristic: if we have a domain and emails, link them
+        # Domain ↔ Email
         domains = [e for e in entities if e.type == EntityType.DOMAIN and e.id is not None]
         emails = [e for e in entities if e.type == EntityType.EMAIL and e.id is not None]
         
@@ -220,8 +227,32 @@ class InvestigationEngine:
                         source_entity_id=domain.id,
                         target_entity_id=email.id,
                         relationship_type=RelationshipType.REGISTERED_TO,
-                        confidence=0.7,
+                        confidence=0.75,
                         source_plugin=plugin_name
                     ))
+        
+        # Domain ↔ IP (from Shodan/VirusTotal)
+        ips = [e for e in entities if e.type == EntityType.IP and e.id is not None]
+        for domain in domains:
+            for ip in ips:
+                relationships.append(Relationship(
+                    source_entity_id=domain.id,
+                    target_entity_id=ip.id,
+                    relationship_type=RelationshipType.RESOLVES_TO,
+                    confidence=0.65,
+                    source_plugin=plugin_name
+                ))
+        
+        # Email ↔ Phone (if both present in same evidence)
+        phones = [e for e in entities if e.type == EntityType.PHONE and e.id is not None]
+        for email in emails:
+            for phone in phones:
+                relationships.append(Relationship(
+                    source_entity_id=email.id,
+                    target_entity_id=phone.id,
+                    relationship_type=RelationshipType.LINKED_TO,
+                    confidence=0.6,
+                    source_plugin=plugin_name
+                ))
         
         return relationships
