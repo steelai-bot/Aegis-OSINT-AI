@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -167,22 +168,28 @@ class InvestigationEngine:
             if not isinstance(ev, dict):
                 continue
             
-            # Common patterns
-            for key, val in ev.items():
-                if isinstance(val, str):
-                    # Email
-                    if '@' in val and '.' in val.split('@')[-1]:
-                        add_entity(EntityType.EMAIL, val, response.confidence)
-                    # Domain
-                    elif '.' in val and ' ' not in val and not val.startswith('http'):
-                        if any(tld in val.lower() for tld in ['.com', '.net', '.org', '.io', '.co', '.dev']):
-                            add_entity(EntityType.DOMAIN, val, response.confidence)
-                    # GitHub
-                    elif 'github.com/' in val:
-                        add_entity(EntityType.GITHUB, val, response.confidence)
-                    # IP
-                    elif val.replace('.', '').isdigit() and val.count('.') == 3:
-                        add_entity(EntityType.IP, val, response.confidence)
+                    # Common patterns
+                    for key, val in ev.items():
+                        if isinstance(val, str):
+                            # Email
+                            if '@' in val and '.' in val.split('@')[-1]:
+                                add_entity(EntityType.EMAIL, val, response.confidence)
+                            # Domain
+                            elif '.' in val and ' ' not in val and not val.startswith('http'):
+                                if any(tld in val.lower() for tld in ['.com', '.net', '.org', '.io', '.co', '.dev']):
+                                    add_entity(EntityType.DOMAIN, val, response.confidence)
+                            # GitHub
+                            elif 'github.com/' in val:
+                                add_entity(EntityType.GITHUB, val, response.confidence)
+                            # IP
+                            elif val.replace('.', '').isdigit() and val.count('.') == 3:
+                                add_entity(EntityType.IP, val, response.confidence)
+                            # Phone numbers (basic)
+                            elif re.match(r'^\+?[\d\s-]{8,15}$', val):
+                                add_entity(EntityType.PHONE, val, response.confidence)
+                            # ABN (Australian Business Number)
+                            elif re.match(r'^\d{11}$', val):
+                                add_entity(EntityType.ABN, val, response.confidence)
                 
                 # Handle lists of values
                 if isinstance(val, list):

@@ -16,6 +16,10 @@ import sqlite3
 import json
 import httpx
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from backend.provider_manager import ProviderManager
 from backend.config.settings import settings, get_settings
 import logging
@@ -112,6 +116,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 def format_response(data: Any = None, success: bool = True, errors: List[str] = None, metadata: Dict = None):
@@ -334,6 +343,7 @@ async def list_targets():
 
 
 @app.post("/api/search")
+@limiter.limit("10/minute")
 async def search(payload: SearchRequest):
     # 1. Determine target type
     target_type_str = payload.target_type or "auto"
