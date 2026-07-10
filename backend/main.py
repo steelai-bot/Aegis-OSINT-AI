@@ -3,26 +3,27 @@ Aegis OSINT AI - Simplified Backend
 Lightweight Windows-first OSINT investigation framework
 """
 
+import json
+import logging
 import os
 import re
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 import sqlite3
-import json
-import httpx
-from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+from backend.config.settings import get_settings, settings
 from backend.provider_manager import ProviderManager
-from backend.config.settings import settings, get_settings
-import logging
 
 # APScheduler for scheduled scans (Phase 2)
 try:
@@ -58,7 +59,7 @@ def init_db():
     os.makedirs(os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True)
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS targets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +69,7 @@ def init_db():
             status TEXT DEFAULT 'pending'
         )
     ''')
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS findings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +83,7 @@ def init_db():
             FOREIGN KEY (target_id) REFERENCES targets (id)
         )
     ''')
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -106,7 +107,7 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
     conn.commit()
     conn.close()
 
@@ -140,8 +141,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Global scheduler instance
-scheduler: Optional[AsyncIOScheduler] = None
+# Global scheduler instance. Use Any so importing the app still works when
+# APScheduler is intentionally not installed.
+scheduler: Any = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -154,10 +156,10 @@ app.add_middleware(
 # Rate limiting
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 
-def format_response(data: Any = None, success: bool = True, errors: List[str] = None, metadata: Dict = None):
+def format_response(data: Any = None, success: bool = True, errors: list[str] | None = None, metadata: dict[str, Any] | None = None):
     return {
         "success": success,
         "data": data if data is not None else {},
@@ -186,17 +188,17 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 class TargetCreate(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
-    target_type: Optional[str] = "auto"
+    target_type: str | None = "auto"
 
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
-    target_type: Optional[str] = "auto"
+    target_type: str | None = "auto"
 
 
 class BulkSearchRequest(BaseModel):
-    queries: List[str] = Field(..., min_items=1, max_items=50)
-    target_type: Optional[str] = "auto"
+    queries: list[str] = Field(..., min_length=1, max_length=50)
+    target_type: str | None = "auto"
 
 
 class ReportRequest(BaseModel):
@@ -206,27 +208,27 @@ class ReportRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000)
-    provider: Optional[str] = "openrouter"
-    model: Optional[str] = ""
-    image_urls: Optional[List[str]] = None
-    video_urls: Optional[List[str]] = None
+    provider: str | None = "openrouter"
+    model: str | None = ""
+    image_urls: list[str] | None = None
+    video_urls: list[str] | None = None
 
 
 class ConfigureProviderRequest(BaseModel):
-    api_key: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
+    api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
 
 
 class SaveSettingsRequest(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 # --- Scheduled Scans Models (Phase 2) ---
 
 class ScheduleCreate(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
-    target_type: Optional[str] = "auto"
+    target_type: str | None = "auto"
     schedule: str = Field(..., description="Cron expression, e.g. '0 9 * * *' (daily at 9:00)")
 
 
@@ -236,19 +238,55 @@ class ScheduleResponse(BaseModel):
     target_type: str
     schedule: str
     enabled: bool
-    last_run: Optional[str] = None
+    last_run: str | None = None
     created_at: str
 
 
 # --- Static File Routes ---
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_LEGACY_DIR = BASE_DIR / "frontend"
+FRONTEND_DIST_DIR = BASE_DIR / "frontend_dist"
+FRONTEND_ROOT = (
+    FRONTEND_DIST_DIR
+    if (FRONTEND_DIST_DIR / "index.html").exists()
+    else FRONTEND_LEGACY_DIR
+)
+
+
+def _frontend_file(filename: str) -> FileResponse:
+    path = FRONTEND_ROOT / filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Frontend asset not found: {filename}")
+    return FileResponse(path)
+
+
 @app.get("/")
 async def root():
-    return FileResponse("frontend_dist/index.html")
+    """Serve the available frontend.
+
+    The repository currently ships the legacy static frontend under `frontend/`.
+    If a future React/Vite build exists in `frontend_dist/`, it is preferred.
+    """
+    return _frontend_file("index.html")
 
 
-app.mount("/static", StaticFiles(directory="frontend_dist"), name="static")
-app.mount("/assets", StaticFiles(directory="frontend_dist"), name="assets")
+@app.get("/style.css", include_in_schema=False)
+async def frontend_style():
+    return _frontend_file("style.css")
+
+
+@app.get("/app.js", include_in_schema=False)
+async def frontend_app_js():
+    return _frontend_file("app.js")
+
+
+# Mount only directories that actually exist. This prevents FastAPI imports from
+# failing when `frontend_dist/` has not been built.
+if (FRONTEND_ROOT / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_ROOT / "assets")), name="assets")
+if FRONTEND_ROOT.exists():
+    app.mount("/static", StaticFiles(directory=str(FRONTEND_ROOT)), name="static")
 
 
 @app.get("/health")
@@ -262,22 +300,22 @@ async def run_scheduled_investigation(query: str, target_type: str, schedule_id:
     """Function executed by the scheduler."""
     try:
         logger.info(f"Running scheduled scan #{schedule_id}: {query}")
-        
-        # Reuse the search logic
+
+        # Reuse the search logic without going through the HTTP/rate-limit wrapper.
         payload = SearchRequest(query=query, target_type=target_type)
-        await search(payload)
-        
+        await run_search(payload)
+
         # Update last_run timestamp
         conn_gen = get_db()
         conn = next(conn_gen)
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE scheduled_scans SET last_run = ? WHERE id = ?",
-            (datetime.now(timezone.utc).isoformat(), schedule_id)
+            (datetime.now(UTC).isoformat(), schedule_id)
         )
         conn.commit()
         conn.close()
-        
+
         logger.info(f"Scheduled scan #{schedule_id} completed successfully")
     except Exception as e:
         logger.error(f"Scheduled scan #{schedule_id} failed: {e}")
@@ -295,7 +333,7 @@ async def get_provider(provider: str):
     try:
         return format_response(provider_manager.get_provider(provider))
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @app.get("/api/providers/{provider}/status")
@@ -304,7 +342,7 @@ async def get_provider_status(provider: str):
         p = provider_manager.get_provider(provider)
         return format_response({"status": p["status"]})
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @app.post("/api/providers/{provider}/configure")
@@ -313,8 +351,8 @@ async def configure_provider(provider: str, payload: ConfigureProviderRequest):
     try:
         provider_manager.get_provider(provider)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
     try:
         config_data = {}
         if payload.api_key is not None:
@@ -326,7 +364,7 @@ async def configure_provider(provider: str, payload: ConfigureProviderRequest):
         provider_manager.configure_provider(provider, config_data)
         return format_response({"message": f"{provider} configured successfully."})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/providers/{provider}/test")
@@ -338,7 +376,7 @@ async def test_provider(provider: str):
         else:
             return format_response(success=False, errors=["Missing or invalid credentials."])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.delete("/api/providers/{provider}")
@@ -347,21 +385,39 @@ async def disconnect_provider(provider: str):
         provider_manager.disconnect_provider(provider)
         return format_response({"message": f"{provider} disconnected successfully."})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Settings endpoints using Pydantic settings
 @app.get("/api/settings")
 async def get_app_settings():
     """Get current settings from the config module."""
-    return format_response(get_settings().model_dump(exclude={"openai_api_key": True, "anthropic_api_key": True, "gemini_api_key": True, "openrouter_api_key": True, "groq_api_key": True, "mistral_api_key": True, "github_token": True, "shodan_api_key": True, "securitytrails_api_key": True}))
+    return format_response(get_settings().model_dump(exclude={
+        "openai_api_key": True,
+        "anthropic_api_key": True,
+        "gemini_api_key": True,
+        "openrouter_api_key": True,
+        "groq_api_key": True,
+        "mistral_api_key": True,
+        "nvidia_api_key": True,
+        "github_token": True,
+        "shodan_api_key": True,
+        "virustotal_api_key": True,
+        "hibp_api_key": True,
+        "hunter_api_key": True,
+        "google_search_api_key": True,
+        "google_search_cx": True,
+        "censys_api_id": True,
+        "censys_api_secret": True,
+        "securitytrails_api_key": True,
+    }))
 
 
 @app.post("/api/settings/save")
-async def save_app_settings(payload: Dict[str, str]):
+async def save_app_settings(payload: dict[str, str]):
     """Save settings to .env file (api keys only)."""
     env_path = Path(".env")
-    
+
     # Build env content with current values
     lines = [
         "# Aegis OSINT AI Configuration",
@@ -376,7 +432,7 @@ async def save_app_settings(payload: Dict[str, str]):
         f"HOST={settings.host}",
         f"PORT={settings.port}",
     ]
-    
+
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return format_response({"message": "Settings saved successfully"})
 
@@ -399,13 +455,13 @@ async def create_target(payload: TargetCreate):
     finally:
         if conn:
             conn.close()
-    
+
     return format_response({
         "id": target_id,
         "query": payload.query,
         "target_type": payload.target_type,
         "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(UTC).isoformat()
     })
 
 
@@ -421,26 +477,25 @@ async def list_targets():
     finally:
         if conn:
             conn.close()
-    
+
     targets = [{"id": r[0], "query": r[1], "target_type": r[2], "status": r[3], "created_at": r[4]} for r in rows]
     return format_response(targets)
 
 
 @app.post("/api/search/bulk")
 @limiter.limit("3/minute")
-async def bulk_search(payload: BulkSearchRequest):
+async def bulk_search(request: Request, payload: BulkSearchRequest):
     """Bulk investigation endpoint - processes multiple queries."""
     results = []
-    
+
     for query in payload.queries:
         try:
-            # Reuse the same logic as single search
             single_payload = SearchRequest(query=query, target_type=payload.target_type)
-            result = await search(single_payload)
+            result = await run_search(single_payload)
             results.append(result)
         except Exception as e:
             results.append(format_response(success=False, errors=[str(e)]))
-    
+
     return format_response({
         "total_queries": len(payload.queries),
         "results": results
@@ -449,7 +504,12 @@ async def bulk_search(payload: BulkSearchRequest):
 
 @app.post("/api/search")
 @limiter.limit("10/minute")
-async def search(payload: SearchRequest):
+async def search(request: Request, payload: SearchRequest):
+    """Start a single investigation."""
+    return await run_search(payload)
+
+
+async def run_search(payload: SearchRequest):
     # 1. Determine target type
     target_type_str = payload.target_type or "auto"
     from backend.models import TargetType
@@ -457,10 +517,10 @@ async def search(payload: SearchRequest):
         if target_type_str == "auto":
             if re.match(r'^\d{11}$', payload.query):
                 target_type = TargetType.ABN
-            elif re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', payload.query):
-                target_type = TargetType.DOMAIN
             elif re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', payload.query):
                 target_type = TargetType.IP
+            elif re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', payload.query):
+                target_type = TargetType.DOMAIN
             else:
                 target_type = TargetType.COMPANY
         else:
@@ -487,15 +547,15 @@ async def search(payload: SearchRequest):
     # 3. Run investigation
     from backend.engine import InvestigationEngine
     engine = InvestigationEngine(DATABASE_PATH)
-    
+
     result = await engine.run_investigation(target_id, target_type, payload.query)
-    
+
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
     entities = [e.model_dump() for e in storage.get_entities_for_target(target_id)]
     relationships = [r.model_dump() for r in storage.get_relationships_for_target(target_id)]
     timeline = [t.model_dump() for t in storage.get_timeline(target_id)]
-    
+
     return format_response({
         "target_id": target_id,
         "query": payload.query,
@@ -536,23 +596,23 @@ async def list_plugins():
 
 
 @app.get("/api/findings")
-async def list_findings(target_id: Optional[int] = None):
+async def list_findings(target_id: int | None = None):
     conn_gen = get_db()
     conn = None
     try:
         conn = next(conn_gen)
         cursor = conn.cursor()
-        
+
         if target_id:
             cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (target_id,))
         else:
             cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings ORDER BY created_at DESC")
-        
+
         rows = cursor.fetchall()
     finally:
         if conn:
             conn.close()
-    
+
     findings = [
         {
             "id": r[0], "target_id": r[1], "source": r[2], "category": r[3],
@@ -572,16 +632,16 @@ async def create_report(payload: ReportRequest):
         cursor = conn.cursor()
         cursor.execute("SELECT id, query, target_type, status, created_at FROM targets WHERE id = ?", (payload.target_id,))
         target_row = cursor.fetchone()
-        
+
         cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (payload.target_id,))
         finding_rows = cursor.fetchall()
     finally:
         if conn:
             conn.close()
-    
+
     if not target_row:
         raise HTTPException(status_code=404, detail="Target not found")
-    
+
     target = {
         "id": target_row[0],
         "query": target_row[1],
@@ -589,7 +649,7 @@ async def create_report(payload: ReportRequest):
         "status": target_row[3],
         "created_at": target_row[4]
     }
-    
+
     findings = [
         {
             "id": r[0], "target_id": r[1], "source": r[2], "category": r[3],
@@ -597,18 +657,18 @@ async def create_report(payload: ReportRequest):
         }
         for r in finding_rows
     ]
-    
+
     from backend.report import ReportGenerator
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
-    
+
     entities = [e.model_dump() for e in storage.get_entities_for_target(payload.target_id)]
     relationships = [r.model_dump() for r in storage.get_relationships_for_target(payload.target_id)]
     timeline = [t.model_dump() for t in storage.get_timeline(payload.target_id)]
-    
+
     generator = ReportGenerator()
     report_content = generator.generate(payload.format, target, findings, entities, relationships, timeline)
-    
+
     conn_gen2 = get_db()
     conn2 = None
     try:
@@ -623,7 +683,7 @@ async def create_report(payload: ReportRequest):
     finally:
         if conn2:
             conn2.close()
-    
+
     return format_response({
         "report_id": report_id,
         "target_id": payload.target_id,
@@ -644,10 +704,10 @@ async def get_report(report_id: int):
     finally:
         if conn:
             conn.close()
-    
+
     if not row:
         raise HTTPException(status_code=404, detail="Report not found")
-    
+
     return format_response({
         "report_id": row[0],
         "target_id": row[1],
@@ -747,7 +807,7 @@ async def delete_schedule(schedule_id: int):
     if scheduler:
         try:
             scheduler.remove_job(f"schedule_{schedule_id}")
-        except:
+        except Exception:
             pass
 
     return format_response({"message": f"Schedule {schedule_id} deleted"})
@@ -756,11 +816,11 @@ async def delete_schedule(schedule_id: int):
 @app.post("/api/chat")
 async def chat(payload: ChatRequest):
     from backend.providers import AIProviderFactory
-    
+
     message = payload.message
-    provider = payload.provider
-    model = payload.model
-    
+    provider = payload.provider or "openrouter"
+    model = payload.model or ""
+
     provider_inst = AIProviderFactory.get_provider(provider)
     if not provider_inst:
         return format_response(
@@ -771,16 +831,16 @@ async def chat(payload: ChatRequest):
             success=False,
             errors=["no_api_key"]
         )
-    
+
     # Use default model if none specified
     if not model:
         model = getattr(provider_inst, '_default_model', None) or \
                 {"openrouter": "gpt-3.5-turbo", "openai": "gpt-4", "anthropic": "claude-3-haiku-20240307", "gemini": "gemini-1.5-flash"}.get(provider, model)
-    
+
     # Support multimodal chat (image/video URLs)
     image_urls = payload.image_urls
     video_urls = payload.video_urls
-    
+
     try:
         if (image_urls or video_urls) and hasattr(provider_inst, 'chat_multimodal'):
             ai_response = await provider_inst.chat_multimodal(message, model, image_urls=image_urls, video_urls=video_urls)

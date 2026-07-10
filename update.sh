@@ -43,16 +43,20 @@ fi
 # Update frontend dependencies and rebuild (if frontend changed)
 echo ""
 echo "[3/5] Checking frontend..."
-if [ -d "frontend" ]; then
-    cd frontend
-    if [ -f "package.json" ]; then
-        echo "      Updating frontend dependencies..."
-        npm install --silent
-        echo "      Rebuilding frontend..."
-        npm run build --silent
-        echo "      Frontend rebuilt successfully."
+if [ -f "frontend/package.json" ]; then
+    if ! command -v npm > /dev/null 2>&1; then
+        echo "ERROR: frontend/package.json exists, but npm is not installed."
+        exit 1
     fi
+    cd frontend
+    echo "      Updating frontend dependencies..."
+    npm install --silent
+    echo "      Rebuilding frontend..."
+    npm run build --silent
+    echo "      Frontend rebuilt successfully."
     cd ..
+elif [ -d "frontend" ]; then
+    echo "      Legacy static frontend detected; no rebuild required."
 else
     echo "      No frontend directory found."
 fi

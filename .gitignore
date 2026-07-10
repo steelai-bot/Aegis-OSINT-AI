@@ -22,7 +22,7 @@ logs/
 
 # Database
 aegis.db
-data/aegis.db
+data/*.db
 
 # Temp
 *.log

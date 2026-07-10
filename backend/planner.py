@@ -1,6 +1,6 @@
 import logging
-from typing import List, Dict, Any, Optional
-from backend.models import TargetType, InvestigationTemplate
+
+from backend.models import InvestigationTemplate, TargetType
 from backend.providers import AIProviderFactory
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ class AIPlanner:
 
     def __init__(self):
         # Predefined templates for common target types
-        self.templates: Dict[TargetType, InvestigationTemplate] = {
+        self.templates: dict[TargetType, InvestigationTemplate] = {
             TargetType.DOMAIN: InvestigationTemplate(
                 target_type=TargetType.DOMAIN,
                 steps=["dns_lookup", "whois_lookup", "cert_transparency", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"]
@@ -36,7 +36,7 @@ class AIPlanner:
             ),
         }
 
-    async def plan_investigation(self, target_type: TargetType, query: str, use_dynamic: bool = False) -> List[str]:
+    async def plan_investigation(self, target_type: TargetType, query: str, use_dynamic: bool = False) -> list[str]:
         """
         Returns a list of plugin names to execute.
         """
@@ -49,14 +49,14 @@ class AIPlanner:
 
         return await self._plan_dynamically(target_type, query)
 
-    async def _plan_dynamically(self, target_type: TargetType, query: str) -> List[str]:
+    async def _plan_dynamically(self, target_type: TargetType, query: str) -> list[str]:
         """
         Uses an LLM to determine the best plugins for the given target.
         """
         # In a real scenario, we would pass the list of available plugins to the LLM
         # For now, we'll simulate the LLM's decision or use a basic heuristic
         logger.info(f"Planning dynamically for {target_type} with query: {query}")
-        
+
         # Try to get a provider for the planner
         provider = AIProviderFactory.get_provider("openrouter")
         if not provider:

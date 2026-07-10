@@ -1,9 +1,10 @@
-import httpx
 import logging
 import os
-from typing import List
-from backend.plugins.base import BasePlugin
+
+import httpx
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class GooglePlugin(BasePlugin):
             estimated_time=6
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
         cx = os.getenv("GOOGLE_SEARCH_CX")
@@ -39,14 +40,14 @@ class GooglePlugin(BasePlugin):
                         dork = f"site:{query}"
                     elif target_type == TargetType.EMAIL:
                         dork = f'"{query}"'
-                    
+
                     url = "https://www.googleapis.com/customsearch/v1"
                     params = {
                         "q": dork,
                         "key": api_key,
                         "cx": cx
                     }
-                    
+
                     resp = await client.get(url, params=params)
                     if resp.status_code == 200:
                         data = resp.json()
@@ -59,7 +60,7 @@ class GooglePlugin(BasePlugin):
                                     "link": item.get("link"),
                                     "snippet": item.get("snippet")
                                 })
-                            
+
                             findings.append(PluginResponse(
                                 provider=self.metadata.name,
                                 entity_type=target_type,

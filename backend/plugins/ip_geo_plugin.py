@@ -1,8 +1,9 @@
-import httpx
 import logging
-from typing import List
-from backend.plugins.base import BasePlugin
+
+import httpx
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class IPGeoPlugin(BasePlugin):
             estimated_time=2
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         ip = query
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -51,5 +52,5 @@ class IPGeoPlugin(BasePlugin):
                         )]
         except Exception as e:
             logger.error(f"IPGeoPlugin error for {ip}: {e}")
-        
+
         return []

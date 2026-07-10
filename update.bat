@@ -41,16 +41,22 @@ if exist ".venv" (
 REM Update frontend
 echo.
 echo [3/5] Checking frontend...
-if exist "frontend" (
-    cd frontend
-    if exist "package.json" (
-        echo       Updating frontend dependencies...
-        call npm install --silent
-        echo       Rebuilding frontend...
-        call npm run build --silent
-        echo       Frontend rebuilt successfully.
+if exist "frontend\package.json" (
+    npm --version >nul 2>&1
+    if errorlevel 1 (
+        echo ERROR: frontend\package.json exists, but npm is not installed.
+        pause
+        exit /b 1
     )
+    cd frontend
+    echo       Updating frontend dependencies...
+    call npm install --silent
+    echo       Rebuilding frontend...
+    call npm run build --silent
+    echo       Frontend rebuilt successfully.
     cd ..
+) else if exist "frontend" (
+    echo       Legacy static frontend detected; no rebuild required.
 ) else (
     echo       No frontend directory found.
 )

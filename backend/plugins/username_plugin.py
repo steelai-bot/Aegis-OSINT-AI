@@ -1,8 +1,9 @@
-import httpx
 import logging
-from typing import List
-from backend.plugins.base import BasePlugin
+
+import httpx
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,9 @@ class UsernamePlugin(BasePlugin):
             estimated_time=8
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         found = []
-        
+
         async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
             for platform in PLATFORMS:
                 url = platform["url"].format(username=query)
@@ -55,7 +56,7 @@ class UsernamePlugin(BasePlugin):
                 except Exception as e:
                     logger.debug(f"UsernamePlugin error checking {platform['name']}: {e}")
                     continue
-        
+
         if found:
             return [PluginResponse(
                 provider=self.metadata.name,
@@ -64,5 +65,5 @@ class UsernamePlugin(BasePlugin):
                 evidence=[{"profiles": found}],
                 raw={"query": query, "results": found}
             )]
-        
+
         return []

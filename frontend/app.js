@@ -415,8 +415,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const payload = {};
         if (p.supported_authentication.includes('api_key')) {
-            const val = document.getElementById('modal-api-key').value;
+            const val = document.getElementById('modal-api-key')?.value;
             if (val) payload['api_key'] = val;
+        } else if (p.supported_authentication.includes('username_password')) {
+            const username = document.getElementById('modal-username')?.value;
+            const password = document.getElementById('modal-password')?.value;
+            if (username) payload['username'] = username;
+            if (password) payload['password'] = password;
         }
 
         try {

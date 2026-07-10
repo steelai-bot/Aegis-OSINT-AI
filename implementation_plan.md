@@ -1,81 +1,73 @@
-# Implementation Plan - COMPLETED
+# Implementation Plan / Current Status
 
-## Status: ✅ All Phases Complete + Phase 2 (Censys + Scheduled Scans + PDF)
+## Current Status: ✅ Stabilized Backend + Bundled Static Frontend
 
-## Phase 2: Censys + Scheduled Scans + PDF Export ✅
-- Added `CensysPlugin` (`backend/plugins/censys_plugin.py`) – supports IP/Domain with `CENSYS_API_ID` + `CENSYS_API_SECRET`
-- Added PDF report generation in `ReportGenerator` using ReportLab (`format="pdf"`)
-- Implemented **Scheduled Scans** using APScheduler:
-  - New DB table `scheduled_scans`
-  - New Pydantic models: `ScheduleCreate`, `ScheduleResponse`
-  - New endpoints:
-    - `POST /api/schedules` – create scheduled scan (cron expression)
-    - `GET /api/schedules` – list all scheduled scans
-    - `DELETE /api/schedules/{id}` – delete scheduled scan
-  - Automatic job execution + `last_run` tracking
-- Updated `requirements.txt` with `reportlab` and `apscheduler`
-- Updated `README.md` with new features
-- All changes committed and pushed to `arena/019f4b6d-aegis-osint-ai` branch
+This repository is currently stabilized around the existing FastAPI backend and the bundled legacy static frontend in `frontend/`.
 
-## Phase 1: Frontend Migration to React + TypeScript + Vite + Tailwind ✅
-- Migrated from vanilla JS/CSS to React 18 + TypeScript + Vite + Tailwind CSS v4
-- Created 6 page components: Dashboard, Investigations, Results, Chat, Plugins, Settings
-- Integrated vis-network for graph visualization
-- Added dark theme support with custom color extensions
+### Stabilization Completed
 
-## Phase 2: AI Provider Layer Enhancement ✅
-- Added GroqProvider and MistralProvider classes
-- Updated ProviderManager to include Groq and Mistral in known_providers
-- Both providers support OpenAI-compatible API format
+- Fixed frontend serving:
+  - FastAPI now serves `frontend_dist/` only if a built frontend exists.
+  - Otherwise it falls back to the bundled `frontend/` static UI.
+  - Import/startup no longer fails when `frontend_dist/` is missing.
+- Fixed backend import/runtime blockers:
+  - Corrected `backend/engine.py` indentation and entity extraction logic.
+  - Added missing entity/target types needed by plugins.
+  - Ensured `SQLiteStorage` creates parent directories and core tables it uses.
+  - Fixed SlowAPI route signatures by separating HTTP wrappers from internal search execution.
+- Aligned configuration:
+  - `.env` auto-creation now uses `config/.env.example` when available.
+  - Settings accept both standard env names (`DATABASE`, `PORT`, `OPENAI_API_KEY`, etc.) and `AEGIS_*` variants.
+  - Provider manager now uses correct env names for GitHub and Google Search.
+  - Censys uses `CENSYS_API_ID` + `CENSYS_API_SECRET`.
+- Stabilized setup/update scripts:
+  - Node.js is optional for the current bundled static frontend.
+  - npm install/build only runs when `frontend/package.json` exists.
+- Updated documentation to match the actual repository state.
+- Quality baseline:
+  - Ruff: passing
+  - MyPy: passing
+  - Pytest: 21 passing tests
 
-## Phase 3: Plugin System Refinement ✅
-- Added hot reload detection using file modification times
-- Added semver version validation for plugin metadata
-- Added plugin dependency checking
-- Added error tracking with `_plugin_errors` dictionary
-- Added `get_plugin_error()` method
+## Completed Backend Features
 
-## Phase 4: Configuration & Settings ✅
-- Created `backend/config/settings.py` with Pydantic Settings
-- Auto-creates `.env` file on first launch if missing
-- Provides `get_enabled_providers()` method
-- Integrated with main.py for settings endpoints
+- Modular plugin system with hot reload detection, semver validation, dependency checks, and error tracking.
+- OSINT plugins for DNS, WHOIS, certificate transparency, GitHub, Google Custom Search, metadata, IP geo, username enumeration, Censys, Shodan, VirusTotal, HIBP, and email discovery.
+- AI provider layer for OpenRouter, OpenAI, Anthropic, Gemini, Nvidia NIM, Groq, and Mistral.
+- SQLite storage for targets, findings, entities, relationships, and timeline events.
+- Investigation engine with entity extraction and relationship building.
+- Report generation in HTML, JSON, Markdown, and PDF.
+- Scheduled scan endpoints with APScheduler.
+- Provider/settings endpoints and frontend provider management UI.
+- CI workflow for Ruff, MyPy, and Pytest.
 
-## Phase 5: Testing & CI/CD ✅
-- Added `mypy.ini` configuration for static type checking
-- Added `pyproject.toml` with Ruff configuration
-- Created `.github/workflows/ci.yml` for GitHub Actions
-- CI runs lint (Ruff), type check (MyPy), and tests (Pytest)
+## Frontend Status
 
-## Phase 6: Documentation ✅
-- Updated README.md with complete tech stack
-- Added plugin development guide
-- Added API reference table
-- Added environment variables documentation
-- Added testing and CI/CD documentation
+Current frontend is the bundled static UI:
 
-## Original Plan (Reference)
+- `frontend/index.html`
+- `frontend/app.js`
+- `frontend/style.css`
 
-[Overview]
-Extended the Aegis OSINT AI backend to support a maintainable, extensible intelligence platform by introducing an Entity Graph, automatic Investigation Timeline, and a modular Report Generation architecture.
+The previous plan mentioned React + TypeScript + Vite + Tailwind, but those source files are not present in the repository. The backend has been stabilized to serve the current static UI. A future React migration can still be done as a separate phase by adding `frontend/package.json`, source files, and a build output to `frontend_dist/`.
 
-[Files - Completed]
-- `backend/models.py`: Added Entity, Relationship, TimelineEvent models
-- `backend/storage.py`: Database abstraction with SQLite implementation
-- `backend/plugins/`: Created MVP plugins (email, github, username, google, metadata, whois, dns, ip_geo, cert_transparency)
-- `backend/engine.py`: Integrated storage layer, timeline logging, entity extraction
-- `backend/report.py`: Refactored for modular section-based generation
-- `backend/main.py`: Extended with settings and plugin endpoints
-- `frontend/`: Migrated to React + TypeScript + Vite + Tailwind
-- `config/.env.example`: Added API key placeholders
-- `tests/`: Added comprehensive test coverage
+## Recommended Next Phases
 
-[Testing Results]
-All 21 tests passing:
-- test_api.py (3 tests)
-- test_engine.py (2 tests)
-- test_plugin_manager.py (6 tests)
-- test_provider_manager.py (2 tests)
-- test_report.py (1 test)
-- test_settings.py (5 tests)
-- test_storage.py (2 tests)
+1. **Scheduled scans persistence hardening**
+   - Restore enabled scheduled jobs from the database on application startup.
+   - Validate cron expressions before inserting schedules.
+
+2. **Plugin execution policy**
+   - Skip disabled plugins at execution time unless explicitly forced.
+   - Surface missing credentials more clearly in investigation results.
+
+3. **Frontend modernization (optional)**
+   - Either keep improving the static UI or start a real React/Vite migration.
+   - If React migration is chosen, add `package.json`, Vite config, TypeScript config, source components, and deterministic build output.
+
+4. **Report/export UX**
+   - Add frontend controls for report format selection and PDF download.
+
+5. **Security hardening**
+   - Restrict CORS in production.
+   - Add authentication if the app is exposed beyond localhost.

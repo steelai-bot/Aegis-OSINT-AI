@@ -15,25 +15,30 @@ echo "========================================"
 echo ""
 
 # --- 1. Check Python ---
-echo "[1/10] Checking Python 3.10+..."
+echo "[1/10] Checking Python 3.11+..."
 if ! command -v python3 &> /dev/null; then
     echo "ERROR: Python3 not found."
     echo "Install with: sudo apt update && sudo apt install python3 python3-venv python3-pip"
     exit 1
 fi
 PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-echo "      Python $PYTHON_VERSION found."
-
-# --- 2. Check Node.js ---
-echo ""
-echo "[2/10] Checking Node.js + npm..."
-if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
-    echo "ERROR: Node.js/npm not found."
-    echo "Install with: sudo apt install nodejs npm"
+if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'; then
+    echo "ERROR: Python 3.11+ is required. Found Python $PYTHON_VERSION."
     exit 1
 fi
-NODE_VERSION=$(node --version)
-echo "      Node.js $NODE_VERSION found."
+echo "      Python $PYTHON_VERSION found."
+
+# --- 2. Check optional Node.js ---
+echo ""
+echo "[2/10] Checking optional Node.js + npm..."
+HAS_NODE=0
+if command -v node &> /dev/null && command -v npm &> /dev/null; then
+    HAS_NODE=1
+    NODE_VERSION=$(node --version)
+    echo "      Node.js $NODE_VERSION found."
+else
+    echo "      Node.js/npm not found. Current bundled frontend does not require it."
+fi
 
 # --- 3. Create virtual environment ---
 echo ""
@@ -52,28 +57,29 @@ echo "[4/10] Installing Python dependencies..."
 ./.venv/bin/pip install -r requirements.txt -q
 echo "      Python dependencies installed."
 
-# --- 5. Install Node.js dependencies ---
+# --- 5. Install frontend dependencies if needed ---
 echo ""
-echo "[5/10] Installing frontend dependencies..."
-if [ -d "frontend" ]; then
-    cd frontend
-    npm install --silent
-    cd ..
-    echo "      Frontend dependencies installed."
+echo "[5/10] Checking frontend dependencies..."
+if [ -f "frontend/package.json" ]; then
+    if [ "$HAS_NODE" -eq 1 ]; then
+        (cd frontend && npm install --silent)
+        echo "      Frontend dependencies installed."
+    else
+        echo "ERROR: frontend/package.json exists, but Node.js/npm is not installed."
+        exit 1
+    fi
 else
-    echo "      No frontend folder found. Skipping."
+    echo "      Legacy static frontend detected; no npm dependencies required."
 fi
 
-# --- 6. Build frontend ---
+# --- 6. Build frontend if needed ---
 echo ""
-echo "[6/10] Building frontend (React + Vite)..."
-if [ -d "frontend" ]; then
-    cd frontend
-    npm run build --silent
-    cd ..
-    echo "      Frontend built successfully → frontend_dist/"
+echo "[6/10] Building frontend if required..."
+if [ -f "frontend/package.json" ]; then
+    (cd frontend && npm run build --silent)
+    echo "      Frontend built successfully."
 else
-    echo "      Skipping frontend build."
+    echo "      Using bundled frontend/ static files."
 fi
 
 # --- 7. Create directories ---
@@ -114,8 +120,8 @@ except Exception as e:
 echo ""
 echo "[10/10] Verifying installation..."
 ./.venv/bin/python -c "import fastapi, httpx, pydantic; print('      Core Python modules OK')" 2>/dev/null || echo "      Python modules verification skipped."
-if [ -d "frontend_dist" ]; then
-    echo "      Frontend build verified."
+if [ -f "frontend/index.html" ] || [ -f "frontend_dist/index.html" ]; then
+    echo "      Frontend files verified."
 fi
 
 echo ""

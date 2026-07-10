@@ -5,29 +5,29 @@ Supports Australian, New Zealand, and custom searches.
 
 import os
 import re
-import json
+from typing import Any
+from urllib.parse import quote
+
 import httpx
-from typing import Dict, List, Any, Optional
-from datetime import datetime
-from urllib.parse import quote, urlencode
+
 
 class OSINTClient:
     """OSINT search client for AU, NZ, and custom targets."""
-    
+
     def __init__(self):
         self.session = httpx.Client(timeout=30.0)
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
-    
-    def search_sync(self, query: str, target_type: str = "auto", custom_search: str = None) -> Dict[str, Any]:
+
+    def search_sync(self, query: str, target_type: str = "auto", custom_search: str | None = None) -> dict[str, Any]:
         """Synchronous search for use in FastAPI."""
-        findings = []
-        
+        findings: list[dict[str, Any]] = []
+
         # Auto-detect target type
         if target_type == "auto":
             target_type = self._detect_type(query)
-        
+
         # Route to appropriate search method
         if target_type == "abn":
             findings.extend(self._search_abn(query))
@@ -48,53 +48,53 @@ class OSINTClient:
         else:
             # General search
             findings.extend(self._search_general(query))
-        
+
         return {"findings": findings, "target_type": target_type}
-    
+
     def _detect_type(self, query: str) -> str:
         """Auto-detect target type from query."""
         query_clean = re.sub(r'\D', '', query)
-        
+
         # ABN (11 digits)
         if len(query_clean) == 11 and query_clean.isdigit():
             return "abn"
-        
+
         # Domain
         if re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', query):
             if query.endswith('.nz') or query.endswith('.co.nz') or query.endswith('.org.nz'):
                 return "nz_domain"
             return "domain"
-        
+
         # Email
         if '@' in query:
             domain = query.split('@')[1]
             if domain.endswith('.nz'):
                 return "nz_domain"
             return "domain"
-        
+
         # Phone
         if re.match(r'^[\d\s\-\+\(\)]+$', query) and len(query_clean) >= 8:
             return "phone"
-        
+
         # IP
         if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', query):
             return "ip"
-        
+
         # NZ company (check for NZ indicators)
         if any(term in query.lower() for term in ['nz', 'new zealand', 'aotearoa']):
             return "nz_company"
-        
+
         return "company"
-    
+
     # Australian searches
-    def _search_abn(self, abn: str) -> List[Dict[str, Any]]:
+    def _search_abn(self, abn: str) -> list[dict[str, Any]]:
         """Search Australian Business Register."""
-        findings = []
+        findings: list[dict[str, Any]] = []
         abn_clean = re.sub(r'\D', '', abn)
-        
+
         if len(abn_clean) != 11:
             return findings
-        
+
         # Try ABR API (requires GUID)
         guid = os.getenv('ABR_GUID', '')
         if guid:
@@ -116,7 +116,7 @@ class OSINTClient:
                     })
             except Exception:
                 pass
-        
+
         # Fallback: scrape ABN Lookup
         try:
             url = f'https://abr.business.gov.au/ABN/View?id={abn_clean}'
@@ -131,13 +131,13 @@ class OSINTClient:
                 })
         except Exception:
             pass
-        
+
         return findings
-    
-    def _search_domain(self, domain: str) -> List[Dict[str, Any]]:
+
+    def _search_domain(self, domain: str) -> list[dict[str, Any]]:
         """Search domain intelligence (AU + general)."""
         findings = []
-        
+
         # DNS records via Google DNS
         for rtype in ['A', 'AAAA', 'MX', 'TXT', 'NS', 'CNAME', 'SOA']:
             try:
@@ -162,7 +162,7 @@ class OSINTClient:
                         })
             except Exception:
                 pass
-        
+
         # Certificate Transparency
         try:
             resp = self.session.get(
@@ -178,7 +178,7 @@ class OSINTClient:
                         sub = sub.strip().lower()
                         if sub and sub.endswith(domain) and '*' not in sub:
                             subdomains.add(sub)
-                
+
                 if subdomains:
                     findings.append({
                         "source": "CertTransparency",
@@ -187,13 +187,13 @@ class OSINTClient:
                         "confidence": 0.9,
                         "data": {
                             "domain": domain,
-                            "subdomains": sorted(list(subdomains))[:100],
+                            "subdomains": sorted(subdomains)[:100],
                             "count": len(subdomains)
                         }
                     })
         except Exception:
             pass
-        
+
         # WHOIS for .au domains
         if domain.endswith('.au'):
             try:
@@ -209,23 +209,23 @@ class OSINTClient:
                     })
             except Exception:
                 pass
-        
+
         return findings
-    
-    def _search_phone(self, phone: str) -> List[Dict[str, Any]]:
+
+    def _search_phone(self, phone: str) -> list[dict[str, Any]]:
         """Search Australian phone number."""
-        findings = []
+        findings: list[dict[str, Any]] = []
         phone_clean = re.sub(r'\D', '', phone)
-        
+
         # Normalize to +61
         if phone_clean.startswith('0') and len(phone_clean) == 10:
             phone_clean = '61' + phone_clean[1:]
         elif phone_clean.startswith('0061'):
             phone_clean = phone_clean[2:]
-        
+
         if not phone_clean.startswith('61'):
             return findings
-        
+
         # Carrier detection
         mobile_prefix = phone_clean[2:5] if len(phone_clean) >= 5 else ''
         carrier_map = {
@@ -250,10 +250,10 @@ class OSINTClient:
             '454': 'Vodafone', '455': 'Vodafone', '456': 'Vodafone', '464': 'Vodafone',
             '465': 'Vodafone',
         }
-        
+
         carrier = carrier_map.get(mobile_prefix, 'Unknown')
         phone_type = 'mobile' if phone_clean[2] == '4' else 'landline'
-        
+
         findings.append({
             "source": "AU-Phone-Lookup",
             "category": "phone_info",
@@ -266,13 +266,13 @@ class OSINTClient:
                 "country": "Australia"
             }
         })
-        
+
         return findings
-    
-    def _search_ip(self, ip: str) -> List[Dict[str, Any]]:
+
+    def _search_ip(self, ip: str) -> list[dict[str, Any]]:
         """Search IP geolocation."""
         findings = []
-        
+
         try:
             resp = self.session.get(
                 f'http://ip-api.com/json/{ip}?fields=status,country,countryCode,regionName,city,isp,org,as',
@@ -301,13 +301,13 @@ class OSINTClient:
                     })
         except Exception:
             pass
-        
+
         return findings
-    
-    def _search_company(self, company: str) -> List[Dict[str, Any]]:
+
+    def _search_company(self, company: str) -> list[dict[str, Any]]:
         """Search Australian company (ASIC)."""
         findings = []
-        
+
         try:
             url = f'https://connectonline.asic.gov.au/RegistrySearch/faces/landing/bySearchRegisters.jspx?searchText={quote(company)}&searchType=OrgAndBusNm'
             resp = self.session.get(url, headers=self.headers)
@@ -321,14 +321,14 @@ class OSINTClient:
                 })
         except Exception:
             pass
-        
+
         return findings
-    
+
     # New Zealand searches
-    def _search_nz_company(self, company: str) -> List[Dict[str, Any]]:
+    def _search_nz_company(self, company: str) -> list[dict[str, Any]]:
         """Search NZ Companies Office."""
         findings = []
-        
+
         try:
             url = f'https://www.companiesoffice.govt.nz/companies/search?q={quote(company)}'
             resp = self.session.get(url, headers=self.headers)
@@ -342,16 +342,16 @@ class OSINTClient:
                 })
         except Exception:
             pass
-        
+
         return findings
-    
-    def _search_nz_domain(self, domain: str) -> List[Dict[str, Any]]:
+
+    def _search_nz_domain(self, domain: str) -> list[dict[str, Any]]:
         """Search NZ domain (.nz)."""
         findings = []
-        
+
         # Use same DNS logic as AU
         findings.extend(self._search_domain(domain))
-        
+
         # NZ-specific WHOIS
         try:
             import subprocess
@@ -366,13 +366,13 @@ class OSINTClient:
                 })
         except Exception:
             pass
-        
+
         return findings
-    
-    def _search_custom(self, query: str, custom_search: str) -> List[Dict[str, Any]]:
+
+    def _search_custom(self, query: str, custom_search: str) -> list[dict[str, Any]]:
         """Custom search using specified engine."""
         findings = []
-        
+
         # Support for custom search engines
         if custom_search == "google":
             try:
@@ -388,7 +388,7 @@ class OSINTClient:
                     })
             except Exception:
                 pass
-        
+
         elif custom_search == "bing":
             try:
                 url = f'https://www.bing.com/search?q={quote(query)}'
@@ -403,7 +403,7 @@ class OSINTClient:
                     })
             except Exception:
                 pass
-        
+
         elif custom_search == "duckduckgo":
             try:
                 url = f'https://duckduckgo.com/html/?q={quote(query)}'
@@ -418,15 +418,15 @@ class OSINTClient:
                     })
             except Exception:
                 pass
-        
+
         return findings
-    
-    def _search_general(self, query: str) -> List[Dict[str, Any]]:
+
+    def _search_general(self, query: str) -> list[dict[str, Any]]:
         """General search fallback."""
         findings = []
-        
+
         # Try multiple search engines
         for engine in ["duckduckgo", "bing"]:
             findings.extend(self._search_custom(query, engine))
-        
+
         return findings

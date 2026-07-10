@@ -1,9 +1,10 @@
-import httpx
 import logging
-from typing import List
 from urllib.parse import quote
-from backend.plugins.base import BasePlugin
+
+import httpx
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class CertTransparencyPlugin(BasePlugin):
             estimated_time=5
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         domain = query
         if "." not in domain:
             return []
@@ -41,7 +42,7 @@ class CertTransparencyPlugin(BasePlugin):
                             sub = sub.strip().lower()
                             if sub and sub.endswith(domain) and '*' not in sub:
                                 subdomains.add(sub)
-                    
+
                     if subdomains:
                         return [PluginResponse(
                             provider=self.metadata.name,
@@ -49,12 +50,12 @@ class CertTransparencyPlugin(BasePlugin):
                             confidence=0.9,
                             evidence=[{
                                 "domain": domain,
-                                "subdomains": sorted(list(subdomains))[:100],
+                                "subdomains": sorted(subdomains)[:100],
                                 "count": len(subdomains)
                             }],
                             raw={"total_certs": len(certs)}
                         )]
         except Exception as e:
             logger.error(f"CertTransparencyPlugin error for {domain}: {e}")
-        
+
         return []

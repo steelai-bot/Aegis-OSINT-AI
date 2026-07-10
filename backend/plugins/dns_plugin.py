@@ -1,9 +1,10 @@
-import httpx
 import logging
-from typing import List
 from urllib.parse import quote
-from backend.plugins.base import BasePlugin
+
+import httpx
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,10 @@ class DNSPlugin(BasePlugin):
             estimated_time=3
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         domain = query
-        
+
         # Basic validation for domain-like strings
         if "." not in domain:
             return []
@@ -53,5 +54,5 @@ class DNSPlugin(BasePlugin):
                 except Exception as e:
                     logger.error(f"DNSPlugin error during {rtype} lookup for {domain}: {e}")
                     continue
-        
+
         return findings

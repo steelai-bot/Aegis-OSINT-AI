@@ -15,29 +15,40 @@ echo ========================================
 echo.
 
 REM --- 1. Check Python ---
-echo [1/10] Checking Python 3.10+...
+echo [1/10] Checking Python 3.11+...
 python --version >nul 2>&1
 if errorlevel 1 (
     echo ERROR: Python not found.
-    echo Please install Python 3.10+ from https://www.python.org/downloads/
+    echo Please install Python 3.11+ from https://www.python.org/downloads/
     pause
     exit /b 1
 )
 for /f "tokens=2" %%i in ('python --version') do set PYTHON_VERSION=%%i
-echo       Python %PYTHON_VERSION% found.
-
-REM --- 2. Check Node.js ---
-echo.
-echo [2/10] Checking Node.js + npm...
-node --version >nul 2>&1
+python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Node.js not found.
-    echo Please install Node.js from https://nodejs.org/
+    echo ERROR: Python 3.11+ is required. Found Python %PYTHON_VERSION%.
     pause
     exit /b 1
 )
-for /f "tokens=*" %%i in ('node --version') do set NODE_VERSION=%%i
-echo       Node.js %NODE_VERSION% found.
+echo       Python %PYTHON_VERSION% found.
+
+REM --- 2. Check optional Node.js ---
+echo.
+echo [2/10] Checking optional Node.js + npm...
+set HAS_NODE=0
+node --version >nul 2>&1
+if errorlevel 1 (
+    echo       Node.js/npm not found. Current bundled frontend does not require it.
+) else (
+    npm --version >nul 2>&1
+    if errorlevel 1 (
+        echo       npm not found. Current bundled frontend does not require it.
+    ) else (
+        set HAS_NODE=1
+        for /f "tokens=*" %%i in ('node --version') do set NODE_VERSION=%%i
+        echo       Node.js !NODE_VERSION! found.
+    )
+)
 
 REM --- 3. Create virtual environment ---
 echo.
@@ -56,28 +67,34 @@ call .venv\Scripts\pip.exe install --upgrade pip -q
 call .venv\Scripts\pip.exe install -r requirements.txt -q
 echo       Python dependencies installed.
 
-REM --- 5. Install Node.js dependencies ---
+REM --- 5. Install frontend dependencies if needed ---
 echo.
-echo [5/10] Installing frontend dependencies...
-if exist "frontend" (
-    cd frontend
-    call npm install --silent
-    cd ..
-    echo       Frontend dependencies installed.
+echo [5/10] Checking frontend dependencies...
+if exist "frontend\package.json" (
+    if "!HAS_NODE!"=="1" (
+        cd frontend
+        call npm install --silent
+        cd ..
+        echo       Frontend dependencies installed.
+    ) else (
+        echo ERROR: frontend\package.json exists, but Node.js/npm is not installed.
+        pause
+        exit /b 1
+    )
 ) else (
-    echo       No frontend folder found. Skipping.
+    echo       Legacy static frontend detected; no npm dependencies required.
 )
 
-REM --- 6. Build frontend ---
+REM --- 6. Build frontend if needed ---
 echo.
-echo [6/10] Building frontend (React + Vite)...
-if exist "frontend" (
+echo [6/10] Building frontend if required...
+if exist "frontend\package.json" (
     cd frontend
     call npm run build --silent
     cd ..
     echo       Frontend built successfully.
 ) else (
-    echo       Skipping frontend build.
+    echo       Using bundled frontend\ static files.
 )
 
 REM --- 7. Create directories ---
@@ -119,7 +136,9 @@ REM --- 10. Final verification ---
 echo.
 echo [10/10] Verifying installation...
 call .venv\Scripts\python.exe -c "import fastapi, httpx, pydantic; print('      Core Python modules OK')" 2>nul || echo       Python verification skipped.
-if exist "frontend_dist" (
+if exist "frontend\index.html" (
+    echo       Frontend files verified.
+) else if exist "frontend_dist\index.html" (
     echo       Frontend build verified.
 )
 

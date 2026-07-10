@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+
 
 class BasePlugin(ABC):
     """
@@ -15,14 +16,14 @@ class BasePlugin(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         """
         Execute the plugin's search logic.
-        
+
         Args:
             query: The target string (domain, IP, email, etc.)
             target_type: The type of the target.
-            
+
         Returns:
             A list of PluginResponse objects containing the findings.
         """

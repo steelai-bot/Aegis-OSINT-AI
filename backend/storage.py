@@ -1,25 +1,31 @@
-import sqlite3
 import json
 import logging
+import os
+import sqlite3
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+from typing import Any
+
 from backend.models import (
-    Entity, EntityType, Relationship, RelationshipType, 
-    TimelineEvent, TimelineEventType
+    Entity,
+    EntityType,
+    Relationship,
+    RelationshipType,
+    TimelineEvent,
+    TimelineEventType,
 )
 
 logger = logging.getLogger(__name__)
 
 class StorageInterface(ABC):
     """Abstract base class for database operations to ensure database-agnosticism."""
-    
+
     @abstractmethod
     def save_entity(self, entity: Entity) -> int:
         pass
 
     @abstractmethod
-    def get_entity(self, entity_id: int) -> Optional[Entity]:
+    def get_entity(self, entity_id: int) -> Entity | None:
         pass
 
     @abstractmethod
@@ -31,15 +37,15 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
-    def get_timeline(self, target_id: int) -> List[TimelineEvent]:
+    def get_timeline(self, target_id: int) -> list[TimelineEvent]:
         pass
 
     @abstractmethod
-    def get_entities_for_target(self, target_id: int) -> List[Entity]:
+    def get_entities_for_target(self, target_id: int) -> list[Entity]:
         pass
 
     @abstractmethod
-    def get_relationships_for_target(self, target_id: int) -> List[Relationship]:
+    def get_relationships_for_target(self, target_id: int) -> list[Relationship]:
         pass
 
     @abstractmethod
@@ -47,17 +53,23 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
-    def save_finding(self, target_id: int, provider: str, confidence: float, evidence: List[Dict[str, Any]]):
+    def save_finding(self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]):
         pass
 
 class SQLiteStorage(StorageInterface):
     """SQLite implementation of the StorageInterface."""
-    
+
     def __init__(self, db_path: str):
         self.db_path = db_path
+        parent_dir = os.path.dirname(db_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         self._init_db()
 
     def _get_connection(self):
+        parent_dir = os.path.dirname(self.db_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
@@ -66,7 +78,32 @@ class SQLiteStorage(StorageInterface):
         """Initialize the database schema."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            
+
+            # Core investigation tables used by the engine.
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS targets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    query TEXT NOT NULL,
+                    target_type TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT DEFAULT 'pending'
+                )
+            ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS findings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    target_id INTEGER,
+                    source TEXT,
+                    category TEXT,
+                    severity TEXT,
+                    confidence REAL,
+                    data TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (target_id) REFERENCES targets (id)
+                )
+            ''')
+
             # Entities table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS entities (
@@ -81,7 +118,7 @@ class SQLiteStorage(StorageInterface):
                     UNIQUE(type, value)
                 )
             ''')
-            
+
             # Relationships table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS relationships (
@@ -96,7 +133,7 @@ class SQLiteStorage(StorageInterface):
                     FOREIGN KEY (target_entity_id) REFERENCES entities (id)
                 )
             ''')
-            
+
             # Timeline events table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS timeline_events (
@@ -111,7 +148,7 @@ class SQLiteStorage(StorageInterface):
                     FOREIGN KEY (entity_id) REFERENCES entities (id)
                 )
             ''')
-            
+
             conn.commit()
 
     def save_entity(self, entity: Entity) -> int:
@@ -121,8 +158,8 @@ class SQLiteStorage(StorageInterface):
                 # Use INSERT OR IGNORE or handle conflict to get existing ID
                 cursor.execute(
                     "INSERT OR IGNORE INTO entities (type, value, display_name, first_seen, last_seen, confidence, metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (entity.type.value, entity.value, entity.display_name, 
-                     entity.first_seen.isoformat(), entity.last_seen.isoformat(), 
+                    (entity.type.value, entity.value, entity.display_name,
+                     entity.first_seen.isoformat(), entity.last_seen.isoformat(),
                      entity.confidence, json.dumps(entity.metadata_json))
                 )
                 if cursor.rowcount == 0:
@@ -131,12 +168,12 @@ class SQLiteStorage(StorageInterface):
                 else:
                     entity_id = cursor.lastrowid
                 conn.commit()
-                return entity_id
+                return int(entity_id)
         except Exception as e:
             logger.error(f"Error saving entity {entity.value}: {e}")
             raise
 
-    def get_entity(self, entity_id: int) -> Optional[Entity]:
+    def get_entity(self, entity_id: int) -> Entity | None:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM entities WHERE id = ?", (entity_id,))
@@ -159,24 +196,24 @@ class SQLiteStorage(StorageInterface):
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO relationships (source_entity_id, target_entity_id, relationship_type, confidence, source_plugin, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (relationship.source_entity_id, relationship.target_entity_id, relationship.relationship_type.value, 
+                (relationship.source_entity_id, relationship.target_entity_id, relationship.relationship_type.value,
                  relationship.confidence, relationship.source_plugin, relationship.created_at.isoformat())
             )
             conn.commit()
-            return cursor.lastrowid
+            return int(cursor.lastrowid)
 
     def log_timeline_event(self, event: TimelineEvent) -> int:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO timeline_events (target_id, timestamp, event_type, plugin, severity, description, entity_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (event.target_id, event.timestamp.isoformat(), event.event_type.value, 
+                (event.target_id, event.timestamp.isoformat(), event.event_type.value,
                  event.plugin, event.severity, event.description, event.entity_id)
             )
             conn.commit()
-            return cursor.lastrowid
+            return int(cursor.lastrowid)
 
-    def get_timeline(self, target_id: int) -> List[TimelineEvent]:
+    def get_timeline(self, target_id: int) -> list[TimelineEvent]:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM timeline_events WHERE target_id = ? ORDER BY timestamp ASC", (target_id,))
@@ -192,14 +229,14 @@ class SQLiteStorage(StorageInterface):
                 entity_id=row['entity_id']
             ) for row in rows]
 
-    def get_entities_for_target(self, target_id: int) -> List[Entity]:
-        # This requires a way to link entities to targets. 
+    def get_entities_for_target(self, target_id: int) -> list[Entity]:
+        # This requires a way to link entities to targets.
         # In this schema, we can find entities via relationships or timeline events.
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT DISTINCT e.* FROM entities e 
-                JOIN timeline_events te ON e.id = te.entity_id 
+                SELECT DISTINCT e.* FROM entities e
+                JOIN timeline_events te ON e.id = te.entity_id
                 WHERE te.target_id = ?
             ''', (target_id,))
             rows = cursor.fetchall()
@@ -214,7 +251,7 @@ class SQLiteStorage(StorageInterface):
                 metadata_json=json.loads(row['metadata_json'])
             ) for row in rows]
 
-    def get_relationships_for_target(self, target_id: int) -> List[Relationship]:
+    def get_relationships_for_target(self, target_id: int) -> list[Relationship]:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -239,7 +276,7 @@ class SQLiteStorage(StorageInterface):
             cursor.execute("UPDATE targets SET status = ? WHERE id = ?", (status, target_id))
             conn.commit()
 
-    def save_finding(self, target_id: int, provider: str, confidence: float, evidence: List[Dict[str, Any]]):
+    def save_finding(self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]):
         with self._get_connection() as conn:
             cursor = conn.cursor()
             for item in evidence:

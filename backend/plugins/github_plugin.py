@@ -1,9 +1,10 @@
-import httpx
 import logging
 import os
-from typing import List
-from backend.plugins.base import BasePlugin
+
+import httpx
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class GithubPlugin(BasePlugin):
             estimated_time=4
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         token = os.getenv("GITHUB_TOKEN")
         headers = {"Authorization": f"token {token}"} if token else {}
@@ -35,7 +36,7 @@ class GithubPlugin(BasePlugin):
                 # Search for users matching the query
                 url = f"https://api.github.com/search/users?q={query}"
                 resp = await client.get(url, headers=headers)
-                
+
                 if resp.status_code == 200:
                     data = resp.json()
                     users = data.get("items", [])
@@ -47,7 +48,7 @@ class GithubPlugin(BasePlugin):
                                 "html_url": u.get("html_url"),
                                 "type": u.get("type")
                             })
-                        
+
                         findings.append(PluginResponse(
                             provider=self.metadata.name,
                             entity_type=TargetType.GITHUB,

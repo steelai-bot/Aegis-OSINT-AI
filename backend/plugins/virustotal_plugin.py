@@ -1,9 +1,10 @@
-import os
-import httpx
 import logging
-from typing import List
-from backend.plugins.base import BasePlugin
+import os
+
+import httpx
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class VirusTotalPlugin(BasePlugin):
             estimated_time=6
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         api_key = os.getenv("VIRUSTOTAL_API_KEY")
         if not api_key:
             logger.warning("VIRUSTOTAL_API_KEY not configured")

@@ -1,9 +1,10 @@
-import os
-import httpx
 import logging
-from typing import List
-from backend.plugins.base import BasePlugin
+import os
+
+import httpx
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class CensysPlugin(BasePlugin):
             estimated_time=12
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         api_id = os.getenv("CENSYS_API_ID")
         api_secret = os.getenv("CENSYS_API_SECRET")
         if not api_id or not api_secret:
@@ -43,18 +44,18 @@ class CensysPlugin(BasePlugin):
         async with httpx.AsyncClient(timeout=20.0) as client:
             try:
                 auth = (api_id, api_secret)
-                
+
                 # Search hosts
                 if target_type in (TargetType.IP, TargetType.DOMAIN, TargetType.NZ_DOMAIN):
                     search_url = "https://search.censys.io/api/v2/hosts/search"
-                    params = {"q": query, "per_page": 5}
-                    
+                    params: dict[str, str | int] = {"q": query, "per_page": 5}
+
                     resp = await client.get(search_url, params=params, auth=auth)
-                    
+
                     if resp.status_code == 200:
                         data = resp.json()
                         results = data.get("result", {}).get("hits", [])
-                        
+
                         if results:
                             evidence = []
                             for hit in results[:5]:
@@ -68,7 +69,7 @@ class CensysPlugin(BasePlugin):
                                     "autonomous_system": hit.get("autonomous_system", {}),
                                     "operating_system": hit.get("operating_system", {})
                                 })
-                            
+
                             findings.append(PluginResponse(
                                 provider=self.metadata.name,
                                 entity_type=target_type,

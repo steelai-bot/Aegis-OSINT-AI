@@ -4,8 +4,9 @@ Supports OpenRouter, OpenAI, Anthropic, Gemini, NVIDIA NIM, Groq, and Mistral.
 """
 
 import os
+from typing import Any
+
 import httpx
-from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel
 
 
@@ -19,6 +20,7 @@ class AIProvider:
     """Base class for AI providers."""
     def __init__(self, api_key: str):
         self.api_key = api_key
+        self._default_model: str | None = None
 
     async def chat(self, prompt: str, model: str) -> AIResponse:
         raise NotImplementedError
@@ -27,11 +29,11 @@ class AIProvider:
         self,
         text: str,
         model: str,
-        image_urls: Optional[List[str]] = None,
-        video_urls: Optional[List[str]] = None,
+        image_urls: list[str] | None = None,
+        video_urls: list[str] | None = None,
     ) -> AIResponse:
         """Send a multimodal request (text + optional images/video).
-        
+
         Default implementation falls back to text-only chat.
         Override in providers that support vision/multimodal inputs.
         """
@@ -124,7 +126,7 @@ class GeminiProvider(AIProvider):
 class NvidiaProvider(AIProvider):
     """
     NVIDIA NIM provider with support for MiniMax-M3 and other models.
-    
+
     MiniMax-M3 is multimodal. To send images or video, set a message's
     "content" to an array of parts (a public URL or a base64 data URI):
         messages: [{ role: "user", content: [
@@ -143,11 +145,11 @@ class NvidiaProvider(AIProvider):
         self,
         text: str,
         model: str,
-        image_urls: Optional[List[str]] = None,
-        video_urls: Optional[List[str]] = None,
+        image_urls: list[str] | None = None,
+        video_urls: list[str] | None = None,
     ) -> AIResponse:
         """Send a multimodal request with text + optional images/video."""
-        content_parts: List[Dict[str, Any]] = [{"type": "text", "text": text}]
+        content_parts: list[dict[str, Any]] = [{"type": "text", "text": text}]
 
         if image_urls:
             for url in image_urls:
@@ -168,7 +170,7 @@ class NvidiaProvider(AIProvider):
     async def _make_request(
         self,
         model: str,
-        content: Union[str, List[Dict[str, Any]]]
+        content: str | list[dict[str, Any]]
     ) -> AIResponse:
         url = "https://integrate.api.nvidia.com/v1/chat/completions"
         headers = {
@@ -202,9 +204,9 @@ class NvidiaProvider(AIProvider):
 
 class GroqProvider(AIProvider):
     """Groq AI provider using OpenAI-compatible API."""
-    
+
     DEFAULT_MODEL = "llama3-8b-8192"
-    
+
     async def chat(self, prompt: str, model: str) -> AIResponse:
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -216,7 +218,7 @@ class GroqProvider(AIProvider):
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7
         }
-        
+
         async with httpx.AsyncClient() as client:
             resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
             resp.raise_for_status()
@@ -230,9 +232,9 @@ class GroqProvider(AIProvider):
 
 class MistralProvider(AIProvider):
     """Mistral AI provider using OpenAI-compatible API."""
-    
+
     DEFAULT_MODEL = "mistral-small-latest"
-    
+
     async def chat(self, prompt: str, model: str) -> AIResponse:
         url = "https://api.mistral.ai/v1/chat/completions"
         headers = {
@@ -244,7 +246,7 @@ class MistralProvider(AIProvider):
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7
         }
-        
+
         async with httpx.AsyncClient() as client:
             resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
             resp.raise_for_status()
@@ -258,7 +260,7 @@ class MistralProvider(AIProvider):
 
 class AIProviderFactory:
     @staticmethod
-    def get_provider(provider_name: str) -> Optional[AIProvider]:
+    def get_provider(provider_name: str) -> AIProvider | None:
         # Map provider IDs to env var names (some share the same key)
         key_map = {
             "openrouter": "OPENROUTER_API_KEY",
@@ -270,15 +272,15 @@ class AIProviderFactory:
             "groq": "GROQ_API_KEY",
             "mistral": "MISTRAL_API_KEY",
         }
-        
+
         env_key = key_map.get(provider_name.lower())
         if not env_key:
             return None
-        
+
         key = os.getenv(env_key)
         if not key:
             return None
-        
+
         providers = {
             "openrouter": (OpenRouterProvider, None),
             "openai": (OpenAIProvider, None),
@@ -289,11 +291,11 @@ class AIProviderFactory:
             "groq": (GroqProvider, GroqProvider.DEFAULT_MODEL),
             "mistral": (MistralProvider, MistralProvider.DEFAULT_MODEL),
         }
-        
+
         entry = providers.get(provider_name.lower())
         if not entry:
             return None
-        
+
         cls, default_model = entry
         instance = cls(key)
         instance._default_model = default_model
