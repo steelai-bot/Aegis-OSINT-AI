@@ -2,6 +2,11 @@
 # Aegis OSINT AI - Linux Setup Script
 # One-click installation for Linux
 
+# ============================================
+# ONE-LINE INSTALL (copy & paste):
+# curl -fsSL https://raw.githubusercontent.com/steelai-bot/Aegis-OSINT-AI/main/setup.sh | bash
+# ============================================
+
 set -e
 
 echo ""
@@ -67,8 +72,16 @@ fi
 # Initialize database
 echo ""
 echo "[7/12] Initializing database..."
-./.venv/bin/python -c "import sys; sys.path.insert(0, '.'); from backend.main import init_db; init_db()" > /dev/null 2>&1 || echo "      WARNING: Could not initialize database (may be created on first run)"
-echo "      Database initialization step completed."
+./.venv/bin/python -c "
+import sys
+sys.path.insert(0, '.')
+try:
+    from backend.main import init_db
+    init_db()
+    print('      Database initialized.')
+except Exception as e:
+    print(f'      WARNING: {e}')
+" 2>/dev/null || echo "      WARNING: Could not initialize database (may be created on first run)"
 
 # Verify installation
 echo ""

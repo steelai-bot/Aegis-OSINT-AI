@@ -2,6 +2,11 @@
 REM Aegis OSINT AI - Windows Setup Script
 REM One-click installation for Windows
 
+REM ============================================
+REM ONE-LINE INSTALL (run in PowerShell as Admin):
+REM iwr -useb https://raw.githubusercontent.com/steelai-bot/Aegis-OSINT-AI/main/setup.bat -OutFile setup.bat; .\setup.bat
+REM ============================================
+
 setlocal enabledelayedexpansion
 
 echo.
@@ -70,7 +75,16 @@ if not exist ".env" (
 REM Initialize database
 echo.
 echo [7/12] Initializing database...
-call .venv\Scripts\python.exe -c "import sys; sys.path.insert(0, '.'); from backend.main import init_db; init_db()" 2>nul
+call .venv\Scripts\python.exe -c "
+import sys
+sys.path.insert(0, '.')
+try:
+    from backend.main import init_db
+    init_db()
+    print('      Database initialized.')
+except Exception as e:
+    print('      WARNING:', e)
+" 2>nul
 if errorlevel 1 (
     echo       WARNING: Could not initialize database (may be created on first run)
 ) else (
