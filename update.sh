@@ -1,6 +1,12 @@
 #!/bin/bash
-# Aegis OSINT AI - Linux Update Script
-# Updates the application while preserving configuration and data
+# ============================================================
+# Aegis OSINT AI - Update Script (Linux)
+# ============================================================
+# ONE-LINE UPDATE:
+# curl -fsSL https://raw.githubusercontent.com/steelai-bot/Aegis-OSINT-AI/main/update.sh | bash
+# ============================================================
+
+set -e
 
 echo ""
 echo "========================================"
@@ -8,54 +14,74 @@ echo "  Aegis OSINT AI - Update (Linux)"
 echo "========================================"
 echo ""
 
-# Check if .venv exists
-if [ ! -d ".venv" ]; then
-    echo "ERROR: Virtual environment not found."
-    echo "Please run ./setup.sh first."
+# Check if this is a git repository
+if [ ! -d ".git" ]; then
+    echo "ERROR: This is not a git repository."
+    echo "Please clone the repository first or run this script from the project root."
     exit 1
 fi
 
-# Backup .env
-echo "[1/5] Backing up configuration..."
-if [ -f ".env" ]; then
-    cp .env .env.backup
-    echo "      Configuration backed up."
+# Pull latest changes
+echo "[1/5] Pulling latest changes from repository..."
+git fetch origin
+git pull origin main --ff-only || {
+    echo "WARNING: Could not fast-forward. Trying normal pull..."
+    git pull origin main
+}
+echo "      Repository updated."
+
+# Update Python dependencies (if requirements changed)
+echo ""
+echo "[2/5] Updating Python dependencies..."
+if [ -d ".venv" ]; then
+    ./.venv/bin/pip install -r requirements.txt -q
+    echo "      Python dependencies updated."
 else
-    echo "      No .env to backup."
+    echo "      Virtual environment not found. Skipping Python update."
 fi
 
-# Git pull
+# Update frontend dependencies and rebuild (if frontend changed)
 echo ""
-echo "[2/5] Pulling latest changes..."
-git pull || echo "      WARNING: Git pull failed (not a git repo or no changes)"
+echo "[3/5] Checking frontend..."
+if [ -d "frontend" ]; then
+    cd frontend
+    if [ -f "package.json" ]; then
+        echo "      Updating frontend dependencies..."
+        npm install --silent
+        echo "      Rebuilding frontend..."
+        npm run build --silent
+        echo "      Frontend rebuilt successfully."
+    fi
+    cd ..
+else
+    echo "      No frontend directory found."
+fi
 
-# Update Python dependencies
-echo ""
-echo "[3/5] Updating Python dependencies..."
-./.venv/bin/pip install -r requirements.txt --upgrade > /dev/null 2>&1 || echo "      WARNING: Some dependencies may not have updated"
-echo "      Dependencies update step completed."
-
-# Database migration (if needed)
+# Re-initialize database (safe)
 echo ""
 echo "[4/5] Checking database..."
-if [ -f "data/aegis.db" ]; then
-    echo "      Database exists - no migration needed."
-else
-    echo "      Database will be created on next run."
+if [ -f ".venv/bin/python" ]; then
+    ./.venv/bin/python -c "
+import sys
+sys.path.insert(0, '.')
+try:
+    from backend.main import init_db
+    init_db()
+    print('      Database schema up to date.')
+except:
+    print('      Database check skipped.')
+" 2>/dev/null || echo "      Database check skipped."
 fi
 
-# Restore .env
 echo ""
-echo "[5/5] Restoring configuration..."
-if [ -f ".env.backup" ]; then
-    mv .env.backup .env
-    echo "      Configuration restored."
-fi
-
+echo "[5/5] Update complete!"
 echo ""
 echo "========================================"
-echo "  Update Complete!"
+echo "  ✅ Update finished successfully!"
 echo "========================================"
 echo ""
-echo "Run: ./run.sh"
+echo "You can now restart the application with:"
+echo "  ./run.sh"
+echo ""
+echo "Or if the server is running, restart it manually."
 echo ""
