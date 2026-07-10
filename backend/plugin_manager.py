@@ -2,15 +2,42 @@ import importlib
 import inspect
 import pkgutil
 import logging
-from typing import Dict, List, Optional, Type, Any
+import os
+import re
+from typing import Dict, List, Optional, Any
+from pathlib import Path
 from backend.plugins.base import BasePlugin
 from backend.models import PluginMetadata, PluginResponse, TargetType
 
 logger = logging.getLogger(__name__)
 
+# Semver regex pattern for version validation (simplified but robust)
+SEMVER_PATTERN = re.compile(
+    r'^([0-9]+)\.([0-9]+)\.([0-9]+)'
+    r'(?:-([0-9A-Za-z-.]+))?'
+    r'(?:\+([0-9A-Za-z-.]+))?$'
+)
+
+
+def validate_semver(version: str) -> bool:
+    """Validate that a version string follows semantic versioning (X.Y.Z format)."""
+    if not version:
+        return False
+    parts = version.split('.')
+    if len(parts) < 3:
+        return False
+    try:
+        major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
+        # Basic sanity check
+        return major >= 0 and minor >= 0 and patch >= 0
+    except (ValueError, IndexError):
+        return False
+
+
 class PluginManager:
     """
     Singleton manager for discovering and executing OSINT plugins.
+    Supports hot reload detection, version validation, and dependency checking.
     """
     _instance: Optional['PluginManager'] = None
 
@@ -25,19 +52,63 @@ class PluginManager:
             return
         self._plugins: Dict[str, BasePlugin] = {}
         self._plugin_statuses: Dict[str, str] = {}
+        self._plugin_errors: Dict[str, str] = {}
+        self._file_mtimes: Dict[str, float] = {}
         self._initialized = True
         logger.info("PluginManager initialized.")
 
-    def discover_plugins(self, package_path: str = "backend.plugins"):
+    def _validate_plugin_metadata(self, plugin_instance: BasePlugin, plugin_name: str) -> Optional[str]:
+        """Validate plugin metadata including version and dependencies. Returns error message or None."""
+        metadata = plugin_instance.metadata
+        
+        # Validate semver format
+        if not validate_semver(metadata.version):
+            return f"Invalid semver version format: {metadata.version}"
+        
+        return None
+
+    def _check_plugin_dependencies(self, plugin_name: str, dependencies: List[str]) -> Optional[str]:
+        """Check if required plugin dependencies exist. Returns error message or None."""
+        missing_deps = []
+        for dep in dependencies:
+            if dep not in self._plugins:
+                missing_deps.append(dep)
+        
+        if missing_deps:
+            return f"Missing dependencies: {', '.join(missing_deps)}"
+        return None
+
+    def discover_plugins(self, package_path: str = "backend.plugins", watch_for_changes: bool = True):
         """
         Dynamically discovers and instantiates plugins from the specified package.
+        
+        Args:
+            package_path: Path to the plugins package
+            watch_for_changes: If True, only rediscover if file modification times have changed
         """
+        # Hot reload detection - skip if no changes and watch is enabled
+        if watch_for_changes:
+            try:
+                package = importlib.import_module(package_path)
+                plugins_dir = Path(package.__path__[0])
+                current_mtimes: Dict[str, float] = {}
+                
+                for py_file in plugins_dir.glob("*.py"):
+                    current_mtimes[str(py_file)] = py_file.stat().st_mtime
+                
+                # If mtimes haven't changed and we have plugins, skip discovery
+                if self._plugins and current_mtimes == self._file_mtimes:
+                    logger.debug("Plugin hot reload: No file changes detected, skipping rediscovery")
+                    return
+                
+                self._file_mtimes = current_mtimes
+            except Exception as e:
+                logger.warning(f"Hot reload detection failed, proceeding with full discovery: {e}")
+        
+        # Clear and rebuild plugin registry
         self._plugins.clear()
         self._plugin_statuses.clear()
-        
-        from backend.provider_manager import ProviderManager
-        import os
-        provider_mgr = ProviderManager()
+        self._plugin_errors.clear()
         
         try:
             package = importlib.import_module(package_path)
@@ -53,7 +124,7 @@ class PluginManager:
                         if issubclass(obj, BasePlugin) and obj is not BasePlugin:
                             plugin_instance = obj()
                             
-                            # Validate Metadata
+                            # Validate Metadata exists
                             if not hasattr(plugin_instance, 'metadata') or plugin_instance.metadata is None:
                                 logger.error(f"Plugin {name} missing metadata. Skipping.")
                                 continue
@@ -64,25 +135,47 @@ class PluginManager:
                             if plugin_name in self._plugins:
                                 logger.error(f"Duplicate plugin name detected: {plugin_name}. Skipping {name}.")
                                 continue
-                                
-                            # Check credentials
+                            
+                            # Validate version format
+                            version_error = self._validate_plugin_metadata(plugin_instance, plugin_name)
+                            if version_error:
+                                logger.error(f"Plugin {plugin_name} validation failed: {version_error}. Skipping.")
+                                self._plugin_errors[plugin_name] = version_error
+                                continue
+                            
+                            # Check credentials and dependencies
                             status = "enabled"
+                            error_msg = None
+                            
+                            # Check required API keys
                             for key in plugin_instance.metadata.required_api_keys:
                                 if not os.getenv(key):
-                                    logger.warning(f"Plugin {plugin_name} missing required credential: {key}. Disabling.")
+                                    error_msg = f"Missing required credential: {key}"
                                     status = "disabled"
                                     break
                             
+                            # Check plugin dependencies (only if enabled)
+                            if status == "enabled" and plugin_instance.metadata.dependencies:
+                                dep_error = self._check_plugin_dependencies(
+                                    plugin_name, 
+                                    plugin_instance.metadata.dependencies
+                                )
+                                if dep_error:
+                                    error_msg = dep_error
+                                    status = "disabled"
+                            
                             self._plugins[plugin_name] = plugin_instance
                             self._plugin_statuses[plugin_name] = status
+                            if error_msg:
+                                self._plugin_errors[plugin_name] = error_msg
                             logger.info(f"Discovered plugin: {plugin_name} (Status: {status})")
                             
                 except Exception as e:
-                    logger.error(f"Failed to load module {full_module_name}: {e}")
+                    logger.error(f"Failed to load module {full_module_name}: {e}", exc_info=True)
             
             logger.info(f"Discovery complete. Found {len(self._plugins)} plugins.")
         except Exception as e:
-            logger.error(f"Error during plugin discovery: {e}")
+            logger.error(f"Error during plugin discovery: {e}", exc_info=True)
 
     def get_plugin(self, plugin_name: str) -> Optional[BasePlugin]:
         """Retrieve a plugin by its name."""
@@ -101,18 +194,24 @@ class PluginManager:
             logger.info(f"Executing plugin: {plugin_name} for query: {query}")
             return await plugin.execute(query, target_type)
         except Exception as e:
-            logger.error(f"Error executing plugin '{plugin_name}': {e}")
-            raise
+            logger.error(f"Error executing plugin '{plugin_name}': {e}", exc_info=True)
+            return []  # Sandbox plugin failures: never crash the app
 
     def list_plugins(self) -> List[Dict[str, Any]]:
         """Return metadata for all discovered plugins."""
         result = []
         for name, plugin in self._plugins.items():
-            data = plugin.metadata.dict()
+            data = plugin.metadata.model_dump()
             data["status"] = self._plugin_statuses.get(name, "unknown")
+            if name in self._plugin_errors:
+                data["error"] = self._plugin_errors[name]
             result.append(data)
         return result
 
     def get_all_plugin_names(self) -> List[str]:
         """Return names of all discovered plugins."""
         return list(self._plugins.keys())
+
+    def get_plugin_error(self, plugin_name: str) -> Optional[str]:
+        """Return the error message for a plugin, if any."""
+        return self._plugin_errors.get(plugin_name)

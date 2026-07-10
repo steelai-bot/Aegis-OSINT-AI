@@ -1,7 +1,13 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow():
+    """Timezone-aware UTC now for Pydantic default_factory."""
+    return datetime.now(timezone.utc)
+
 
 class TargetType(str, Enum):
     DOMAIN = "domain"
@@ -19,21 +25,27 @@ class TargetType(str, Enum):
     NZ_COMPANY = "nz_company"
     AUTO = "auto"
 
+
 class InvestigationStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
 
+
 class PluginMetadata(BaseModel):
     name: str = Field(..., description="Unique identifier for the plugin")
     description: str = Field(..., description="Brief description of what the plugin does")
+    version: str = Field(default="1.0.0", description="Plugin version (semver)")
     supported_entity_types: List[TargetType] = Field(..., description="Types of targets this plugin can process")
     required_api_keys: List[str] = Field(default_factory=list, description="List of environment variable names for required API keys")
     supported_authentication: List[str] = Field(default_factory=lambda: ["none"], description="Supported auth methods (e.g., api_key, oauth, username_password, session_cookie, none)")
     tags: List[str] = Field(default_factory=list, description="Tags for categorization (e.g., 'dns', 'passive')")
     execution_cost: float = Field(default=1.0, description="Relative weight/cost of execution")
     estimated_time: int = Field(default=5, description="Estimated execution time in seconds")
+    dependencies: List[str] = Field(default_factory=list, description="List of other plugin names this plugin depends on")
+    min_app_version: str = Field(default="1.0.0", description="Minimum Aegis version required")
+
 
 class PluginResponse(BaseModel):
     provider: str = Field(..., description="Name of the plugin that provided the result")
@@ -42,6 +54,7 @@ class PluginResponse(BaseModel):
     evidence: List[Dict[str, Any]] = Field(default_factory=list, description="Structured evidence found")
     raw: Dict[str, Any] = Field(default_factory=dict, description="Original raw output from the provider")
 
+
 class InvestigationWorkflow(BaseModel):
     target_id: int
     target_type: TargetType
@@ -49,9 +62,11 @@ class InvestigationWorkflow(BaseModel):
     status: InvestigationStatus = InvestigationStatus.PENDING
     results: List[PluginResponse] = Field(default_factory=list)
 
+
 class InvestigationTemplate(BaseModel):
     target_type: TargetType
     steps: List[str] = Field(..., description="Standard sequence of plugins for this target type")
+
 
 class EntityType(str, Enum):
     DOMAIN = "domain"
@@ -65,15 +80,17 @@ class EntityType(str, Enum):
     PERSON = "person"
     UNKNOWN = "unknown"
 
+
 class Entity(BaseModel):
     id: Optional[int] = None
     type: EntityType
     value: str
     display_name: Optional[str] = None
-    first_seen: datetime = Field(default_factory=datetime.utcnow)
-    last_seen: datetime = Field(default_factory=datetime.utcnow)
+    first_seen: datetime = Field(default_factory=_utcnow)
+    last_seen: datetime = Field(default_factory=_utcnow)
     confidence: float = Field(0.0, ge=0.0, le=1.0)
     metadata_json: Dict[str, Any] = Field(default_factory=dict)
+
 
 class RelationshipType(str, Enum):
     RESOLVES_TO = "resolves_to"
@@ -84,6 +101,7 @@ class RelationshipType(str, Enum):
     EXPOSED_IN = "exposed_in"
     UNKNOWN = "unknown"
 
+
 class Relationship(BaseModel):
     id: Optional[int] = None
     source_entity_id: int
@@ -91,7 +109,8 @@ class Relationship(BaseModel):
     relationship_type: RelationshipType
     confidence: float = Field(0.0, ge=0.0, le=1.0)
     source_plugin: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
+
 
 class TimelineEventType(str, Enum):
     INVESTIGATION_CREATED = "investigation_created"
@@ -103,10 +122,11 @@ class TimelineEventType(str, Enum):
     REPORT_GENERATED = "report_generated"
     ERROR = "error"
 
+
 class TimelineEvent(BaseModel):
     id: Optional[int] = None
     target_id: int
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow)
     event_type: TimelineEventType
     plugin: Optional[str] = None
     severity: str = "info"  # info, warning, critical

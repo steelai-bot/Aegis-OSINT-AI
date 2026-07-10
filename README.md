@@ -45,12 +45,14 @@ A lightweight, modular, and extensible OSINT (Open Source Intelligence) investig
 ## ⚙️ Setup & Installation
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/steelai-bot/Aegis-OSINT-AI.git
    cd Aegis-OSINT-AI
    ```
 
 2. **Set up a virtual environment**:
+
    ```bash
    python -m venv .venv
    # Windows
@@ -60,26 +62,30 @@ A lightweight, modular, and extensible OSINT (Open Source Intelligence) investig
    ```
 
 3. **Install dependencies**:
+
    ```bash
    pip install -r requirements.txt
    ```
 
 4. **Configure API Keys**:
    Copy the example configuration to a `.env` file and add your keys:
+
    ```bash
    cp config/.env.example .env
    ```
 
 5. **Run the application**:
+
    ```bash
    python -m backend.main
    ```
+
    The application will be available at `http://localhost:8000`.
 
 ## 🧩 Developing Plugins (Plugin Development Guide)
 
 To add a new plugin, create a new file in `backend/plugins/` that inherits from `BasePlugin`.
-Your plugin must define `supported_authentication`. 
+Your plugin must define `supported_authentication`.
 
 ```python
 from backend.plugins.base import BasePlugin
@@ -116,6 +122,7 @@ Plugins MUST use `ProviderManager.get_credentials()` instead of reading `os.gete
 ## 🌍 Environment Variables
 
 Aegis creates `.env` automatically from `.env.example` if it doesn't exist.
+
 - `DATABASE`: Path to SQLite database.
 - `{PLUGIN_NAME}_API_KEY`: Secrets managed by Provider UI.
 

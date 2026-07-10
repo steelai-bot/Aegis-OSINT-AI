@@ -4,46 +4,46 @@ Lightweight Windows-first OSINT investigation framework
 """
 
 import os
-from dotenv import load_dotenv
+import re
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-from datetime import datetime
 import sqlite3
 import json
 import httpx
 from fastapi.middleware.cors import CORSMiddleware
 from backend.provider_manager import ProviderManager
-import traceback
+from backend.config.settings import settings, get_settings
+import logging
 
-# Load environment variables from .env
-load_dotenv(".env")
+logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app
-app = FastAPI(
-    title="Aegis OSINT AI",
-    version="1.0.0",
-    description="Lightweight OSINT investigation framework"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+# Initialize provider manager (non-async init)
 provider_manager = ProviderManager()
 
-# Database setup
-DATABASE_PATH = os.getenv("DATABASE", "data/aegis.db")
+# Database path from settings
+DATABASE_PATH = settings.database_path
+
+
+# --- Database Context Manager ---
+def get_db():
+    """Context manager for SQLite connections - auto-closes on exit."""
+    os.makedirs(os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True)
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
 
 def init_db():
     """Initialize SQLite database with schema."""
-    os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
+    os.makedirs(os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True)
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     
@@ -85,13 +85,34 @@ def init_db():
     conn.commit()
     conn.close()
 
-@app.on_event("startup")
-async def startup_event():
+
+# --- Lifespan Handler (replaces deprecated on_event) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: initialize DB and discover plugins on startup."""
     init_db()
-    # Discover plugins on startup
     from backend.plugin_manager import PluginManager
     pm = PluginManager()
     pm.discover_plugins()
+    yield
+
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Aegis OSINT AI",
+    version="1.0.0",
+    description="Lightweight OSINT investigation framework",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,  # False is required per spec when allow_origins=["*"]
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 def format_response(data: Any = None, success: bool = True, errors: List[str] = None, metadata: Dict = None):
     return {
@@ -101,12 +122,14 @@ def format_response(data: Any = None, success: bool = True, errors: List[str] = 
         "metadata": metadata or {}
     }
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content=format_response(success=False, errors=[str(exc)])
     )
+
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -115,34 +138,51 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         content=format_response(success=False, errors=[exc.detail])
     )
 
+
+# --- Pydantic Models ---
+
 class TargetCreate(BaseModel):
-    query: str
+    query: str = Field(..., min_length=1, max_length=1000)
     target_type: Optional[str] = "auto"
+
 
 class SearchRequest(BaseModel):
-    query: str
+    query: str = Field(..., min_length=1, max_length=1000)
     target_type: Optional[str] = "auto"
-    custom_search: Optional[str] = None
+
 
 class ReportRequest(BaseModel):
-    target_id: int
+    target_id: int = Field(..., gt=0)
     format: str = "html"
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=10000)
+    provider: Optional[str] = "openrouter"
+    model: Optional[str] = ""
+    image_urls: Optional[List[str]] = None
+    video_urls: Optional[List[str]] = None
+
+
+class ConfigureProviderRequest(BaseModel):
+    api_key: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
+class SaveSettingsRequest(BaseModel):
+    api_key: Optional[str] = None
+
+
+# --- Static File Routes ---
 
 @app.get("/")
 async def root():
-    return FileResponse("frontend/index.html")
+    return FileResponse("frontend_dist/index.html")
 
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
-app.mount("/assets", StaticFiles(directory="frontend"), name="assets")
 
-# Exception for main index to serve frontend
-@app.get("/app.js")
-async def get_app_js():
-    return FileResponse("frontend/app.js")
-
-@app.get("/style.css")
-async def get_style_css():
-    return FileResponse("frontend/style.css")
+app.mount("/static", StaticFiles(directory="frontend_dist"), name="static")
+app.mount("/assets", StaticFiles(directory="frontend_dist"), name="assets")
 
 
 @app.get("/health")
@@ -156,12 +196,14 @@ async def health():
 async def list_providers():
     return format_response(provider_manager.get_providers())
 
+
 @app.get("/api/providers/{provider}")
 async def get_provider(provider: str):
     try:
         return format_response(provider_manager.get_provider(provider))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
 
 @app.get("/api/providers/{provider}/status")
 async def get_provider_status(provider: str):
@@ -171,13 +213,28 @@ async def get_provider_status(provider: str):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+
 @app.post("/api/providers/{provider}/configure")
-async def configure_provider(provider: str, payload: Dict[str, str]):
+async def configure_provider(provider: str, payload: ConfigureProviderRequest):
+    # Validate provider exists
     try:
-        provider_manager.configure_provider(provider, payload)
+        provider_manager.get_provider(provider)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    
+    try:
+        config_data = {}
+        if payload.api_key is not None:
+            config_data["api_key"] = payload.api_key
+        if payload.username is not None:
+            config_data["username"] = payload.username
+        if payload.password is not None:
+            config_data["password"] = payload.password
+        provider_manager.configure_provider(provider, config_data)
         return format_response({"message": f"{provider} configured successfully."})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/providers/{provider}/test")
 async def test_provider(provider: str):
@@ -190,6 +247,7 @@ async def test_provider(provider: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.delete("/api/providers/{provider}")
 async def disconnect_provider(provider: str):
     try:
@@ -198,56 +256,82 @@ async def disconnect_provider(provider: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Backward compatibility for settings page (if needed, but we should use providers)
-@app.get("/api/settings")
-async def get_settings():
-    providers = provider_manager.get_providers()
-    settings = {}
-    for p in providers:
-        # Just return connected state or something, or actual keys (not recommended for security)
-        key_name = f"{p['id'].upper()}_API_KEY"
-        settings[p['id']] = os.getenv(key_name, "")
-    return format_response(settings)
 
-@app.post("/api/settings")
-async def save_settings(payload: Dict[str, str]):
-    for key, val in payload.items():
-        if val:
-            provider_manager.configure_provider(key, {"api_key": val})
+# Settings endpoints using Pydantic settings
+@app.get("/api/settings")
+async def get_app_settings():
+    """Get current settings from the config module."""
+    return format_response(get_settings().model_dump(exclude={"openai_api_key": True, "anthropic_api_key": True, "gemini_api_key": True, "openrouter_api_key": True, "groq_api_key": True, "mistral_api_key": True, "github_token": True, "shodan_api_key": True, "securitytrails_api_key": True}))
+
+
+@app.post("/api/settings/save")
+async def save_app_settings(payload: Dict[str, str]):
+    """Save settings to .env file (api keys only)."""
+    env_path = Path(".env")
+    
+    # Build env content with current values
+    lines = [
+        "# Aegis OSINT AI Configuration",
+        f"OPENAI_API_KEY={os.getenv('OPENAI_API_KEY', '')}",
+        f"ANTHROPIC_API_KEY={os.getenv('ANTHROPIC_API_KEY', '')}",
+        f"GEMINI_API_KEY={os.getenv('GEMINI_API_KEY', '')}",
+        f"OPENROUTER_API_KEY={os.getenv('OPENROUTER_API_KEY', '')}",
+        f"GROQ_API_KEY={os.getenv('GROQ_API_KEY', '')}",
+        f"MISTRAL_API_KEY={os.getenv('MISTRAL_API_KEY', '')}",
+        f"GITHUB_TOKEN={os.getenv('GITHUB_TOKEN', '')}",
+        f"DATABASE={settings.database_path}",
+        f"HOST={settings.host}",
+        f"PORT={settings.port}",
+    ]
+    
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return format_response({"message": "Settings saved successfully"})
+
 
 # --- INVESTIGATION ENDPOINTS ---
 
 @app.post("/api/targets")
 async def create_target(payload: TargetCreate):
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO targets (query, target_type) VALUES (?, ?)",
-        (payload.query, payload.target_type)
-    )
-    target_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    conn_gen = get_db()
+    conn = None
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO targets (query, target_type) VALUES (?, ?)",
+            (payload.query, payload.target_type)
+        )
+        target_id = cursor.lastrowid
+        conn.commit()
+    finally:
+        if conn:
+            conn.close()
     
     return format_response({
         "id": target_id,
         "query": payload.query,
         "target_type": payload.target_type,
         "status": "pending",
-        "created_at": datetime.now().isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat()
     })
+
 
 @app.get("/api/targets")
 async def list_targets():
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC")
-    rows = cursor.fetchall()
-    conn.close()
+    conn_gen = get_db()
+    conn = None
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC")
+        rows = cursor.fetchall()
+    finally:
+        if conn:
+            conn.close()
     
     targets = [{"id": r[0], "query": r[1], "target_type": r[2], "status": r[3], "created_at": r[4]} for r in rows]
     return format_response(targets)
+
 
 @app.post("/api/search")
 async def search(payload: SearchRequest):
@@ -256,7 +340,6 @@ async def search(payload: SearchRequest):
     from backend.models import TargetType
     try:
         if target_type_str == "auto":
-            import re
             if re.match(r'^\d{11}$', payload.query):
                 target_type = TargetType.ABN
             elif re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', payload.query):
@@ -271,15 +354,20 @@ async def search(payload: SearchRequest):
         target_type = TargetType.COMPANY
 
     # 2. Create target in DB
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO targets (query, target_type, status) VALUES (?, ?, ?)",
-        (payload.query, target_type.value, "pending")
-    )
-    target_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    conn_gen = get_db()
+    conn = None
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO targets (query, target_type, status) VALUES (?, ?, ?)",
+            (payload.query, target_type.value, "pending")
+        )
+        target_id = cursor.lastrowid
+        conn.commit()
+    finally:
+        if conn:
+            conn.close()
 
     # 3. Run investigation
     from backend.engine import InvestigationEngine
@@ -289,37 +377,41 @@ async def search(payload: SearchRequest):
     
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
-    entities = [e.dict() for e in storage.get_entities_for_target(target_id)]
-    relationships = [r.dict() for r in storage.get_relationships_for_target(target_id)]
-    timeline = [t.dict() for t in storage.get_timeline(target_id)]
+    entities = [e.model_dump() for e in storage.get_entities_for_target(target_id)]
+    relationships = [r.model_dump() for r in storage.get_relationships_for_target(target_id)]
+    timeline = [t.model_dump() for t in storage.get_timeline(target_id)]
     
     return format_response({
         "target_id": target_id,
         "query": payload.query,
         "findings_count": result.get("findings_count", 0),
-        "findings": [f.dict() if hasattr(f, 'dict') else f for f in result.get("results", [])],
+        "findings": [f.model_dump() if hasattr(f, 'model_dump') else f for f in result.get("results", [])],
         "entities": entities,
         "relationships": relationships,
         "timeline": timeline
     })
 
+
 @app.get("/api/targets/{target_id}/entities")
 async def get_target_entities(target_id: int):
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
-    return format_response([e.dict() for e in storage.get_entities_for_target(target_id)])
+    return format_response([e.model_dump() for e in storage.get_entities_for_target(target_id)])
+
 
 @app.get("/api/targets/{target_id}/relationships")
 async def get_target_relationships(target_id: int):
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
-    return format_response([r.dict() for r in storage.get_relationships_for_target(target_id)])
+    return format_response([r.model_dump() for r in storage.get_relationships_for_target(target_id)])
+
 
 @app.get("/api/targets/{target_id}/timeline")
 async def get_target_timeline(target_id: int):
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
-    return format_response([t.dict() for t in storage.get_timeline(target_id)])
+    return format_response([t.model_dump() for t in storage.get_timeline(target_id)])
+
 
 @app.get("/api/plugins")
 async def list_plugins():
@@ -327,18 +419,24 @@ async def list_plugins():
     pm = PluginManager()
     return format_response(pm.list_plugins())
 
+
 @app.get("/api/findings")
 async def list_findings(target_id: Optional[int] = None):
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    
-    if target_id:
-        cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (target_id,))
-    else:
-        cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings ORDER BY created_at DESC")
-    
-    rows = cursor.fetchall()
-    conn.close()
+    conn_gen = get_db()
+    conn = None
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        
+        if target_id:
+            cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (target_id,))
+        else:
+            cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings ORDER BY created_at DESC")
+        
+        rows = cursor.fetchall()
+    finally:
+        if conn:
+            conn.close()
     
     findings = [
         {
@@ -349,16 +447,22 @@ async def list_findings(target_id: Optional[int] = None):
     ]
     return format_response(findings)
 
+
 @app.post("/api/reports")
 async def create_report(payload: ReportRequest):
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, query, target_type, status, created_at FROM targets WHERE id = ?", (payload.target_id,))
-    target_row = cursor.fetchone()
-    
-    cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (payload.target_id,))
-    finding_rows = cursor.fetchall()
-    conn.close()
+    conn_gen = get_db()
+    conn = None
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, query, target_type, status, created_at FROM targets WHERE id = ?", (payload.target_id,))
+        target_row = cursor.fetchone()
+        
+        cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (payload.target_id,))
+        finding_rows = cursor.fetchall()
+    finally:
+        if conn:
+            conn.close()
     
     if not target_row:
         raise HTTPException(status_code=404, detail="Target not found")
@@ -383,22 +487,27 @@ async def create_report(payload: ReportRequest):
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
     
-    entities = [e.dict() for e in storage.get_entities_for_target(payload.target_id)]
-    relationships = [r.dict() for r in storage.get_relationships_for_target(payload.target_id)]
-    timeline = [t.dict() for t in storage.get_timeline(payload.target_id)]
+    entities = [e.model_dump() for e in storage.get_entities_for_target(payload.target_id)]
+    relationships = [r.model_dump() for r in storage.get_relationships_for_target(payload.target_id)]
+    timeline = [t.model_dump() for t in storage.get_timeline(payload.target_id)]
     
     generator = ReportGenerator()
     report_content = generator.generate(payload.format, target, findings, entities, relationships, timeline)
     
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO reports (target_id, format, content) VALUES (?, ?, ?)",
-        (payload.target_id, payload.format, report_content)
-    )
-    report_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    conn_gen2 = get_db()
+    conn2 = None
+    try:
+        conn2 = next(conn_gen2)
+        cursor = conn2.cursor()
+        cursor.execute(
+            "INSERT INTO reports (target_id, format, content) VALUES (?, ?, ?)",
+            (payload.target_id, payload.format, report_content)
+        )
+        report_id = cursor.lastrowid
+        conn2.commit()
+    finally:
+        if conn2:
+            conn2.close()
     
     return format_response({
         "report_id": report_id,
@@ -407,13 +516,19 @@ async def create_report(payload: ReportRequest):
         "content": report_content
     })
 
+
 @app.get("/api/reports/{report_id}")
 async def get_report(report_id: int):
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, target_id, format, content, created_at FROM reports WHERE id = ?", (report_id,))
-    row = cursor.fetchone()
-    conn.close()
+    conn_gen = get_db()
+    conn = None
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, target_id, format, content, created_at FROM reports WHERE id = ?", (report_id,))
+        row = cursor.fetchone()
+    finally:
+        if conn:
+            conn.close()
     
     if not row:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -426,13 +541,14 @@ async def get_report(report_id: int):
         "created_at": row[4]
     })
 
+
 @app.post("/api/chat")
-async def chat(payload: Dict[str, Any]):
+async def chat(payload: ChatRequest):
     from backend.providers import AIProviderFactory
     
-    message = payload.get("message", "")
-    provider = payload.get("provider", "openrouter")
-    model = payload.get("model", "gpt-3.5-turbo")
+    message = payload.message
+    provider = payload.provider
+    model = payload.model
     
     provider_inst = AIProviderFactory.get_provider(provider)
     if not provider_inst:
@@ -445,8 +561,20 @@ async def chat(payload: Dict[str, Any]):
             errors=["no_api_key"]
         )
     
+    # Use default model if none specified
+    if not model:
+        model = getattr(provider_inst, '_default_model', None) or \
+                {"openrouter": "gpt-3.5-turbo", "openai": "gpt-4", "anthropic": "claude-3-haiku-20240307", "gemini": "gemini-1.5-flash"}.get(provider, model)
+    
+    # Support multimodal chat (image/video URLs)
+    image_urls = payload.image_urls
+    video_urls = payload.video_urls
+    
     try:
-        ai_response = await provider_inst.chat(message, model)
+        if (image_urls or video_urls) and hasattr(provider_inst, 'chat_multimodal'):
+            ai_response = await provider_inst.chat_multimodal(message, model, image_urls=image_urls, video_urls=video_urls)
+        else:
+            ai_response = await provider_inst.chat(message, model)
         return format_response({
             "response": ai_response.content,
             "provider": provider,
@@ -461,6 +589,7 @@ async def chat(payload: Dict[str, Any]):
             success=False,
             errors=[str(e)]
         )
+
 
 if __name__ == "__main__":
     import uvicorn
