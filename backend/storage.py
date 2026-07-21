@@ -101,10 +101,13 @@ class SQLiteStorage(StorageInterface):
         self._transaction_active = True
         try:
             yield self
-            if self._connection and not self._connection.is_closed:
-                await self._connection.commit()
+            if self._connection:
+                try:
+                    await self._connection.commit()
+                except Exception:
+                    pass
         except Exception:
-            if self._connection and not self._connection.is_closed:
+            if self._connection:
                 try:
                     await self._connection.rollback()
                 except Exception:

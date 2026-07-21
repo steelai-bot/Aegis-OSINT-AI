@@ -27,7 +27,6 @@ class InvestigationEngine:
     Singleton to avoid redundant plugin discovery on every request.
     """
     _instance = None
-    _initialized = False
 
     @classmethod
     def get_instance(cls, db_path: str):
@@ -42,9 +41,11 @@ class InvestigationEngine:
         self.storage = SQLiteStorage(db_path)
         self.plugin_manager = PluginManager()
         self.planner = AIPlanner()
+        self._initialized = False
 
     async def initialize(self):
         self.plugin_manager.discover_plugins()
+        self._initialized = True
 
     async def run_investigation(self, target_id: int, target_type: TargetType, query: str, use_dynamic: bool = False) -> dict[str, Any]:
         """

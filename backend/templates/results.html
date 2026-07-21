@@ -51,7 +51,7 @@
             <!-- Entities Tab -->
             <div x-show="activeTab === 'entities'" x-cloak>
                 <h3 class="text-xl font-semibold mb-4">Discovered Entities</h3>
-                <div hx-get="/api/targets/{{ target_id }}/entities"
+                <div hx-get="/api/targets/{{ target_id }}/entities?format=html"
                      hx-trigger="load"
                      hx-target="this"
                      hx-swap="innerHTML">
@@ -62,7 +62,7 @@
             <!-- Relationships Tab -->
             <div x-show="activeTab === 'relationships'" x-cloak>
                 <h3 class="text-xl font-semibold mb-4">Entity Relationships</h3>
-                <div hx-get="/api/targets/{{ target_id }}/relationships"
+                <div hx-get="/api/targets/{{ target_id }}/relationships?format=html"
                      hx-trigger="load"
                      hx-target="this"
                      hx-swap="innerHTML">
@@ -73,7 +73,7 @@
             <!-- Timeline Tab -->
             <div x-show="activeTab === 'timeline'" x-cloak>
                 <h3 class="text-xl font-semibold mb-4">Investigation Timeline</h3>
-                <div hx-get="/api/targets/{{ target_id }}/timeline"
+                <div hx-get="/api/targets/{{ target_id }}/timeline?format=html"
                      hx-trigger="load"
                      hx-target="this"
                      hx-swap="innerHTML">
@@ -88,9 +88,8 @@
                      class="bg-background border border-border rounded-md"
                      style="height: 600px;"
                      hx-get="/api/targets/{{ target_id }}/graph-data"
-                     hx-trigger="load"
-                     hx-swap="none"
-                     @htmx:after-request="renderGraph($event.detail.xhr.response)">
+                     hx-trigger="intersect once"
+                     hx-swap="none">
                 </div>
                 <p class="text-xs text-muted mt-2">Drag nodes to explore, scroll to zoom</p>
             </div>
@@ -99,6 +98,12 @@
 </div>
 
 <script>
+    document.addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.target && evt.detail.target.id === 'entity-graph') {
+            renderGraph(evt.detail.xhr.response);
+        }
+    });
+
     function renderGraph(jsonData) {
         const data = JSON.parse(jsonData);
 

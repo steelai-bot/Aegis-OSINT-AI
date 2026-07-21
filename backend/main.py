@@ -376,14 +376,17 @@ async def create_target(payload: TargetCreate):
 
 
 @app.get("/api/targets")
-async def list_targets(request: Request, format: str = "json"):
+async def list_targets(request: Request, format: str = "json", limit: int | None = None):
     """Return targets as JSON or HTML partial."""
     conn_gen = get_db()
     conn = None
     try:
         conn = next(conn_gen)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC")
+        if limit:
+            cursor.execute("SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC LIMIT ?", (limit,))
+        else:
+            cursor.execute("SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC")
         rows = cursor.fetchall()
     finally:
         if conn:
@@ -595,9 +598,9 @@ async def create_report(payload: ReportRequest):
     from backend.report import ReportGenerator
     storage = app.state.storage
 
-    entities = [e.model_dump() for e in storage.get_entities_for_target(payload.target_id)]
-    relationships = [r.model_dump() for r in storage.get_relationships_for_target(payload.target_id)]
-    timeline = [t.model_dump() for t in storage.get_timeline(payload.target_id)]
+    entities = [e.model_dump() for e in await storage.get_entities_for_target(payload.target_id)]
+    relationships = [r.model_dump() for r in await storage.get_relationships_for_target(payload.target_id)]
+    timeline = [t.model_dump() for t in await storage.get_timeline(payload.target_id)]
 
     generator = ReportGenerator()
     report_content = generator.generate(payload.format, target, findings, entities, relationships, timeline)
