@@ -392,10 +392,11 @@ async def list_targets(request: Request, format: str = "json"):
     targets = [{"id": r[0], "query": r[1], "target_type": r[2], "status": r[3], "created_at": r[4]} for r in rows]
 
     if format == "html":
-        return templates.TemplateResponse("components/targets_list.html", {
-            "request": request,
-            "targets": targets
-        })
+        return templates.TemplateResponse(
+            request=request,
+            name="components/targets_list.html",
+            context={"targets": targets}
+        )
     return format_response(targets)
 
 
@@ -450,11 +451,14 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
     timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
 
     if format == "html" or request.headers.get("HX-Request"):
-        return templates.TemplateResponse("components/investigation_result.html", {
-            "request": request,
-            "target_id": target_id,
-            "status": result.get("status", "completed")
-        })
+        return templates.TemplateResponse(
+            request=request,
+            name="components/investigation_result.html",
+            context={
+                "target_id": target_id,
+                "status": result.get("status", "completed")
+            }
+        )
 
     return format_response({
         "target_id": target_id,
@@ -474,10 +478,11 @@ async def get_target_entities(request: Request, target_id: int, format: str = "j
     entities = await storage.get_entities_for_target(target_id)
 
     if format == "html":
-        return templates.TemplateResponse("components/entities.html", {
-            "request": request,
-            "entities": entities
-        })
+        return templates.TemplateResponse(
+            request=request,
+            name="components/entities.html",
+            context={"entities": entities}
+        )
     return format_response([e.model_dump() for e in entities])
 
 
@@ -488,10 +493,11 @@ async def get_target_relationships(request: Request, target_id: int, format: str
     relationships = await storage.get_relationships_for_target(target_id)
 
     if format == "html":
-        return templates.TemplateResponse("components/relationships.html", {
-            "request": request,
-            "relationships": relationships
-        })
+        return templates.TemplateResponse(
+            request=request,
+            name="components/relationships.html",
+            context={"relationships": relationships}
+        )
     return format_response([r.model_dump() for r in relationships])
 
 
@@ -502,10 +508,11 @@ async def get_target_timeline(request: Request, target_id: int, format: str = "j
     timeline = await storage.get_timeline(target_id)
 
     if format == "html":
-        return templates.TemplateResponse("components/timeline.html", {
-            "request": request,
-            "timeline": timeline
-        })
+        return templates.TemplateResponse(
+            request=request,
+            name="components/timeline.html",
+            context={"timeline": timeline}
+        )
     return format_response([t.model_dump() for t in timeline])
 
 
@@ -515,10 +522,10 @@ async def list_plugins(request: Request):
     pm = PluginManager()
     plugins = pm.list_plugins()
     if request.headers.get("HX-Request"):
-        return templates.TemplateResponse("components/plugins_grid.html", {
-            "request": request,
-            "plugins": plugins
-        })
+        template = templates.env.get_template("components/plugins_grid.html")
+        html = template.render({"request": request, "plugins": plugins})
+        from starlette.responses import HTMLResponse
+        return HTMLResponse(content=html)
     return format_response(plugins)
 
 
