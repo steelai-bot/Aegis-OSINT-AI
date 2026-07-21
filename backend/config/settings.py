@@ -3,9 +3,10 @@ Pydantic Settings for Aegis OSINT AI.
 Provides centralized configuration management with auto-initialization.
 """
 
+import os
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +14,7 @@ class AegisSettings(BaseSettings):
     """
     Centralized application settings using Pydantic Settings.
     Loads from environment variables and .env file with sensible defaults.
+    Syncs API keys to os.environ so os.getenv() works in plugins/providers.
     """
 
     model_config = SettingsConfigDict(
@@ -131,6 +133,34 @@ PORT=8000
         if self.virustotal_api_key:
             providers.append("virustotal")
         return providers
+
+    @model_validator(mode="after")
+    def _sync_to_environ(self) -> "AegisSettings":
+        key_map = {
+            "openai_api_key": "OPENAI_API_KEY",
+            "anthropic_api_key": "ANTHROPIC_API_KEY",
+            "gemini_api_key": "GEMINI_API_KEY",
+            "openrouter_api_key": "OPENROUTER_API_KEY",
+            "nvidia_api_key": "NVIDIA_API_KEY",
+            "groq_api_key": "GROQ_API_KEY",
+            "mistral_api_key": "MISTRAL_API_KEY",
+            "github_token": "GITHUB_TOKEN",
+            "shodan_api_key": "SHODAN_API_KEY",
+            "securitytrails_api_key": "SECURITYTRAILS_API_KEY",
+            "virustotal_api_key": "VIRUSTOTAL_API_KEY",
+            "hunter_api_key": "HUNTER_API_KEY",
+            "intelx_api_key": "INTELX_API_KEY",
+            "censys_api_key": "CENSYS_API_KEY",
+            "abuseipdb_api_key": "ABUSEIPDB_API_KEY",
+            "urlscan_api_key": "URLSCAN_API_KEY",
+            "google_search_api_key": "GOOGLE_SEARCH_API_KEY",
+            "google_search_cx": "GOOGLE_SEARCH_CX",
+        }
+        for attr, env_key in key_map.items():
+            val = getattr(self, attr, None)
+            if val:
+                os.environ[env_key] = str(val)
+        return self
 
 
 # Global settings instance

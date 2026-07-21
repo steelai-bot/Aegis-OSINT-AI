@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -180,12 +180,6 @@ class ChatRequest(BaseModel):
     video_urls: list[str] | None = None
 
 
-class ConfigureProviderRequest(BaseModel):
-    api_key: str | None = None
-    username: str | None = None
-    password: str | None = None
-
-
 class SaveSettingsRequest(BaseModel):
     api_key: str | None = None
 
@@ -280,7 +274,7 @@ async def get_provider_status(provider: str):
 
 
 @app.post("/api/providers/{provider}/configure")
-async def configure_provider(provider: str, payload: ConfigureProviderRequest):
+async def configure_provider(provider: str, api_key: str | None = Form(None), username: str | None = Form(None), password: str | None = Form(None)):
     # Validate provider exists
     try:
         provider_manager.get_provider(provider)
@@ -289,12 +283,12 @@ async def configure_provider(provider: str, payload: ConfigureProviderRequest):
 
     try:
         config_data = {}
-        if payload.api_key is not None:
-            config_data["api_key"] = payload.api_key
-        if payload.username is not None:
-            config_data["username"] = payload.username
-        if payload.password is not None:
-            config_data["password"] = payload.password
+        if api_key is not None:
+            config_data["api_key"] = api_key
+        if username is not None:
+            config_data["username"] = username
+        if password is not None:
+            config_data["password"] = password
         provider_manager.configure_provider(provider, config_data)
         return format_response({"message": f"{provider} configured successfully."})
     except Exception as e:
@@ -406,18 +400,18 @@ async def list_targets(request: Request, format: str = "json"):
 
 
 @app.post("/api/search")
-async def search(request: Request, payload: SearchRequest, format: str = "json"):
+async def search(request: Request, query: str = Form(...), target_type: str | None = Form("auto"), format: str = "json"):
     """Start investigation and return JSON or HTML partial."""
     # 1. Determine target type
-    target_type_str = payload.target_type or "auto"
+    target_type_str = target_type or "auto"
     from backend.models import TargetType
     try:
         if target_type_str == "auto":
-            if re.match(r'^\d{11}$', payload.query):
+            if re.match(r'^\d{11}$', query):
                 target_type = TargetType.ABN
-            elif re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', payload.query):
+            elif re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', query):
                 target_type = TargetType.DOMAIN
-            elif re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', payload.query):
+            elif re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', query):
                 target_type = TargetType.IP
             else:
                 target_type = TargetType.COMPANY
@@ -434,7 +428,7 @@ async def search(request: Request, payload: SearchRequest, format: str = "json")
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO targets (query, target_type, status) VALUES (?, ?, ?)",
-            (payload.query, target_type.value, "pending")
+            (query, target_type.value, "pending")
         )
         target_id = cursor.lastrowid
         conn.commit()
@@ -448,14 +442,14 @@ async def search(request: Request, payload: SearchRequest, format: str = "json")
     if not engine._initialized:
         await engine.initialize()
 
-    result = await engine.run_investigation(target_id, target_type, payload.query)
+    result = await engine.run_investigation(target_id, target_type, query)
 
     storage = app.state.storage
     entities = [e.model_dump() for e in await storage.get_entities_for_target(target_id)]
     relationships = [r.model_dump() for r in await storage.get_relationships_for_target(target_id)]
     timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
 
-    if format == "html":
+    if format == "html" or request.headers.get("HX-Request"):
         return templates.TemplateResponse("components/investigation_result.html", {
             "request": request,
             "target_id": target_id,
@@ -464,7 +458,7 @@ async def search(request: Request, payload: SearchRequest, format: str = "json")
 
     return format_response({
         "target_id": target_id,
-        "query": payload.query,
+        "query": query,
         "findings_count": result.get("findings_count", 0),
         "findings": [f.model_dump() if hasattr(f, 'model_dump') else f for f in result.get("results", [])],
         "entities": entities,
@@ -516,10 +510,16 @@ async def get_target_timeline(request: Request, target_id: int, format: str = "j
 
 
 @app.get("/api/plugins")
-async def list_plugins():
+async def list_plugins(request: Request):
     from backend.plugin_manager import PluginManager
     pm = PluginManager()
-    return format_response(pm.list_plugins())
+    plugins = pm.list_plugins()
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse("components/plugins_grid.html", {
+            "request": request,
+            "plugins": plugins
+        })
+    return format_response(plugins)
 
 
 @app.get("/api/findings")
