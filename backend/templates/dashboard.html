@@ -3,93 +3,290 @@
 {% block title %}Dashboard - Aegis OSINT AI{% endblock %}
 
 {% block content %}
-<div class="p-6" x-data="{ targetType: 'auto', query: '', isSubmitting: false }">
-    <!-- Header -->
-    <div class="mb-6">
-        <h2 class="text-3xl font-bold mb-2">Dashboard</h2>
-        <p class="text-muted">Start a new OSINT investigation</p>
+<div class="p-8 max-w-7xl mx-auto space-y-8" x-data="{
+    targetType: 'auto',
+    query: '',
+    isSubmitting: false,
+    async submitInvestigation() {
+        if (!this.query.trim()) return;
+        
+        this.isSubmitting = true;
+        const spinner = document.getElementById('spinner');
+        const resultDiv = document.getElementById('investigation-result');
+        
+        if (spinner) spinner.classList.remove('hidden');
+        
+        try {
+            const formData = new FormData();
+            formData.append('query', this.query);
+            formData.append('target_type', this.targetType === 'auto' ? '' : this.targetType);
+            
+            const response = await fetch('/api/search', {
+                method: 'POST',
+                body: formData,
+                headers: { 'HX-Request': 'true' }
+            });
+            
+            if (response.ok) {
+                const html = await response.text();
+                if (resultDiv) {
+                    resultDiv.innerHTML = html;
+                    lucide.createIcons();
+                }
+                
+                // Reset form
+                this.query = '';
+                this.targetType = 'auto';
+                
+                // Reload stats
+                loadDashboardStats();
+            } else {
+                if (resultDiv) {
+                    resultDiv.innerHTML = '<div class=\"bg-red-500/10 border border-red-500/30 rounded-lg p-4\"><p class=\"text-red-400 text-sm\">Error starting investigation. Please try again.</p></div>';
+                    lucide.createIcons();
+                }
+            }
+        } catch (e) {
+            if (resultDiv) {
+                resultDiv.innerHTML = '<div class=\"bg-red-500/10 border border-red-500/30 rounded-lg p-4\"><p class=\"text-red-400 text-sm\">Network error: ' + e.message + '</p></div>';
+                lucide.createIcons();
+            }
+        } finally {
+            this.isSubmitting = false;
+            if (spinner) spinner.classList.add('hidden');
+        }
+    }
+}">
+    <!-- Header with Stats Overview -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h2 class="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+                <i data-lucide="radar" class="w-8 h-8 text-primary"></i>
+                Intelligence Dashboard
+            </h2>
+            <p class="text-muted mt-1">Initiate advanced multi-vector OSINT investigations and threat reconnaissance.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="px-3 py-1.5 bg-card border border-border rounded-lg text-xs font-mono text-primary flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-success animate-pulse"></span>
+                SYSTEM ACTIVE
+            </span>
+        </div>
     </div>
 
-    <!-- New Investigation Form -->
-    <div class="bg-card rounded-lg border border-border p-6 mb-6">
-        <h3 class="text-xl font-semibold mb-4">New Investigation</h3>
+    <!-- Quick Stats Cards Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-card border border-border rounded-xl p-5 relative overflow-hidden">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-mono text-muted uppercase tracking-wider">Active Targets</span>
+                    <h3 class="text-2xl font-bold font-mono mt-1 text-foreground" id="stat-targets">--</h3>
+                </div>
+                <div class="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                    <i data-lucide="target" class="w-5 h-5"></i>
+                </div>
+            </div>
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/50 to-primary"></div>
+        </div>
 
-        <form hx-post="/api/search"
-              hx-target="#investigation-result"
-              hx-indicator="#spinner"
-              @htmx:after-request="isSubmitting = false"
-              class="space-y-4">
+        <div class="bg-card border border-border rounded-xl p-5 relative overflow-hidden">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-mono text-muted uppercase tracking-wider">Findings Discovered</span>
+                    <h3 class="text-2xl font-bold font-mono mt-1 text-foreground" id="stat-findings">--</h3>
+                </div>
+                <div class="w-10 h-10 rounded-lg bg-success/10 border border-success/20 flex items-center justify-center text-success">
+                    <i data-lucide="database" class="w-5 h-5"></i>
+                </div>
+            </div>
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-success/50 to-success"></div>
+        </div>
 
+        <div class="bg-card border border-border rounded-xl p-5 relative overflow-hidden">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-mono text-muted uppercase tracking-wider">Entities Mapped</span>
+                    <h3 class="text-2xl font-bold font-mono mt-1 text-foreground" id="stat-entities">--</h3>
+                </div>
+                <div class="w-10 h-10 rounded-lg bg-warning/10 border border-warning/20 flex items-center justify-center text-warning">
+                    <i data-lucide="git-branch" class="w-5 h-5"></i>
+                </div>
+            </div>
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-warning/50 to-warning"></div>
+        </div>
+
+        <div class="bg-card border border-border rounded-xl p-5 relative overflow-hidden">
+            <div class="flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-mono text-muted uppercase tracking-wider">Plugins Loaded</span>
+                    <h3 class="text-2xl font-bold font-mono mt-1 text-foreground" id="stat-plugins">--</h3>
+                </div>
+                <div class="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                    <i data-lucide="cpu" class="w-5 h-5"></i>
+                </div>
+            </div>
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500/50 to-purple-500"></div>
+        </div>
+    </div>
+
+    <!-- New Investigation Form Panel -->
+    <div class="bg-card rounded-xl border border-border p-6 shadow-xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <i data-lucide="search-code" class="w-4 h-4"></i>
+            </div>
             <div>
-                <label class="block text-sm font-medium mb-2">Target Query</label>
-                <input type="text"
-                       name="query"
-                       x-model="query"
-                       placeholder="example.com, email@domain.com, IP address, username..."
-                       class="w-full px-4 py-2 bg-background border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent text-foreground"
-                       required>
-                <p class="text-xs text-muted mt-1">Enter a domain, email, IP, or username to investigate</p>
+                <h3 class="text-lg font-semibold text-foreground">Launch New Investigation</h3>
+                <p class="text-xs text-muted">Input a target handle, domain, IP, or email to initiate automated discovery plugins.</p>
+            </div>
+        </div>
+
+        <form id="investigation-form"
+              class="space-y-5"
+              @submit.prevent="submitInvestigation">
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-mono text-muted mb-2 uppercase tracking-wider">Target Query / Identifier</label>
+                    <input type="text"
+                           name="query"
+                           x-model="query"
+                           placeholder="example.com, target@company.com, 192.168.1.1, username..."
+                           class="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-foreground font-mono text-sm shadow-inner"
+                           required>
+                    <p class="text-[11px] text-muted mt-1.5 flex items-center gap-1">
+                        <i data-lucide="info" class="w-3 h-3 text-primary"></i>
+                        Supports domains, IP addresses, email accounts, GitHub profiles, and usernames.
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-mono text-muted mb-2 uppercase tracking-wider">Target Classification</label>
+                    <select name="target_type"
+                            x-model="targetType"
+                            class="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-foreground text-sm">
+                        <option value="auto">Auto-detect vector</option>
+                        <option value="domain">Domain / Subdomain</option>
+                        <option value="ip">IP Address</option>
+                        <option value="email">Email Account</option>
+                        <option value="username">Username Handle</option>
+                        <option value="github">GitHub Organization/User</option>
+                    </select>
+                    <p class="text-[11px] text-muted mt-1.5">Leave on Auto-detect for AI planner routing.</p>
+                </div>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium mb-2">Target Type</label>
-                <select name="target_type"
-                        x-model="targetType"
-                        class="w-full px-4 py-2 bg-background border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-transparent text-foreground">
-                    <option value="auto">Auto-detect</option>
-                    <option value="domain">Domain</option>
-                    <option value="ip">IP Address</option>
-                    <option value="email">Email</option>
-                    <option value="username">Username</option>
-                    <option value="github">GitHub</option>
-                </select>
-            </div>
+            <div class="flex items-center justify-between pt-2 border-t border-border">
+<button type="submit"
+        class="px-6 py-3 bg-primary text-background font-semibold rounded-lg hover:bg-primary-dark transition-all flex items-center gap-2.5 shadow-lg shadow-primary/20 text-sm"
+        :disabled="isSubmitting">
+    <i data-lucide="play" class="w-4 h-4 fill-background"></i>
+    <span x-text="isSubmitting ? 'Executing Reconnaissance...' : 'Execute Investigation'"></span>
+</button>
 
-            <div class="flex items-center gap-4">
-                <button type="submit"
-                        @click="isSubmitting = true"
-                        class="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2"
-                        :disabled="isSubmitting">
-                    <i data-lucide="search" class="w-4 h-4"></i>
-                    <span x-text="isSubmitting ? 'Investigating...' : 'Start Investigation'"></span>
-                </button>
-
-                <span id="spinner" class="htmx-indicator text-muted flex items-center gap-2">
-                    <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <span id="spinner" class="text-xs font-mono text-primary flex items-center gap-2 hidden">
+                    <svg class="animate-spin h-4 w-4 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Running investigation...
+                    Dispatching AI agent workers...
                 </span>
             </div>
         </form>
-
-        <div id="investigation-result" class="mt-6"></div>
     </div>
 
-    <!-- Recent Investigations -->
-    <div class="bg-card rounded-lg border border-border p-6">
-        <h3 class="text-xl font-semibold mb-4">Recent Investigations</h3>
+    <!-- New Investigation Result Area -->
+    <div id="investigation-result" class="space-y-4"></div>
 
-        <div hx-get="/api/targets?format=html&limit=10"
+    <!-- Recent Investigations Section -->
+    <div class="bg-card rounded-xl border border-border p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                    <i data-lucide="history" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-foreground">Recent Investigations</h3>
+                    <p class="text-xs text-muted">Latest targets scanned and analyzed by the intelligence engine.</p>
+                </div>
+            </div>
+            <a href="/investigations" class="text-xs font-medium text-primary hover:underline flex items-center gap-1">
+                View All <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </a>
+        </div>
+
+        <div hx-get="/api/targets?format=html&limit=5"
              hx-trigger="load"
              hx-target="this"
              hx-swap="innerHTML">
-            <div class="flex items-center justify-center py-8 text-muted">
-                <svg class="animate-spin h-6 w-6 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <div class="flex items-center justify-center py-12 text-muted font-mono text-xs">
+                <svg class="animate-spin h-5 w-5 mr-3 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Loading recent investigations...
+                Querying storage for recent investigations...
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // Reinitialize icons after HTMX swaps
     document.body.addEventListener('htmx:afterSwap', function() {
         lucide.createIcons();
     });
+
+    // Fetch real stats from API
+    async function loadDashboardStats() {
+        try {
+            // Load targets count
+            const targetsResp = await fetch('/api/targets?format=json');
+            let targetCount = 0;
+            if (targetsResp.ok) {
+                const targets = await targetsResp.json();
+                targetCount = Array.isArray(targets) ? targets.length : (targets.data?.length || 0);
+            }
+            
+            // Load plugins count
+            const pluginsResp = await fetch('/api/plugins');
+            let pluginCount = 0;
+            if (pluginsResp.ok) {
+                const pluginsData = await pluginsResp.json();
+                pluginCount = Array.isArray(pluginsData.data) ? pluginsData.data.length : 0;
+            }
+            
+            // Load findings and entities counts
+            const findingsResp = await fetch('/api/findings');
+            let findingsCount = 0;
+            if (findingsResp.ok) {
+                const findingsData = await findingsResp.json();
+                findingsCount = Array.isArray(findingsData.data) ? findingsData.data.length : 0;
+            }
+            
+            // Update DOM
+            const targetsEl = document.getElementById('stat-targets');
+            const findingsEl = document.getElementById('stat-findings');
+            const entitiesEl = document.getElementById('stat-entities');
+            const pluginsEl = document.getElementById('stat-plugins');
+            
+            if (targetsEl) targetsEl.textContent = targetCount;
+            if (findingsEl) findingsEl.textContent = findingsCount;
+            if (entitiesEl) entitiesEl.textContent = '0';  // Will be populated when entities are extracted
+            if (pluginsEl) pluginsEl.textContent = pluginCount;
+            
+        } catch (e) {
+            console.error('Failed to load dashboard stats:', e);
+            document.getElementById('stat-targets')?.textContent = '0';
+            document.getElementById('stat-findings')?.textContent = '0';
+            document.getElementById('stat-entities')?.textContent = '0';
+            document.getElementById('stat-plugins')?.textContent = '0';
+        }
+    }
+    
+    // Load stats on page load
+    loadDashboardStats();
+    
+    // Reload stats after HTMX swaps (for investigations list updates)
+    document.body.addEventListener('htmx:afterSwap', loadDashboardStats);
 </script>
 {% endblock %}
