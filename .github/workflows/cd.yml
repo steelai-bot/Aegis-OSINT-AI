@@ -1,0 +1,60 @@
+name: CD - build & push
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/aegis-osint-ai:latest
+            ghcr.io/${{ github.repository_owner }}/aegis-osint-ai:${{ github.sha }}
+
+  deploy-via-ssh:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: ${{ secrets.DEPLOY_HOST != '' }}
+    steps:
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            docker pull ghcr.io/${{ github.repository_owner }}/aegis-osint-ai:latest
+            docker stop aegis || true
+            docker rm aegis || true
+            docker run -d --name aegis -p 8000:8000 \
+              --env-file /home/${{ secrets.DEPLOY_USER }}/.aegis_env \
+              ghcr.io/${{ github.repository_owner }}/aegis-osint-ai:latest
