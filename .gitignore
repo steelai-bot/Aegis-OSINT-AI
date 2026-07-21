@@ -23,6 +23,8 @@ logs/
 # Database
 aegis.db
 data/aegis.db
+*.db-shm
+*.db-wal
 
 # Temp
 *.log
@@ -45,3 +47,4 @@ data/test_storage.db
 
 # Planning artifacts
 *_plan.md
+plan.md
