@@ -66,7 +66,8 @@ class AIPlanner:
         prompt = (
             f"You are an OSINT expert. Given a target of type '{target_type}' with the value '{query}', "
             f"which of the following plugins should be executed in order to gather the most intelligence? "
-            f"Available plugins: dns_lookup, whois_lookup, cert_transparency, ip_geolocation. "
+            f"Available plugins: dns_lookup, whois_lookup, cert_transparency, ip_geolocation, "
+            f"email_discovery, github_discovery, username_enumeration, google_dorking, metadata_extraction. "
             f"Return ONLY a comma-separated list of plugin names. Example: dns_lookup,whois_lookup"
         )
 

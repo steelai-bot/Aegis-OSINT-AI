@@ -1,0 +1,127 @@
+<!-- Provider Cards List Component -->
+{% if providers %}
+<div class="space-y-6">
+    <!-- AI Providers Section -->
+    <div>
+        <h4 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <i data-lucide="brain" class="w-5 h-5 text-primary"></i>
+            AI Providers
+        </h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for provider in providers if provider.category == 'ai' %}
+            <div class="provider-card" x-data="{ configOpen: false }">
+                <div class="provider-header">
+                    <div class="flex items-start gap-3">
+                        <div class="provider-icon">
+                            <i data-lucide="cpu" class="w-6 h-6 text-primary"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h5 class="font-semibold">{{ provider.name }}</h5>
+                            <p class="text-xs text-muted truncate-2-lines">{{ provider.description }}</p>
+                        </div>
+                    </div>
+                    <span class="status-badge {% if provider.status == 'connected' %}status-connected{% else %}status-disconnected{% endif %}">
+                        {{ provider.status }}
+                    </span>
+                </div>
+
+                <div class="flex gap-2 mt-4">
+                    <button @click="configOpen = true" class="btn btn-primary btn-sm flex-1">
+                        <i data-lucide="settings" class="w-4 h-4"></i>
+                        Configure
+                    </button>
+
+                    {% if provider.status == 'connected' %}
+                    <button hx-post="/api/providers/{{ provider.id }}/test"
+                            hx-target="#toast-container"
+                            hx-swap="afterbegin"
+                            class="btn btn-secondary btn-sm">
+                        <i data-lucide="zap" class="w-4 h-4"></i>
+                        Test
+                    </button>
+                    <button hx-delete="/api/providers/{{ provider.id }}"
+                            hx-confirm="Disconnect {{ provider.name }}?"
+                            hx-target="closest .provider-card"
+                            hx-swap="outerHTML"
+                            class="btn btn-danger btn-sm btn-icon">
+                        <i data-lucide="unplug" class="w-4 h-4"></i>
+                    </button>
+                    {% endif %}
+                </div>
+
+                <!-- Configuration Modal -->
+                {% include 'components/provider_modal.html' %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- OSINT Tools Section -->
+    <div>
+        <h4 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <i data-lucide="search" class="w-5 h-5 text-primary"></i>
+            OSINT Tools
+        </h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for provider in providers if provider.category == 'osint' %}
+            <div class="provider-card" x-data="{ configOpen: false }">
+                <div class="provider-header">
+                    <div class="flex items-start gap-3">
+                        <div class="provider-icon">
+                            <i data-lucide="shield" class="w-6 h-6 text-primary"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h5 class="font-semibold">{{ provider.name }}</h5>
+                            <p class="text-xs text-muted truncate-2-lines">{{ provider.description }}</p>
+                        </div>
+                    </div>
+                    <span class="status-badge {% if provider.status == 'connected' %}status-connected{% else %}status-disconnected{% endif %}">
+                        {{ provider.status }}
+                    </span>
+                </div>
+
+                <div class="flex gap-2 mt-4">
+                    <button @click="configOpen = true" class="btn btn-primary btn-sm flex-1">
+                        <i data-lucide="settings" class="w-4 h-4"></i>
+                        Configure
+                    </button>
+
+                    {% if provider.status == 'connected' %}
+                    <button hx-post="/api/providers/{{ provider.id }}/test"
+                            hx-target="#toast-container"
+                            hx-swap="afterbegin"
+                            class="btn btn-secondary btn-sm">
+                        <i data-lucide="zap" class="w-4 h-4"></i>
+                        Test
+                    </button>
+                    <button hx-delete="/api/providers/{{ provider.id }}"
+                            hx-confirm="Disconnect {{ provider.name }}?"
+                            hx-target="closest .provider-card"
+                            hx-swap="outerHTML"
+                            class="btn btn-danger btn-sm btn-icon">
+                        <i data-lucide="unplug" class="w-4 h-4"></i>
+                    </button>
+                    {% endif %}
+                </div>
+
+                <!-- Configuration Modal -->
+                {% include 'components/provider_modal.html' %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+    // Reinitialize Lucide icons after HTMX updates
+    document.body.addEventListener('htmx:afterSwap', () => {
+        lucide.createIcons();
+    });
+    lucide.createIcons();
+</script>
+{% else %}
+<div class="text-center py-12 text-muted">
+    <i data-lucide="package" class="w-16 h-16 mx-auto mb-4 opacity-50"></i>
+    <p>No providers available</p>
+</div>
+{% endif %}

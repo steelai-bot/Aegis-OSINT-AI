@@ -53,15 +53,19 @@ class ProviderManager:
 
     def get_providers(self) -> List[Dict[str, Any]]:
         """Returns all providers with their current connection status."""
+        ai_providers = {"openrouter", "openai", "anthropic", "gemini", "nvidia", "nvidia-minimax", "groq", "mistral"}
         result = []
         for p in self.known_providers:
             key_name = self._get_key_name(p['id'])
             is_connected = bool(os.getenv(key_name))
+            auth_methods = p.get("supported_authentication", ["api_key"])
             result.append({
                 "id": p["id"],
                 "name": p["name"],
                 "description": p["description"],
-                "supported_authentication": p["supported_authentication"],
+                "supported_authentication": auth_methods,
+                "auth_type": auth_methods[0] if auth_methods else "api_key",
+                "category": "ai" if p["id"] in ai_providers else "osint",
                 "status": "connected" if is_connected else "disconnected",
                 "last_validation": None
             })

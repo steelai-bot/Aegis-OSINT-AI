@@ -1,0 +1,24 @@
+<!-- Relationships list partial -->
+{% if relationships %}
+<div class="space-y-3">
+    {% for rel in relationships %}
+    <div class="bg-background border border-border rounded-lg p-4">
+        <div class="flex items-center gap-3">
+            <div class="flex-1 text-sm">
+                <span class="font-medium">Entity {{ rel.source_entity_id }}</span>
+                <span class="text-muted mx-2">→</span>
+                <span class="font-medium">Entity {{ rel.target_entity_id }}</span>
+            </div>
+            <span class="px-2 py-1 text-xs rounded bg-primary/20 text-primary">
+                {{ rel.relationship_type.value }}
+            </span>
+        </div>
+        <div class="text-xs text-muted mt-2">
+            Plugin: {{ rel.source_plugin }} | Confidence: {{ (rel.confidence * 100)|int }}%
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-center text-muted py-8">No relationships discovered yet</p>
+{% endif %}

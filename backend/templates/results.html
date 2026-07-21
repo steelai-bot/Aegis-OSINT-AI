@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Results - Aegis OSINT AI{% endblock %}
+
+{% block extra_head %}
+<!-- vis-network for graph visualization -->
+<script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
+<link href="https://unpkg.com/vis-network@9.1.9/dist/dist/vis-network.min.css" rel="stylesheet" />
+{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="{ activeTab: 'entities' }">
+    <!-- Header -->
+    <div class="mb-6 flex items-center justify-between">
+        <div>
+            <h2 class="text-3xl font-bold mb-2">Investigation Results</h2>
+            <p class="text-muted">Target ID: {{ target_id }}</p>
+        </div>
+        <a href="/investigations" class="px-4 py-2 bg-card border border-border rounded-md hover:bg-card/80 transition-colors">
+            Back to Investigations
+        </a>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-card rounded-lg border border-border mb-6">
+        <div class="border-b border-border flex">
+            <button @click="activeTab = 'entities'"
+                    :class="activeTab === 'entities' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'"
+                    class="px-6 py-3 font-medium transition-colors">
+                Entities
+            </button>
+            <button @click="activeTab = 'relationships'"
+                    :class="activeTab === 'relationships' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'"
+                    class="px-6 py-3 font-medium transition-colors">
+                Relationships
+            </button>
+            <button @click="activeTab = 'timeline'"
+                    :class="activeTab === 'timeline' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'"
+                    class="px-6 py-3 font-medium transition-colors">
+                Timeline
+            </button>
+            <button @click="activeTab = 'graph'"
+                    :class="activeTab === 'graph' ? 'border-b-2 border-primary text-primary' : 'text-muted hover:text-foreground'"
+                    class="px-6 py-3 font-medium transition-colors">
+                Graph View
+            </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="p-6">
+            <!-- Entities Tab -->
+            <div x-show="activeTab === 'entities'" x-cloak>
+                <h3 class="text-xl font-semibold mb-4">Discovered Entities</h3>
+                <div hx-get="/api/targets/{{ target_id }}/entities"
+                     hx-trigger="load"
+                     hx-target="this"
+                     hx-swap="innerHTML">
+                    <p class="text-muted">Loading entities...</p>
+                </div>
+            </div>
+
+            <!-- Relationships Tab -->
+            <div x-show="activeTab === 'relationships'" x-cloak>
+                <h3 class="text-xl font-semibold mb-4">Entity Relationships</h3>
+                <div hx-get="/api/targets/{{ target_id }}/relationships"
+                     hx-trigger="load"
+                     hx-target="this"
+                     hx-swap="innerHTML">
+                    <p class="text-muted">Loading relationships...</p>
+                </div>
+            </div>
+
+            <!-- Timeline Tab -->
+            <div x-show="activeTab === 'timeline'" x-cloak>
+                <h3 class="text-xl font-semibold mb-4">Investigation Timeline</h3>
+                <div hx-get="/api/targets/{{ target_id }}/timeline"
+                     hx-trigger="load"
+                     hx-target="this"
+                     hx-swap="innerHTML">
+                    <p class="text-muted">Loading timeline...</p>
+                </div>
+            </div>
+
+            <!-- Graph Tab -->
+            <div x-show="activeTab === 'graph'" x-cloak>
+                <h3 class="text-xl font-semibold mb-4">Entity Graph Visualization</h3>
+                <div id="entity-graph"
+                     class="bg-background border border-border rounded-md"
+                     style="height: 600px;"
+                     hx-get="/api/targets/{{ target_id }}/graph-data"
+                     hx-trigger="load"
+                     hx-swap="none"
+                     @htmx:after-request="renderGraph($event.detail.xhr.response)">
+                </div>
+                <p class="text-xs text-muted mt-2">Drag nodes to explore, scroll to zoom</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function renderGraph(jsonData) {
+        const data = JSON.parse(jsonData);
+
+        const nodes = new vis.DataSet(data.nodes.map(n => ({
+            id: n.id,
+            label: n.value,
+            title: `${n.type}: ${n.value}`,
+            color: getColorByType(n.type),
+            font: { color: '#f1f5f9' }
+        })));
+
+        const edges = new vis.DataSet(data.edges.map(e => ({
+            from: e.from,
+            to: e.to,
+            label: e.type,
+            arrows: 'to',
+            color: { color: '#64748b' },
+            font: { color: '#94a3b8', size: 10 }
+        })));
+
+        const container = document.getElementById('entity-graph');
+        const graphData = { nodes, edges };
+        const options = {
+            physics: {
+                stabilization: { iterations: 150 },
+                barnesHut: { gravitationalConstant: -8000, springLength: 150 }
+            },
+            interaction: { hover: true, navigationButtons: true },
+            nodes: {
+                shape: 'dot',
+                size: 20,
+                borderWidth: 2,
+                borderWidthSelected: 3
+            }
+        };
+
+        new vis.Network(container, graphData, options);
+    }
+
+    function getColorByType(type) {
+        const colors = {
+            domain: '#3b82f6',
+            email: '#10b981',
+            ip: '#f59e0b',
+            github: '#8b5cf6',
+            username: '#ec4899'
+        };
+        return colors[type] || '#6b7280';
+    }
+</script>
+
+<style>
+    [x-cloak] { display: none !important; }
+</style>
+{% endblock %}

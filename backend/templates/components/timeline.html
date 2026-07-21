@@ -1,0 +1,32 @@
+<!-- Timeline component partial -->
+<div class="space-y-2">
+    {% if timeline %}
+        {% for event in timeline %}
+        <div class="flex items-start gap-3 p-3 bg-background/50 rounded border-l-4
+                    {% if event.event_type.value == 'error' %}border-red-500
+                    {% elif event.event_type.value == 'plugin_completed' %}border-green-500
+                    {% elif event.event_type.value == 'entity_discovered' %}border-blue-500
+                    {% else %}border-border{% endif %}">
+            <div class="text-xs text-muted w-20 flex-shrink-0">
+                {{ event.timestamp.strftime('%H:%M:%S') }}
+            </div>
+            <div class="flex-1">
+                <div class="font-medium text-sm">{{ event.description }}</div>
+                {% if event.plugin %}
+                <div class="text-xs text-muted mt-1">Plugin: {{ event.plugin }}</div>
+                {% endif %}
+            </div>
+            {% if event.severity %}
+            <span class="text-xs px-2 py-1 rounded
+                         {% if event.severity == 'error' %}bg-red-500/20 text-red-400
+                         {% elif event.severity == 'warning' %}bg-yellow-500/20 text-yellow-400
+                         {% else %}bg-blue-500/20 text-blue-400{% endif %}">
+                {{ event.severity }}
+            </span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="text-center text-muted py-4">No timeline events yet</p>
+    {% endif %}
+</div>

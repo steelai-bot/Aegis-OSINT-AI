@@ -8,20 +8,25 @@ from backend.config.settings import AegisSettings, get_settings, reload_settings
 
 def test_settings_defaults():
     """Test that settings have sensible defaults."""
-    settings = AegisSettings()
-    
-    assert settings.app_name == "Aegis OSINT AI"
-    assert settings.app_version == "1.0.0"
-    assert settings.debug is False
-    assert settings.database_path == "data/aegis.db"
-    assert settings.host == "0.0.0.0"
-    assert settings.port == 8000
+    with patch.dict(os.environ, {
+        "HOST": "0.0.0.0",
+        "PORT": "8000",
+        "DATABASE": "data/aegis.db",
+    }, clear=True):
+        settings = AegisSettings(_env_file=None)
+        
+        assert settings.app_name == "Aegis OSINT AI"
+        assert settings.app_version == "1.0.0"
+        assert settings.debug is False
+        assert settings.database_path == "data/aegis.db"
+        assert settings.host == "0.0.0.0"
+        assert settings.port == 8000
 
 
 def test_settings_from_env():
     """Test that settings can be loaded from environment variables."""
-    os.environ["AEGIS_DEBUG"] = "true"
-    os.environ["AEGIS_PORT"] = "9000"
+    os.environ["DEBUG"] = "true"
+    os.environ["PORT"] = "9000"
     
     settings = AegisSettings()
     

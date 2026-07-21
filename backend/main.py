@@ -7,14 +7,15 @@ import os
 import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import sqlite3
 import json
-import httpx
 from fastapi.middleware.cors import CORSMiddleware
 from backend.provider_manager import ProviderManager
 from backend.config.settings import settings, get_settings
@@ -92,9 +93,22 @@ async def lifespan(app: FastAPI):
     """Application lifespan: initialize DB and discover plugins on startup."""
     init_db()
     from backend.plugin_manager import PluginManager
+    from backend.storage import SQLiteStorage
+
     pm = PluginManager()
     pm.discover_plugins()
+
+    # Initialize global async storage pool
+    app.state.storage = SQLiteStorage(DATABASE_PATH)
+    await app.state.storage._get_connection()  # Pre-warm connection
+
     yield
+
+    # Cleanup on shutdown
+    if hasattr(app.state, 'storage'):
+        await app.state.storage.close()
+    from backend.http_client import SharedHTTPClient
+    await SharedHTTPClient.close()
 
 
 # Initialize FastAPI app
@@ -174,15 +188,64 @@ class SaveSettingsRequest(BaseModel):
     api_key: Optional[str] = None
 
 
-# --- Static File Routes ---
+# --- Jinja2 Templates ---
+templates = Jinja2Templates(directory="backend/templates")
 
-@app.get("/")
-async def root():
-    return FileResponse("frontend_dist/index.html")
+# Mount static files (if backend/static exists, otherwise skip)
+if os.path.exists("backend/static"):
+    app.mount("/static", StaticFiles(directory="backend/static"), name="static")
 
 
-app.mount("/static", StaticFiles(directory="frontend_dist"), name="static")
-app.mount("/assets", StaticFiles(directory="frontend_dist"), name="assets")
+# --- Template Routes (replacing React SPA) ---
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard_page(request: Request):
+    """Dashboard page with new investigation form"""
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={"active_page": "dashboard"}
+    )
+
+
+@app.get("/investigations", response_class=HTMLResponse)
+async def investigations_page(request: Request):
+    """Investigations list page"""
+    return templates.TemplateResponse(
+        request=request,
+        name="investigations.html",
+        context={"active_page": "investigations"}
+    )
+
+
+@app.get("/results/{target_id}", response_class=HTMLResponse)
+async def results_page(request: Request, target_id: int):
+    """Investigation results page with graph visualization"""
+    return templates.TemplateResponse(
+        request=request,
+        name="results.html",
+        context={"target_id": target_id, "active_page": "results"}
+    )
+
+
+@app.get("/plugins", response_class=HTMLResponse)
+async def plugins_page(request: Request):
+    """Plugins management page"""
+    return templates.TemplateResponse(
+        request=request,
+        name="plugins.html",
+        context={"active_page": "plugins"}
+    )
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    """Settings page"""
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={"active_page": "settings"}
+    )
 
 
 @app.get("/health")
@@ -317,7 +380,8 @@ async def create_target(payload: TargetCreate):
 
 
 @app.get("/api/targets")
-async def list_targets():
+async def list_targets(request: Request, format: str = "json"):
+    """Return targets as JSON or HTML partial."""
     conn_gen = get_db()
     conn = None
     try:
@@ -330,11 +394,18 @@ async def list_targets():
             conn.close()
     
     targets = [{"id": r[0], "query": r[1], "target_type": r[2], "status": r[3], "created_at": r[4]} for r in rows]
+    
+    if format == "html":
+        return templates.TemplateResponse("components/targets_list.html", {
+            "request": request,
+            "targets": targets
+        })
     return format_response(targets)
 
 
 @app.post("/api/search")
-async def search(payload: SearchRequest):
+async def search(request: Request, payload: SearchRequest, format: str = "json"):
+    """Start investigation and return JSON or HTML partial."""
     # 1. Determine target type
     target_type_str = payload.target_type or "auto"
     from backend.models import TargetType
@@ -377,9 +448,16 @@ async def search(payload: SearchRequest):
     
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
-    entities = [e.model_dump() for e in storage.get_entities_for_target(target_id)]
-    relationships = [r.model_dump() for r in storage.get_relationships_for_target(target_id)]
-    timeline = [t.model_dump() for t in storage.get_timeline(target_id)]
+    entities = [e.model_dump() for e in await storage.get_entities_for_target(target_id)]
+    relationships = [r.model_dump() for r in await storage.get_relationships_for_target(target_id)]
+    timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
+    
+    if format == "html":
+        return templates.TemplateResponse("components/investigation_result.html", {
+            "request": request,
+            "target_id": target_id,
+            "status": result.get("status", "completed")
+        })
     
     return format_response({
         "target_id": target_id,
@@ -393,24 +471,48 @@ async def search(payload: SearchRequest):
 
 
 @app.get("/api/targets/{target_id}/entities")
-async def get_target_entities(target_id: int):
+async def get_target_entities(request: Request, target_id: int, format: str = "json"):
+    """Return entities as JSON or HTML partial."""
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
-    return format_response([e.model_dump() for e in storage.get_entities_for_target(target_id)])
+    entities = await storage.get_entities_for_target(target_id)
+    
+    if format == "html":
+        return templates.TemplateResponse("components/entities.html", {
+            "request": request,
+            "entities": entities
+        })
+    return format_response([e.model_dump() for e in entities])
 
 
 @app.get("/api/targets/{target_id}/relationships")
-async def get_target_relationships(target_id: int):
+async def get_target_relationships(request: Request, target_id: int, format: str = "json"):
+    """Return relationships as JSON or HTML partial."""
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
-    return format_response([r.model_dump() for r in storage.get_relationships_for_target(target_id)])
+    relationships = await storage.get_relationships_for_target(target_id)
+    
+    if format == "html":
+        return templates.TemplateResponse("components/relationships.html", {
+            "request": request,
+            "relationships": relationships
+        })
+    return format_response([r.model_dump() for r in relationships])
 
 
 @app.get("/api/targets/{target_id}/timeline")
-async def get_target_timeline(target_id: int):
+async def get_target_timeline(request: Request, target_id: int, format: str = "json"):
+    """Return timeline as JSON or HTML partial."""
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
-    return format_response([t.model_dump() for t in storage.get_timeline(target_id)])
+    timeline = await storage.get_timeline(target_id)
+    
+    if format == "html":
+        return templates.TemplateResponse("components/timeline.html", {
+            "request": request,
+            "timeline": timeline
+        })
+    return format_response([t.model_dump() for t in timeline])
 
 
 @app.get("/api/plugins")
@@ -594,3 +696,26 @@ async def chat(payload: ChatRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+# --- HTMX Partial Endpoints (return HTML instead of JSON) ---
+
+@app.get("/api/targets/{target_id}/graph-data")
+async def graph_data(target_id: int):
+    """Return graph data in JSON format for vis-network"""
+    storage = app.state.storage
+    entities = await storage.get_entities_for_target(target_id)
+    relationships = await storage.get_relationships_for_target(target_id)
+    
+    nodes = [{"id": e.id, "value": e.value, "type": e.type.value} for e in entities]
+    edges = [{"from": r.source_entity_id, "to": r.target_entity_id, "type": r.relationship_type.value} for r in relationships]
+    
+    return {"nodes": nodes, "edges": edges}
+
+@app.get("/htmx/providers", response_class=HTMLResponse)
+async def htmx_providers_list(request: Request):
+    """HTMX endpoint - returns HTML partial with providers list"""
+    providers_data = provider_manager.get_providers()
+    return templates.TemplateResponse(
+        request=request,
+        name="components/providers_list.html",
+        context={"providers": providers_data}
+    )

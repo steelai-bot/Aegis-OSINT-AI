@@ -95,7 +95,8 @@ class ReportGenerator:
 
     def _generate_section_key_findings(self, target, findings, risk, entities, relationships, timeline) -> List[Dict[str, Any]]:
         # Return top 5 most severe findings
-        sorted_findings = sorted(findings, key=lambda x: x.get("severity", "info") == "critical", reverse=True)
+        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        sorted_findings = sorted(findings, key=lambda x: severity_order.get(x.get("severity", "info").lower(), 4))
         return sorted_findings[:5]
 
     def _generate_section_evidence(self, target, findings, risk, entities, relationships, timeline) -> List[Dict[str, Any]]:

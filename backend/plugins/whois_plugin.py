@@ -1,4 +1,4 @@
-import subprocess
+import asyncio
 import logging
 from typing import List
 from backend.plugins.base import BasePlugin
@@ -26,11 +26,11 @@ class WHOISPlugin(BasePlugin):
     async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
         domain = query
         try:
-            # Run the system whois command
-            result = subprocess.run(
-                ['whois', domain], 
-                capture_output=True, 
-                text=True, 
+            result = await asyncio.to_thread(
+                subprocess.run,
+                ['whois', domain],
+                capture_output=True,
+                text=True,
                 timeout=15
             )
             

@@ -20,6 +20,7 @@ class TargetType(str, Enum):
     IP = "ip"
     PERSON = "person"
     UNKNOWN = "unknown"
+    USERNAME = "username"
     ABN = "abn"
     NZ_DOMAIN = "nz_domain"
     NZ_COMPANY = "nz_company"

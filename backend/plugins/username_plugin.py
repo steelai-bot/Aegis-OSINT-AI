@@ -1,4 +1,5 @@
 import httpx
+import asyncio
 import logging
 from typing import List
 from backend.plugins.base import BasePlugin
@@ -36,25 +37,29 @@ class UsernamePlugin(BasePlugin):
             estimated_time=8
         )
 
+    async def _check_platform(self, client: httpx.AsyncClient, platform: dict, username: str) -> dict:
+        url = platform["url"].format(username=username)
+        try:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code == 200:
+                return {
+                    "platform": platform["name"],
+                    "url": url,
+                    "status": "found"
+                }
+        except Exception as e:
+            logger.debug(f"UsernamePlugin error checking {platform['name']}: {e}")
+        return None
+
     async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
         found = []
         
         async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-            for platform in PLATFORMS:
-                url = platform["url"].format(username=query)
-                try:
-                    resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                    # Basic check: 200 OK and not a generic "not found" page (heuristic)
-                    if resp.status_code == 200:
-                        # Some sites return 200 for not found pages, but for MVP we accept 200
-                        found.append({
-                            "platform": platform["name"],
-                            "url": url,
-                            "status": "found"
-                        })
-                except Exception as e:
-                    logger.debug(f"UsernamePlugin error checking {platform['name']}: {e}")
-                    continue
+            tasks = [self._check_platform(client, platform, query) for platform in PLATFORMS]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, dict):
+                    found.append(result)
         
         if found:
             return [PluginResponse(
