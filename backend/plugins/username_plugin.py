@@ -1,14 +1,12 @@
 import asyncio
 import logging
 
-import httpx
-
+from backend.http_client import SharedHTTPClient
 from backend.models import PluginMetadata, PluginResponse, TargetType
 from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
-# Common platforms to check for username presence
 PLATFORMS = [
     {"name": "GitHub", "url": "https://github.com/{username}"},
     {"name": "Twitter", "url": "https://twitter.com/{username}"},
@@ -38,7 +36,7 @@ class UsernamePlugin(BasePlugin):
             estimated_time=8
         )
 
-    async def _check_platform(self, client: httpx.AsyncClient, platform: dict, username: str) -> dict:
+    async def _check_platform(self, client, platform: dict, username: str) -> dict:
         url = platform["url"].format(username=username)
         try:
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -54,13 +52,13 @@ class UsernamePlugin(BasePlugin):
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         found = []
+        client = await SharedHTTPClient.get_client()
 
-        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-            tasks = [self._check_platform(client, platform, query) for platform in PLATFORMS]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, dict):
-                    found.append(result)
+        tasks = [self._check_platform(client, platform, query) for platform in PLATFORMS]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, dict):
+                found.append(result)
 
         if found:
             return [PluginResponse(

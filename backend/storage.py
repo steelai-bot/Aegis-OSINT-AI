@@ -1,6 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 
@@ -67,17 +68,39 @@ class StorageInterface(ABC):
         pass
 
 class SQLiteStorage(StorageInterface):
-    """Async SQLite implementation with connection pooling."""
+    """Async SQLite implementation with connection pooling and transaction support."""
 
     def __init__(self, db_path: str):
         self.db_path = db_path
         self._connection: aiosqlite.Connection | None = None
+        self._transaction_active: bool = False
+
+    @asynccontextmanager
+    async def transaction(self):
+        self._transaction_active = True
+        try:
+            yield self
+            if self._connection and not self._connection.is_closed:
+                await self._connection.commit()
+        except Exception:
+            if self._connection and not self._connection.is_closed:
+                try:
+                    await self._connection.rollback()
+                except Exception:
+                    pass
+            raise
+        finally:
+            self._transaction_active = False
 
     async def _get_connection(self) -> aiosqlite.Connection:
-        """Get or create persistent connection with connection reuse"""
+        """Get or create persistent connection with WAL mode and connection reuse"""
         if self._connection is None:
             self._connection = await aiosqlite.connect(self.db_path)
             self._connection.row_factory = aiosqlite.Row
+            await self._connection.execute("PRAGMA journal_mode=WAL")
+            await self._connection.execute("PRAGMA synchronous=NORMAL")
+            await self._connection.execute("PRAGMA cache_size=-64000")
+            await self._connection.execute("PRAGMA temp_store=MEMORY")
             await self._init_db()
         return self._connection
 
@@ -137,6 +160,32 @@ class SQLiteStorage(StorageInterface):
             )
         ''')
 
+        # Targets table
+        await cursor.execute('''
+            CREATE TABLE IF NOT EXISTS targets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT NOT NULL,
+                target_type TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'pending'
+            )
+        ''')
+
+        # Findings table
+        await cursor.execute('''
+            CREATE TABLE IF NOT EXISTS findings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target_id INTEGER,
+                source TEXT,
+                category TEXT,
+                severity TEXT,
+                confidence REAL,
+                data TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (target_id) REFERENCES targets (id)
+            )
+        ''')
+
         # Create indexes for better query performance
         await cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_timeline_target
@@ -150,6 +199,22 @@ class SQLiteStorage(StorageInterface):
             CREATE INDEX IF NOT EXISTS idx_relationships_target
             ON relationships(target_entity_id)
         ''')
+        await cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_findings_target
+            ON findings(target_id)
+        ''')
+        await cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_entities_type_value
+            ON entities(type, value)
+        ''')
+        await cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_targets_status
+            ON targets(status)
+        ''')
+        await cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_timeline_target_type
+            ON timeline_events(target_id, event_type)
+        ''')
 
         await conn.commit()
 
@@ -157,22 +222,23 @@ class SQLiteStorage(StorageInterface):
         try:
             conn = await self._get_connection()
             cursor = await conn.cursor()
-            # Use INSERT OR IGNORE to handle duplicates
             await cursor.execute(
-                "INSERT OR IGNORE INTO entities (type, value, display_name, first_seen, last_seen, confidence, metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO entities (type, value, display_name, first_seen, last_seen, confidence, metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(type, value) DO UPDATE SET last_seen=excluded.last_seen "
+                "RETURNING id",
                 (entity.type.value, entity.value, entity.display_name,
                  entity.first_seen.isoformat(), entity.last_seen.isoformat(),
                  entity.confidence, json.dumps(entity.metadata_json))
             )
-            if cursor.rowcount == 0:
-                # Entity already exists, fetch its ID
+            row = await cursor.fetchone()
+            entity_id = row[0] if row else None
+            if entity_id is None:
                 await cursor.execute("SELECT id FROM entities WHERE type = ? AND value = ?", (entity.type.value, entity.value))
                 row = await cursor.fetchone()
-                entity_id = row[0]
-            else:
-                entity_id = cursor.lastrowid
-            await conn.commit()
-            return entity_id
+                entity_id = row[0] if row else None
+            if not self._transaction_active:
+                await conn.commit()
+            return entity_id or 0
         except Exception as e:
             logger.error(f"Error saving entity {entity.value}: {e}")
             raise
@@ -203,7 +269,8 @@ class SQLiteStorage(StorageInterface):
             (relationship.source_entity_id, relationship.target_entity_id, relationship.relationship_type.value,
              relationship.confidence, relationship.source_plugin, relationship.created_at.isoformat())
         )
-        await conn.commit()
+        if not self._transaction_active:
+            await conn.commit()
         return cursor.lastrowid
 
     async def log_timeline_event(self, event: TimelineEvent) -> int:
@@ -214,7 +281,8 @@ class SQLiteStorage(StorageInterface):
             (event.target_id, event.timestamp.isoformat(), event.event_type.value,
              event.plugin, event.severity, event.description, event.entity_id)
         )
-        await conn.commit()
+        if not self._transaction_active:
+            await conn.commit()
         return cursor.lastrowid
 
     async def log_timeline_events_batch(self, events: list[TimelineEvent]) -> list[int]:
@@ -233,7 +301,8 @@ class SQLiteStorage(StorageInterface):
             "INSERT INTO timeline_events (target_id, timestamp, event_type, plugin, severity, description, entity_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
             values
         )
-        await conn.commit()
+        if not self._transaction_active:
+            await conn.commit()
         return []
 
     async def get_timeline(self, target_id: int) -> list[TimelineEvent]:
@@ -295,7 +364,8 @@ class SQLiteStorage(StorageInterface):
         conn = await self._get_connection()
         cursor = await conn.cursor()
         await cursor.execute("UPDATE targets SET status = ? WHERE id = ?", (status, target_id))
-        await conn.commit()
+        if not self._transaction_active:
+            await conn.commit()
 
     async def save_finding(self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]):
         conn = await self._get_connection()
@@ -305,4 +375,5 @@ class SQLiteStorage(StorageInterface):
                 "INSERT INTO findings (target_id, source, category, severity, confidence, data) VALUES (?, ?, ?, ?, ?, ?)",
                 (target_id, provider, "osint_discovery", "info", confidence, json.dumps(item))
             )
-        await conn.commit()
+        if not self._transaction_active:
+            await conn.commit()

@@ -9,6 +9,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
+from backend.http_client import SharedHTTPClient
+
 
 class AIResponse(BaseModel):
     content: str
@@ -20,6 +22,9 @@ class AIProvider:
     """Base class for AI providers."""
     def __init__(self, api_key: str):
         self.api_key = api_key
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        return await SharedHTTPClient.get_client()
 
     async def chat(self, prompt: str, model: str) -> AIResponse:
         raise NotImplementedError
@@ -51,15 +56,15 @@ class OpenRouterProvider(AIProvider):
             "model": model,
             "messages": [{"role": "user", "content": prompt}]
         }
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
-            resp.raise_for_status()
-            data = resp.json()
-            return AIResponse(
-                content=data["choices"][0]["message"]["content"],
-                provider="openrouter",
-                model=model
-            )
+        client = await self._get_client()
+        resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
+        resp.raise_for_status()
+        data = resp.json()
+        return AIResponse(
+            content=data["choices"][0]["message"]["content"],
+            provider="openrouter",
+            model=model
+        )
 
 
 class OpenAIProvider(AIProvider):
@@ -70,15 +75,15 @@ class OpenAIProvider(AIProvider):
             "model": model,
             "messages": [{"role": "user", "content": prompt}]
         }
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
-            resp.raise_for_status()
-            data = resp.json()
-            return AIResponse(
-                content=data["choices"][0]["message"]["content"],
-                provider="openai",
-                model=model
-            )
+        client = await self._get_client()
+        resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
+        resp.raise_for_status()
+        data = resp.json()
+        return AIResponse(
+            content=data["choices"][0]["message"]["content"],
+            provider="openai",
+            model=model
+        )
 
 
 class AnthropicProvider(AIProvider):
@@ -94,15 +99,15 @@ class AnthropicProvider(AIProvider):
             "max_tokens": 1024,
             "messages": [{"role": "user", "content": prompt}]
         }
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
-            resp.raise_for_status()
-            data = resp.json()
-            return AIResponse(
-                content=data["content"][0]["text"],
-                provider="anthropic",
-                model=model
-            )
+        client = await self._get_client()
+        resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
+        resp.raise_for_status()
+        data = resp.json()
+        return AIResponse(
+            content=data["content"][0]["text"],
+            provider="anthropic",
+            model=model
+        )
 
 
 class GeminiProvider(AIProvider):
@@ -111,15 +116,15 @@ class GeminiProvider(AIProvider):
         payload = {
             "contents": [{"parts": [{"text": prompt}]}]
         }
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, json=payload, timeout=30.0)
-            resp.raise_for_status()
-            data = resp.json()
-            return AIResponse(
-                content=data["candidates"][0]["content"]["parts"][0]["text"],
-                provider="gemini",
-                model=model
-            )
+        client = await self._get_client()
+        resp = await client.post(url, json=payload, timeout=30.0)
+        resp.raise_for_status()
+        data = resp.json()
+        return AIResponse(
+            content=data["candidates"][0]["content"]["parts"][0]["text"],
+            provider="gemini",
+            model=model
+        )
 
 
 class NvidiaProvider(AIProvider):
@@ -183,22 +188,21 @@ class NvidiaProvider(AIProvider):
             "temperature": 1.00,
             "top_p": 0.95,
         }
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, headers=headers, json=payload, timeout=60.0)
-            resp.raise_for_status()
-            data = resp.json()
-            # Handle empty choices (model not provisioned for account)
-            if not data.get("choices"):
-                return AIResponse(
-                    content=f"NVIDIA API returned empty response. The model '{model}' may not be provisioned for this account.",
-                    provider="nvidia",
-                    model=model
-                )
+        client = await self._get_client()
+        resp = await client.post(url, headers=headers, json=payload, timeout=60.0)
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("choices"):
             return AIResponse(
-                content=data["choices"][0]["message"]["content"],
+                content=f"NVIDIA API returned empty response. The model '{model}' may not be provisioned for this account.",
                 provider="nvidia",
                 model=model
             )
+        return AIResponse(
+            content=data["choices"][0]["message"]["content"],
+            provider="nvidia",
+            model=model
+        )
 
 
 class GroqProvider(AIProvider):
@@ -218,15 +222,15 @@ class GroqProvider(AIProvider):
             "temperature": 0.7
         }
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
-            resp.raise_for_status()
-            data = resp.json()
-            return AIResponse(
-                content=data["choices"][0]["message"]["content"],
-                provider="groq",
-                model=model
-            )
+        client = await self._get_client()
+        resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
+        resp.raise_for_status()
+        data = resp.json()
+        return AIResponse(
+            content=data["choices"][0]["message"]["content"],
+            provider="groq",
+            model=model
+        )
 
 
 class MistralProvider(AIProvider):
@@ -246,15 +250,15 @@ class MistralProvider(AIProvider):
             "temperature": 0.7
         }
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
-            resp.raise_for_status()
-            data = resp.json()
-            return AIResponse(
-                content=data["choices"][0]["message"]["content"],
-                provider="mistral",
-                model=model
-            )
+        client = await self._get_client()
+        resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
+        resp.raise_for_status()
+        data = resp.json()
+        return AIResponse(
+            content=data["choices"][0]["message"]["content"],
+            provider="mistral",
+            model=model
+        )
 
 
 class AIProviderFactory:

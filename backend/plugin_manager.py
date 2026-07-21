@@ -29,7 +29,6 @@ def validate_semver(version: str) -> bool:
         return False
     try:
         major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
-        # Basic sanity check
         return major >= 0 and minor >= 0 and patch >= 0
     except (ValueError, IndexError):
         return False
@@ -38,7 +37,7 @@ def validate_semver(version: str) -> bool:
 class PluginManager:
     """
     Singleton manager for discovering and executing OSINT plugins.
-    Supports hot reload detection, version validation, and dependency checking.
+    Supports hot reload detection, version validation, dependency checking, and result caching.
     """
     _instance: Optional['PluginManager'] = None
 
@@ -55,6 +54,8 @@ class PluginManager:
         self._plugin_statuses: dict[str, str] = {}
         self._plugin_errors: dict[str, str] = {}
         self._file_mtimes: dict[str, float] = {}
+        self._result_cache: dict[str, tuple[list[PluginResponse], float]] = {}
+        self._cache_ttl: float = 3600.0
         self._initialized = True
         logger.info("PluginManager initialized.")
 
@@ -184,8 +185,20 @@ class PluginManager:
 
     async def execute_plugin(self, plugin_name: str, query: str, target_type: TargetType) -> list[PluginResponse]:
         """
-        Execute a specific plugin.
+        Execute a specific plugin with TTL-based result caching.
         """
+        import time
+        cache_key = f"{plugin_name}:{query}:{target_type.value}"
+        now = time.time()
+
+        if cache_key in self._result_cache:
+            results, cached_at = self._result_cache[cache_key]
+            if now - cached_at < self._cache_ttl:
+                logger.debug(f"Cache hit for {cache_key}")
+                return results
+            else:
+                del self._result_cache[cache_key]
+
         plugin = self.get_plugin(plugin_name)
         if not plugin:
             logger.error(f"Plugin '{plugin_name}' not found.")
@@ -193,7 +206,9 @@ class PluginManager:
 
         try:
             logger.info(f"Executing plugin: {plugin_name} for query: {query}")
-            return await plugin.execute(query, target_type)
+            results = await plugin.execute(query, target_type)
+            self._result_cache[cache_key] = (results, now)
+            return results
         except Exception as e:
             logger.error(f"Error executing plugin '{plugin_name}': {e}", exc_info=True)
             return []  # Sandbox plugin failures: never crash the app

@@ -60,7 +60,6 @@ class AIPlanner:
         # Try to get a provider for the planner
         provider = AIProviderFactory.get_provider("openrouter")
         if not provider:
-            # Fallback to basic heuristic if no AI provider is available
             return self.templates.get(target_type, InvestigationTemplate(target_type=target_type, steps=[])).steps
 
         prompt = (
@@ -72,9 +71,9 @@ class AIPlanner:
         )
 
         try:
-            response = await provider.chat(prompt, "gpt-3.5-turbo")
+            model = "gpt-3.5-turbo" if getattr(provider, 'provider', '') == "openrouter" else getattr(provider, '_default_model', 'gpt-3.5-turbo')
+            response = await provider.chat(prompt, model)
             plugins = [p.strip() for p in response.content.split(",") if p.strip()]
-            # Validate that the suggested plugins actually exist (this would be checked by the Engine/Manager)
             logger.info(f"AI Planner suggested: {plugins}")
             return plugins
         except Exception as e:

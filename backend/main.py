@@ -445,11 +445,11 @@ async def search(request: Request, payload: SearchRequest, format: str = "json")
     # 3. Run investigation
     from backend.engine import InvestigationEngine
     engine = InvestigationEngine(DATABASE_PATH)
+    await engine.initialize()
 
     result = await engine.run_investigation(target_id, target_type, payload.query)
 
-    from backend.storage import SQLiteStorage
-    storage = SQLiteStorage(DATABASE_PATH)
+    storage = app.state.storage
     entities = [e.model_dump() for e in await storage.get_entities_for_target(target_id)]
     relationships = [r.model_dump() for r in await storage.get_relationships_for_target(target_id)]
     timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
@@ -475,8 +475,7 @@ async def search(request: Request, payload: SearchRequest, format: str = "json")
 @app.get("/api/targets/{target_id}/entities")
 async def get_target_entities(request: Request, target_id: int, format: str = "json"):
     """Return entities as JSON or HTML partial."""
-    from backend.storage import SQLiteStorage
-    storage = SQLiteStorage(DATABASE_PATH)
+    storage = app.state.storage
     entities = await storage.get_entities_for_target(target_id)
 
     if format == "html":
@@ -490,8 +489,7 @@ async def get_target_entities(request: Request, target_id: int, format: str = "j
 @app.get("/api/targets/{target_id}/relationships")
 async def get_target_relationships(request: Request, target_id: int, format: str = "json"):
     """Return relationships as JSON or HTML partial."""
-    from backend.storage import SQLiteStorage
-    storage = SQLiteStorage(DATABASE_PATH)
+    storage = app.state.storage
     relationships = await storage.get_relationships_for_target(target_id)
 
     if format == "html":
@@ -505,8 +503,7 @@ async def get_target_relationships(request: Request, target_id: int, format: str
 @app.get("/api/targets/{target_id}/timeline")
 async def get_target_timeline(request: Request, target_id: int, format: str = "json"):
     """Return timeline as JSON or HTML partial."""
-    from backend.storage import SQLiteStorage
-    storage = SQLiteStorage(DATABASE_PATH)
+    storage = app.state.storage
     timeline = await storage.get_timeline(target_id)
 
     if format == "html":
@@ -588,8 +585,7 @@ async def create_report(payload: ReportRequest):
     ]
 
     from backend.report import ReportGenerator
-    from backend.storage import SQLiteStorage
-    storage = SQLiteStorage(DATABASE_PATH)
+    storage = app.state.storage
 
     entities = [e.model_dump() for e in storage.get_entities_for_target(payload.target_id)]
     relationships = [r.model_dump() for r in storage.get_relationships_for_target(payload.target_id)]

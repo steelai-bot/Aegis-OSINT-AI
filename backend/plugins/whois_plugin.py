@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import shutil
+import subprocess
 
 from backend.models import PluginMetadata, PluginResponse, TargetType
 from backend.plugins.base import BasePlugin
@@ -25,6 +27,11 @@ class WHOISPlugin(BasePlugin):
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         domain = query
+
+        if not shutil.which("whois"):
+            logger.warning("whois binary not found, skipping whois lookup")
+            return []
+
         try:
             result = await asyncio.to_thread(
                 subprocess.run,

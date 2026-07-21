@@ -1,8 +1,7 @@
 import logging
 import os
 
-import httpx
-
+from backend.http_client import SharedHTTPClient
 from backend.models import PluginMetadata, PluginResponse, TargetType
 from backend.plugins.base import BasePlugin
 
@@ -29,41 +28,38 @@ class EmailPlugin(BasePlugin):
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         api_key = os.getenv("HUNTER_API_KEY")
+        client = await SharedHTTPClient.get_client()
 
         if api_key:
-            # Use Hunter.io API
             try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    if target_type == TargetType.DOMAIN:
-                        # Domain search
-                        url = f"https://api.hunter.io/v2/domain-search?domain={query}&api_key={api_key}"
-                        resp = await client.get(url)
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            emails = data.get("data", {}).get("emails", [])
-                            if emails:
-                                findings.append(PluginResponse(
-                                    provider=self.metadata.name,
-                                    entity_type=TargetType.EMAIL,
-                                    confidence=0.9,
-                                    evidence=[{"emails": [e.get("value") for e in emails]}],
-                                    raw=data
-                                ))
-                    elif target_type == TargetType.EMAIL:
-                        # Email verifier
-                        url = f"https://api.hunter.io/v2/email-verifier?email={query}&api_key={api_key}"
-                        resp = await client.get(url)
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            result = data.get("data", {})
-                            if result.get("status") == "valid":
-                                findings.append(PluginResponse(
-                                    provider=self.metadata.name,
-                                    entity_type=TargetType.EMAIL,
-                                    confidence=1.0,
-                                    evidence=[{"status": "valid", "email": query}],
-                                    raw=data
-                                ))
+                if target_type == TargetType.DOMAIN:
+                    url = f"https://api.hunter.io/v2/domain-search?domain={query}&api_key={api_key}"
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        emails = data.get("data", {}).get("emails", [])
+                        if emails:
+                            findings.append(PluginResponse(
+                                provider=self.metadata.name,
+                                entity_type=TargetType.EMAIL,
+                                confidence=0.9,
+                                evidence=[{"emails": [e.get("value") for e in emails]}],
+                                raw=data
+                            ))
+                elif target_type == TargetType.EMAIL:
+                    url = f"https://api.hunter.io/v2/email-verifier?email={query}&api_key={api_key}"
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        result = data.get("data", {})
+                        if result.get("status") == "valid":
+                            findings.append(PluginResponse(
+                                provider=self.metadata.name,
+                                entity_type=TargetType.EMAIL,
+                                confidence=1.0,
+                                evidence=[{"status": "valid", "email": query}],
+                                raw=data
+                            ))
             except Exception as e:
                 logger.error(f"EmailPlugin Hunter.io error: {e}")
 

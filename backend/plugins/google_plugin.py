@@ -1,8 +1,7 @@
 import logging
 import os
 
-import httpx
-
+from backend.http_client import SharedHTTPClient
 from backend.models import PluginMetadata, PluginResponse, TargetType
 from backend.plugins.base import BasePlugin
 
@@ -30,50 +29,48 @@ class GooglePlugin(BasePlugin):
         findings = []
         api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
         cx = os.getenv("GOOGLE_SEARCH_CX")
+        client = await SharedHTTPClient.get_client()
 
         if api_key and cx:
             try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    # Construct a dork based on target type
-                    dork = query
-                    if target_type == TargetType.DOMAIN:
-                        dork = f"site:{query}"
-                    elif target_type == TargetType.EMAIL:
-                        dork = f'"{query}"'
+                dork = query
+                if target_type == TargetType.DOMAIN:
+                    dork = f"site:{query}"
+                elif target_type == TargetType.EMAIL:
+                    dork = f'"{query}"'
 
-                    url = "https://www.googleapis.com/customsearch/v1"
-                    params = {
-                        "q": dork,
-                        "key": api_key,
-                        "cx": cx
-                    }
+                url = "https://www.googleapis.com/customsearch/v1"
+                params = {
+                    "q": dork,
+                    "key": api_key,
+                    "cx": cx
+                }
 
-                    resp = await client.get(url, params=params)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        items = data.get("items", [])
-                        if items:
-                            results = []
-                            for item in items:
-                                results.append({
-                                    "title": item.get("title"),
-                                    "link": item.get("link"),
-                                    "snippet": item.get("snippet")
-                                })
+                resp = await client.get(url, params=params)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    items = data.get("items", [])
+                    if items:
+                        results = []
+                        for item in items:
+                            results.append({
+                                "title": item.get("title"),
+                                "link": item.get("link"),
+                                "snippet": item.get("snippet")
+                            })
 
-                            findings.append(PluginResponse(
-                                provider=self.metadata.name,
-                                entity_type=target_type,
-                                confidence=0.8,
-                                evidence=[{"search_results": results}],
-                                raw=data
-                            ))
-                    else:
-                        logger.error(f"GooglePlugin error: {resp.status_code} - {resp.text}")
+                        findings.append(PluginResponse(
+                            provider=self.metadata.name,
+                            entity_type=target_type,
+                            confidence=0.8,
+                            evidence=[{"search_results": results}],
+                            raw=data
+                        ))
+                else:
+                    logger.error(f"GooglePlugin error: {resp.status_code} - {resp.text}")
             except Exception as e:
                 logger.error(f"GooglePlugin error: {e}")
         else:
-            # Fallback/Simulation if no API key
             logger.warning("GooglePlugin: API key or CX not configured. Skipping.")
             if not api_key:
                 findings.append(PluginResponse(
