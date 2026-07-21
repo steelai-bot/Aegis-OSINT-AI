@@ -1,9 +1,11 @@
 import os
-import pytest
-from backend.storage import SQLiteStorage
-from backend.models import Entity, EntityType
-
 import tempfile
+
+import pytest
+
+from backend.models import Entity, EntityType
+from backend.storage import SQLiteStorage
+
 
 @pytest.fixture
 def storage():

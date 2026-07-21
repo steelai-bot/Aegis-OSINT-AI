@@ -3,10 +3,11 @@ Shared HTTP Client for all OSINT plugins
 Provides connection pooling and reuse across plugins
 """
 
-import httpx
 import asyncio
-from typing import Optional
 import logging
+from typing import Optional
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class SharedHTTPClient:
     Shared across all plugins to eliminate connection overhead.
     """
     _instance: Optional['SharedHTTPClient'] = None
-    _client: Optional[httpx.AsyncClient] = None
+    _client: httpx.AsyncClient | None = None
     _lock = asyncio.Lock()
 
     def __new__(cls):

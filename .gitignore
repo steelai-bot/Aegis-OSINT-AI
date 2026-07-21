@@ -41,4 +41,7 @@ frontend_dist/
 
 # Temporary editor directories
 .kilo/data/test_engine.db  
-data/test_storage.db  
+data/test_storage.db
+
+# Planning artifacts
+*_plan.md

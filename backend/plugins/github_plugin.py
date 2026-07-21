@@ -1,9 +1,9 @@
 import logging
 import os
-from typing import List
-from backend.plugins.base import BasePlugin
-from backend.models import PluginMetadata, PluginResponse, TargetType
+
 from backend.http_client import SharedHTTPClient
+from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class GithubPlugin(BasePlugin):
             estimated_time=4
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         token = os.getenv("GITHUB_TOKEN")
         headers = {"Authorization": f"token {token}"} if token else {}

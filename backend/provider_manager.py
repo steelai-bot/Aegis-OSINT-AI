@@ -1,7 +1,9 @@
 import os
 import shutil
-from typing import Dict, Any, List
+from typing import Any
+
 from dotenv import load_dotenv, set_key
+
 
 class ProviderManager:
     """
@@ -12,8 +14,8 @@ class ProviderManager:
         self._ensure_env_exists()
         load_dotenv(self.env_path)
 
-        # Default providers that don't come from plugins (like AI providers) 
-        # and known OSINT providers. We will expand this dynamically if needed, 
+        # Default providers that don't come from plugins (like AI providers)
+        # and known OSINT providers. We will expand this dynamically if needed,
         # but for now we define a static list for the UI.
         self.known_providers = [
             {"id": "openrouter", "name": "OpenRouter", "description": "AI model routing platform", "supported_authentication": ["api_key"]},
@@ -51,7 +53,7 @@ class ProviderManager:
         }
         return key_overrides.get(provider_id, f"{provider_id.upper()}_API_KEY")
 
-    def get_providers(self) -> List[Dict[str, Any]]:
+    def get_providers(self) -> list[dict[str, Any]]:
         """Returns all providers with their current connection status."""
         ai_providers = {"openrouter", "openai", "anthropic", "gemini", "nvidia", "nvidia-minimax", "groq", "mistral"}
         result = []
@@ -71,7 +73,7 @@ class ProviderManager:
             })
         return result
 
-    def get_provider(self, provider_id: str) -> Dict[str, Any]:
+    def get_provider(self, provider_id: str) -> dict[str, Any]:
         """Returns details for a specific provider."""
         providers = self.get_providers()
         for p in providers:
@@ -79,7 +81,7 @@ class ProviderManager:
                 return p
         raise ValueError(f"Provider {provider_id} not found.")
 
-    def configure_provider(self, provider_id: str, auth_data: Dict[str, str]) -> None:
+    def configure_provider(self, provider_id: str, auth_data: dict[str, str]) -> None:
         """Saves provider credentials to .env."""
         key_name = self._get_key_name(provider_id)
         # For MVP, we only handle "api_key" authentication method mapping to {PROVIDER}_API_KEY

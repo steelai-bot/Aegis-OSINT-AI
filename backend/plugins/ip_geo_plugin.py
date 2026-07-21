@@ -1,8 +1,8 @@
 import logging
-from typing import List
-from backend.plugins.base import BasePlugin
-from backend.models import PluginMetadata, PluginResponse, TargetType
+
 from backend.http_client import SharedHTTPClient
+from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class IPGeoPlugin(BasePlugin):
             estimated_time=2
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         ip = query
         try:
             client = await SharedHTTPClient.get_client()
@@ -52,5 +52,5 @@ class IPGeoPlugin(BasePlugin):
                     )]
         except Exception as e:
             logger.error(f"IPGeoPlugin error for {ip}: {e}")
-        
+
         return []

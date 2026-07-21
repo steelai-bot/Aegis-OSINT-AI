@@ -1,5 +1,3 @@
-import os
-import pytest
 from backend.provider_manager import ProviderManager
 
 

@@ -1,9 +1,10 @@
-import httpx
 import logging
 import os
-from typing import List
-from backend.plugins.base import BasePlugin
+
+import httpx
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class EmailPlugin(BasePlugin):
             estimated_time=5
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         api_key = os.getenv("HUNTER_API_KEY")
 
@@ -65,10 +66,10 @@ class EmailPlugin(BasePlugin):
                                 ))
             except Exception as e:
                 logger.error(f"EmailPlugin Hunter.io error: {e}")
-        
+
         # Fallback or complementary: Basic pattern extraction if query is a domain
         if target_type == TargetType.DOMAIN:
-            # In a real scenario, we might scrape the domain for emails. 
+            # In a real scenario, we might scrape the domain for emails.
             # For MVP, we simulate finding a common pattern if no API key was used.
             if not api_key:
                 findings.append(PluginResponse(

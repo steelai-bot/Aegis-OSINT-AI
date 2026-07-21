@@ -1,10 +1,10 @@
 import asyncio
 import logging
-from typing import List, Optional
 from urllib.parse import quote
-from backend.plugins.base import BasePlugin
-from backend.models import PluginMetadata, PluginResponse, TargetType
+
 from backend.http_client import SharedHTTPClient
+from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class DNSPlugin(BasePlugin):
             estimated_time=1  # Reduced from 3 due to parallel execution
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         domain = query
 
         # Basic validation for domain-like strings
@@ -62,7 +62,7 @@ class DNSPlugin(BasePlugin):
         domain: str,
         rtype: str,
         target_type: TargetType
-    ) -> Optional[PluginResponse]:
+    ) -> PluginResponse | None:
         """Perform single DNS record lookup"""
         try:
             url = f'https://dns.google/resolve?name={quote(domain)}&type={rtype}'

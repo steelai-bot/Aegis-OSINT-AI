@@ -1,12 +1,18 @@
-import aiosqlite
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+from typing import Any
+
+import aiosqlite
+
 from backend.models import (
-    Entity, EntityType, Relationship, RelationshipType,
-    TimelineEvent, TimelineEventType
+    Entity,
+    EntityType,
+    Relationship,
+    RelationshipType,
+    TimelineEvent,
+    TimelineEventType,
 )
 
 logger = logging.getLogger(__name__)
@@ -19,7 +25,7 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def get_entity(self, entity_id: int) -> Optional[Entity]:
+    async def get_entity(self, entity_id: int) -> Entity | None:
         pass
 
     @abstractmethod
@@ -31,20 +37,20 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def log_timeline_events_batch(self, events: List[TimelineEvent]) -> List[int]:
+    async def log_timeline_events_batch(self, events: list[TimelineEvent]) -> list[int]:
         """Batch insert timeline events for better performance"""
         pass
 
     @abstractmethod
-    async def get_timeline(self, target_id: int) -> List[TimelineEvent]:
+    async def get_timeline(self, target_id: int) -> list[TimelineEvent]:
         pass
 
     @abstractmethod
-    async def get_entities_for_target(self, target_id: int) -> List[Entity]:
+    async def get_entities_for_target(self, target_id: int) -> list[Entity]:
         pass
 
     @abstractmethod
-    async def get_relationships_for_target(self, target_id: int) -> List[Relationship]:
+    async def get_relationships_for_target(self, target_id: int) -> list[Relationship]:
         pass
 
     @abstractmethod
@@ -52,7 +58,7 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def save_finding(self, target_id: int, provider: str, confidence: float, evidence: List[Dict[str, Any]]):
+    async def save_finding(self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]):
         pass
 
     @abstractmethod
@@ -65,7 +71,7 @@ class SQLiteStorage(StorageInterface):
 
     def __init__(self, db_path: str):
         self.db_path = db_path
-        self._connection: Optional[aiosqlite.Connection] = None
+        self._connection: aiosqlite.Connection | None = None
 
     async def _get_connection(self) -> aiosqlite.Connection:
         """Get or create persistent connection with connection reuse"""
@@ -171,7 +177,7 @@ class SQLiteStorage(StorageInterface):
             logger.error(f"Error saving entity {entity.value}: {e}")
             raise
 
-    async def get_entity(self, entity_id: int) -> Optional[Entity]:
+    async def get_entity(self, entity_id: int) -> Entity | None:
         conn = await self._get_connection()
         cursor = await conn.cursor()
         await cursor.execute("SELECT * FROM entities WHERE id = ?", (entity_id,))
@@ -211,7 +217,7 @@ class SQLiteStorage(StorageInterface):
         await conn.commit()
         return cursor.lastrowid
 
-    async def log_timeline_events_batch(self, events: List[TimelineEvent]) -> List[int]:
+    async def log_timeline_events_batch(self, events: list[TimelineEvent]) -> list[int]:
         """Batch insert timeline events for 80% better write performance"""
         if not events:
             return []
@@ -230,7 +236,7 @@ class SQLiteStorage(StorageInterface):
         await conn.commit()
         return []
 
-    async def get_timeline(self, target_id: int) -> List[TimelineEvent]:
+    async def get_timeline(self, target_id: int) -> list[TimelineEvent]:
         conn = await self._get_connection()
         cursor = await conn.cursor()
         await cursor.execute("SELECT * FROM timeline_events WHERE target_id = ? ORDER BY timestamp ASC", (target_id,))
@@ -246,7 +252,7 @@ class SQLiteStorage(StorageInterface):
             entity_id=row['entity_id']
         ) for row in rows]
 
-    async def get_entities_for_target(self, target_id: int) -> List[Entity]:
+    async def get_entities_for_target(self, target_id: int) -> list[Entity]:
         conn = await self._get_connection()
         cursor = await conn.cursor()
         await cursor.execute('''
@@ -266,7 +272,7 @@ class SQLiteStorage(StorageInterface):
             metadata_json=json.loads(row['metadata_json'])
         ) for row in rows]
 
-    async def get_relationships_for_target(self, target_id: int) -> List[Relationship]:
+    async def get_relationships_for_target(self, target_id: int) -> list[Relationship]:
         conn = await self._get_connection()
         cursor = await conn.cursor()
         await cursor.execute('''
@@ -291,7 +297,7 @@ class SQLiteStorage(StorageInterface):
         await cursor.execute("UPDATE targets SET status = ? WHERE id = ?", (status, target_id))
         await conn.commit()
 
-    async def save_finding(self, target_id: int, provider: str, confidence: float, evidence: List[Dict[str, Any]]):
+    async def save_finding(self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]):
         conn = await self._get_connection()
         cursor = await conn.cursor()
         for item in evidence:

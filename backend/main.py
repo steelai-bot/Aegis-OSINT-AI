@@ -3,23 +3,25 @@ Aegis OSINT AI - Simplified Backend
 Lightweight Windows-first OSINT investigation framework
 """
 
+import json
+import logging
 import os
 import re
+import sqlite3
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-import sqlite3
-import json
-from fastapi.middleware.cors import CORSMiddleware
+
+from backend.config.settings import get_settings, settings
 from backend.provider_manager import ProviderManager
-from backend.config.settings import settings, get_settings
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +49,7 @@ def init_db():
     os.makedirs(os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True)
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS targets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +59,7 @@ def init_db():
             status TEXT DEFAULT 'pending'
         )
     ''')
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS findings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +73,7 @@ def init_db():
             FOREIGN KEY (target_id) REFERENCES targets (id)
         )
     ''')
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +84,7 @@ def init_db():
             FOREIGN KEY (target_id) REFERENCES targets (id)
         )
     ''')
-    
+
     conn.commit()
     conn.close()
 
@@ -128,7 +130,7 @@ app.add_middleware(
 )
 
 
-def format_response(data: Any = None, success: bool = True, errors: List[str] = None, metadata: Dict = None):
+def format_response(data: Any = None, success: bool = True, errors: list[str] = None, metadata: dict = None):
     return {
         "success": success,
         "data": data if data is not None else {},
@@ -157,12 +159,12 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 class TargetCreate(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
-    target_type: Optional[str] = "auto"
+    target_type: str | None = "auto"
 
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
-    target_type: Optional[str] = "auto"
+    target_type: str | None = "auto"
 
 
 class ReportRequest(BaseModel):
@@ -172,20 +174,20 @@ class ReportRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=10000)
-    provider: Optional[str] = "openrouter"
-    model: Optional[str] = ""
-    image_urls: Optional[List[str]] = None
-    video_urls: Optional[List[str]] = None
+    provider: str | None = "openrouter"
+    model: str | None = ""
+    image_urls: list[str] | None = None
+    video_urls: list[str] | None = None
 
 
 class ConfigureProviderRequest(BaseModel):
-    api_key: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None
+    api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
 
 
 class SaveSettingsRequest(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 # --- Jinja2 Templates ---
@@ -284,7 +286,7 @@ async def configure_provider(provider: str, payload: ConfigureProviderRequest):
         provider_manager.get_provider(provider)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
     try:
         config_data = {}
         if payload.api_key is not None:
@@ -328,10 +330,10 @@ async def get_app_settings():
 
 
 @app.post("/api/settings/save")
-async def save_app_settings(payload: Dict[str, str]):
+async def save_app_settings(payload: dict[str, str]):
     """Save settings to .env file (api keys only)."""
     env_path = Path(".env")
-    
+
     # Build env content with current values
     lines = [
         "# Aegis OSINT AI Configuration",
@@ -346,7 +348,7 @@ async def save_app_settings(payload: Dict[str, str]):
         f"HOST={settings.host}",
         f"PORT={settings.port}",
     ]
-    
+
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return format_response({"message": "Settings saved successfully"})
 
@@ -369,13 +371,13 @@ async def create_target(payload: TargetCreate):
     finally:
         if conn:
             conn.close()
-    
+
     return format_response({
         "id": target_id,
         "query": payload.query,
         "target_type": payload.target_type,
         "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(UTC).isoformat()
     })
 
 
@@ -392,9 +394,9 @@ async def list_targets(request: Request, format: str = "json"):
     finally:
         if conn:
             conn.close()
-    
+
     targets = [{"id": r[0], "query": r[1], "target_type": r[2], "status": r[3], "created_at": r[4]} for r in rows]
-    
+
     if format == "html":
         return templates.TemplateResponse("components/targets_list.html", {
             "request": request,
@@ -443,22 +445,22 @@ async def search(request: Request, payload: SearchRequest, format: str = "json")
     # 3. Run investigation
     from backend.engine import InvestigationEngine
     engine = InvestigationEngine(DATABASE_PATH)
-    
+
     result = await engine.run_investigation(target_id, target_type, payload.query)
-    
+
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
     entities = [e.model_dump() for e in await storage.get_entities_for_target(target_id)]
     relationships = [r.model_dump() for r in await storage.get_relationships_for_target(target_id)]
     timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
-    
+
     if format == "html":
         return templates.TemplateResponse("components/investigation_result.html", {
             "request": request,
             "target_id": target_id,
             "status": result.get("status", "completed")
         })
-    
+
     return format_response({
         "target_id": target_id,
         "query": payload.query,
@@ -476,7 +478,7 @@ async def get_target_entities(request: Request, target_id: int, format: str = "j
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
     entities = await storage.get_entities_for_target(target_id)
-    
+
     if format == "html":
         return templates.TemplateResponse("components/entities.html", {
             "request": request,
@@ -491,7 +493,7 @@ async def get_target_relationships(request: Request, target_id: int, format: str
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
     relationships = await storage.get_relationships_for_target(target_id)
-    
+
     if format == "html":
         return templates.TemplateResponse("components/relationships.html", {
             "request": request,
@@ -506,7 +508,7 @@ async def get_target_timeline(request: Request, target_id: int, format: str = "j
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
     timeline = await storage.get_timeline(target_id)
-    
+
     if format == "html":
         return templates.TemplateResponse("components/timeline.html", {
             "request": request,
@@ -523,23 +525,23 @@ async def list_plugins():
 
 
 @app.get("/api/findings")
-async def list_findings(target_id: Optional[int] = None):
+async def list_findings(target_id: int | None = None):
     conn_gen = get_db()
     conn = None
     try:
         conn = next(conn_gen)
         cursor = conn.cursor()
-        
+
         if target_id:
             cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (target_id,))
         else:
             cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings ORDER BY created_at DESC")
-        
+
         rows = cursor.fetchall()
     finally:
         if conn:
             conn.close()
-    
+
     findings = [
         {
             "id": r[0], "target_id": r[1], "source": r[2], "category": r[3],
@@ -559,16 +561,16 @@ async def create_report(payload: ReportRequest):
         cursor = conn.cursor()
         cursor.execute("SELECT id, query, target_type, status, created_at FROM targets WHERE id = ?", (payload.target_id,))
         target_row = cursor.fetchone()
-        
+
         cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (payload.target_id,))
         finding_rows = cursor.fetchall()
     finally:
         if conn:
             conn.close()
-    
+
     if not target_row:
         raise HTTPException(status_code=404, detail="Target not found")
-    
+
     target = {
         "id": target_row[0],
         "query": target_row[1],
@@ -576,7 +578,7 @@ async def create_report(payload: ReportRequest):
         "status": target_row[3],
         "created_at": target_row[4]
     }
-    
+
     findings = [
         {
             "id": r[0], "target_id": r[1], "source": r[2], "category": r[3],
@@ -584,18 +586,18 @@ async def create_report(payload: ReportRequest):
         }
         for r in finding_rows
     ]
-    
+
     from backend.report import ReportGenerator
     from backend.storage import SQLiteStorage
     storage = SQLiteStorage(DATABASE_PATH)
-    
+
     entities = [e.model_dump() for e in storage.get_entities_for_target(payload.target_id)]
     relationships = [r.model_dump() for r in storage.get_relationships_for_target(payload.target_id)]
     timeline = [t.model_dump() for t in storage.get_timeline(payload.target_id)]
-    
+
     generator = ReportGenerator()
     report_content = generator.generate(payload.format, target, findings, entities, relationships, timeline)
-    
+
     conn_gen2 = get_db()
     conn2 = None
     try:
@@ -610,7 +612,7 @@ async def create_report(payload: ReportRequest):
     finally:
         if conn2:
             conn2.close()
-    
+
     return format_response({
         "report_id": report_id,
         "target_id": payload.target_id,
@@ -631,10 +633,10 @@ async def get_report(report_id: int):
     finally:
         if conn:
             conn.close()
-    
+
     if not row:
         raise HTTPException(status_code=404, detail="Report not found")
-    
+
     return format_response({
         "report_id": row[0],
         "target_id": row[1],
@@ -647,11 +649,11 @@ async def get_report(report_id: int):
 @app.post("/api/chat")
 async def chat(payload: ChatRequest):
     from backend.providers import AIProviderFactory
-    
+
     message = payload.message
     provider = payload.provider
     model = payload.model
-    
+
     provider_inst = AIProviderFactory.get_provider(provider)
     if not provider_inst:
         return format_response(
@@ -662,16 +664,16 @@ async def chat(payload: ChatRequest):
             success=False,
             errors=["no_api_key"]
         )
-    
+
     # Use default model if none specified
     if not model:
         model = getattr(provider_inst, '_default_model', None) or \
                 {"openrouter": "gpt-3.5-turbo", "openai": "gpt-4", "anthropic": "claude-3-haiku-20240307", "gemini": "gemini-1.5-flash"}.get(provider, model)
-    
+
     # Support multimodal chat (image/video URLs)
     image_urls = payload.image_urls
     video_urls = payload.video_urls
-    
+
     try:
         if (image_urls or video_urls) and hasattr(provider_inst, 'chat_multimodal'):
             ai_response = await provider_inst.chat_multimodal(message, model, image_urls=image_urls, video_urls=video_urls)
@@ -704,10 +706,10 @@ async def graph_data(target_id: int):
     storage = app.state.storage
     entities = await storage.get_entities_for_target(target_id)
     relationships = await storage.get_relationships_for_target(target_id)
-    
+
     nodes = [{"id": e.id, "value": e.value, "type": e.type.value} for e in entities]
     edges = [{"from": r.source_entity_id, "to": r.target_entity_id, "type": r.relationship_type.value} for r in relationships]
-    
+
     return {"nodes": nodes, "edges": edges}
 
 @app.get("/htmx/providers", response_class=HTMLResponse)

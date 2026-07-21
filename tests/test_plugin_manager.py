@@ -1,10 +1,5 @@
-import pytest
-import os
-from pathlib import Path
-from unittest.mock import patch
 
 from backend.plugin_manager import PluginManager, validate_semver
-from backend.models import PluginMetadata, TargetType
 
 
 def test_plugin_discovery():
@@ -14,7 +9,7 @@ def test_plugin_discovery():
     pm._plugin_statuses.clear()
     pm._file_mtimes.clear()
     pm._initialized = False
-    
+
     pm.discover_plugins()
     plugins = pm.list_plugins()
     assert isinstance(plugins, list)
@@ -26,7 +21,7 @@ def test_plugin_status():
     pm._plugin_statuses.clear()
     pm._file_mtimes.clear()
     pm._initialized = False
-    
+
     pm.discover_plugins()
     plugins = pm.list_plugins()
     for p in plugins:
@@ -42,7 +37,7 @@ def test_validate_semver():
     assert validate_semver("1.2.3") is True
     assert validate_semver("10.20.30") is True
     assert validate_semver("0.0.0") is True
-    
+
     # Invalid versions
     assert validate_semver("1.0") is False
     assert validate_semver("v1.0.0") is False
@@ -58,14 +53,14 @@ def test_hot_reload_detection():
     pm._plugin_statuses.clear()
     pm._file_mtimes.clear()
     pm._initialized = False
-    
+
     # First discovery
     pm.discover_plugins()
     first_count = len(pm.list_plugins())
-    
+
     # Second discovery should skip (hot reload)
     pm.discover_plugins()
-    
+
     # Both should return same count
     second_count = len(pm.list_plugins())
     assert first_count == second_count
@@ -79,9 +74,9 @@ def test_plugin_error_tracking():
     pm._plugin_errors.clear()
     pm._file_mtimes.clear()
     pm._initialized = False
-    
+
     pm.discover_plugins()
-    
+
     # If there are disabled plugins with errors, check error tracking
     plugins = pm.list_plugins()
     for p in plugins:
@@ -97,9 +92,9 @@ def test_get_plugin_error():
     pm._plugin_errors.clear()
     pm._file_mtimes.clear()
     pm._initialized = False
-    
+
     pm.discover_plugins()
-    
+
     # Known plugins should exist
     plugin_names = pm.get_all_plugin_names()
     assert isinstance(plugin_names, list)

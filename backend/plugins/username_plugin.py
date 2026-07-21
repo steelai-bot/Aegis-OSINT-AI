@@ -1,9 +1,10 @@
-import httpx
 import asyncio
 import logging
-from typing import List
-from backend.plugins.base import BasePlugin
+
+import httpx
+
 from backend.models import PluginMetadata, PluginResponse, TargetType
+from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
@@ -51,16 +52,16 @@ class UsernamePlugin(BasePlugin):
             logger.debug(f"UsernamePlugin error checking {platform['name']}: {e}")
         return None
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         found = []
-        
+
         async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
             tasks = [self._check_platform(client, platform, query) for platform in PLATFORMS]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for result in results:
                 if isinstance(result, dict):
                     found.append(result)
-        
+
         if found:
             return [PluginResponse(
                 provider=self.metadata.name,
@@ -69,5 +70,5 @@ class UsernamePlugin(BasePlugin):
                 evidence=[{"profiles": found}],
                 raw={"query": query, "results": found}
             )]
-        
+
         return []

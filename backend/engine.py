@@ -1,15 +1,20 @@
-import logging
 import asyncio
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+import logging
+from typing import Any
 
 from backend.models import (
-    TargetType, InvestigationStatus, PluginResponse,
-    Entity, EntityType, Relationship, RelationshipType,
-    TimelineEvent, TimelineEventType
+    Entity,
+    EntityType,
+    InvestigationStatus,
+    PluginResponse,
+    Relationship,
+    RelationshipType,
+    TargetType,
+    TimelineEvent,
+    TimelineEventType,
 )
-from backend.plugin_manager import PluginManager
 from backend.planner import AIPlanner
+from backend.plugin_manager import PluginManager
 from backend.storage import SQLiteStorage
 
 logger = logging.getLogger(__name__)
@@ -30,7 +35,7 @@ class InvestigationEngine:
         # Ensure plugins are discovered on startup
         self.plugin_manager.discover_plugins()
 
-    async def run_investigation(self, target_id: int, target_type: TargetType, query: str, use_dynamic: bool = False) -> Dict[str, Any]:
+    async def run_investigation(self, target_id: int, target_type: TargetType, query: str, use_dynamic: bool = False) -> dict[str, Any]:
         """
         The main entry point for running an investigation.
         Now with parallel plugin execution and batched timeline logging.
@@ -68,7 +73,7 @@ class InvestigationEngine:
             plugin_results = await asyncio.gather(*plugin_tasks, return_exceptions=True)
 
             # Flatten results and handle exceptions
-            all_results: List[PluginResponse] = []
+            all_results: list[PluginResponse] = []
             failed_count = 0
             for result in plugin_results:
                 if isinstance(result, Exception):
@@ -84,7 +89,7 @@ class InvestigationEngine:
             else:
                 status = InvestigationStatus.COMPLETED.value
                 description = f"Investigation completed with {len(all_results)} findings"
-            
+
             await self.storage.update_target_status(target_id, status)
 
             await self.storage.log_timeline_event(TimelineEvent(
@@ -116,7 +121,7 @@ class InvestigationEngine:
                 "error": str(e)
             }
 
-    async def _execute_plugin_with_logging(self, plugin_name: str, query: str, target_type: TargetType, target_id: int) -> List[PluginResponse]:
+    async def _execute_plugin_with_logging(self, plugin_name: str, query: str, target_type: TargetType, target_id: int) -> list[PluginResponse]:
         """Execute single plugin with all logging and entity extraction."""
         timeline_buffer = []
 
@@ -186,12 +191,12 @@ class InvestigationEngine:
                 await self.storage.log_timeline_events_batch(timeline_buffer)
             return []
 
-    def extract_entities(self, response: PluginResponse, target_id: int) -> List[Entity]:
+    def extract_entities(self, response: PluginResponse, target_id: int) -> list[Entity]:
         """Parse plugin evidence to identify entities (domain, email, github, etc.)."""
-        entities: List[Entity] = []
+        entities: list[Entity] = []
 
         # Helper to add entity if not duplicate
-        def add_entity(etype: EntityType, value: str, confidence: float = 0.8, display: Optional[str] = None):
+        def add_entity(etype: EntityType, value: str, confidence: float = 0.8, display: str | None = None):
             if value and value.strip():
                 entities.append(Entity(
                     type=etype,
@@ -244,9 +249,9 @@ class InvestigationEngine:
 
         return entities
 
-    def build_relationships(self, entities: List[Entity], plugin_name: str) -> List[Relationship]:
+    def build_relationships(self, entities: list[Entity], plugin_name: str) -> list[Relationship]:
         """Infer relationships between discovered entities."""
-        relationships: List[Relationship] = []
+        relationships: list[Relationship] = []
 
         # Simple heuristic: if we have a domain and emails, link them
         domains = [e for e in entities if e.type == EntityType.DOMAIN and e.id is not None]
