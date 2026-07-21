@@ -18,6 +18,27 @@ from backend.models import (
 
 logger = logging.getLogger(__name__)
 
+MAX_EVIDENCE_STRING_LENGTH = 10000
+MAX_EVIDENCE_LIST_LENGTH = 100
+
+
+def _truncate_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Truncate large values in evidence to reduce DB size and memory usage."""
+    truncated = []
+    for item in evidence:
+        new_item = {}
+        for key, val in item.items():
+            if isinstance(val, str):
+                new_item[key] = val[:MAX_EVIDENCE_STRING_LENGTH]
+            elif isinstance(val, list):
+                new_item[key] = val[:MAX_EVIDENCE_LIST_LENGTH]
+            elif isinstance(val, dict):
+                new_item[key] = _truncate_evidence([val])[0]
+            else:
+                new_item[key] = val
+        truncated.append(new_item)
+    return truncated
+
 class StorageInterface(ABC):
     """Abstract base class for database operations to ensure database-agnosticism."""
 
@@ -370,6 +391,7 @@ class SQLiteStorage(StorageInterface):
     async def save_finding(self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]):
         conn = await self._get_connection()
         cursor = await conn.cursor()
+        evidence = _truncate_evidence(evidence)
         for item in evidence:
             await cursor.execute(
                 "INSERT INTO findings (target_id, source, category, severity, confidence, data) VALUES (?, ?, ?, ?, ?, ?)",

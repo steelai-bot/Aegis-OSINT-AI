@@ -24,9 +24,20 @@ class InvestigationEngine:
     The Investigation Engine orchestrates the entire OSINT workflow.
     It uses the AIPlanner to determine the steps and the PluginManager to execute them.
     Now with parallel plugin execution and batched database writes.
+    Singleton to avoid redundant plugin discovery on every request.
     """
+    _instance = None
+    _initialized = False
+
+    @classmethod
+    def get_instance(cls, db_path: str):
+        if cls._instance is None:
+            cls._instance = cls(db_path)
+        return cls._instance
 
     def __init__(self, db_path: str):
+        if self.__class__._instance is not None:
+            raise RuntimeError("Use InvestigationEngine.get_instance() instead of direct instantiation")
         self.db_path = db_path
         self.storage = SQLiteStorage(db_path)
         self.plugin_manager = PluginManager()

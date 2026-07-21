@@ -444,8 +444,9 @@ async def search(request: Request, payload: SearchRequest, format: str = "json")
 
     # 3. Run investigation
     from backend.engine import InvestigationEngine
-    engine = InvestigationEngine(DATABASE_PATH)
-    await engine.initialize()
+    engine = InvestigationEngine.get_instance(DATABASE_PATH)
+    if not engine._initialized:
+        await engine.initialize()
 
     result = await engine.run_investigation(target_id, target_type, payload.query)
 

@@ -12,7 +12,6 @@ class ProviderManager:
     def __init__(self, env_path: str = ".env"):
         self.env_path = env_path
         self._ensure_env_exists()
-        load_dotenv(self.env_path)
 
         # Default providers that don't come from plugins (like AI providers)
         # and known OSINT providers. We will expand this dynamically if needed,
