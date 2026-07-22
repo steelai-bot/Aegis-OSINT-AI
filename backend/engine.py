@@ -67,6 +67,21 @@ class InvestigationEngine:
                 steps = await self.planner.plan_investigation(target_type, query, use_dynamic)
                 logger.info(f"Plan generated: {steps}")
 
+                if not self.plugin_manager._plugins:
+                    self.plugin_manager.discover_plugins()
+
+                valid_steps = []
+                for s in steps:
+                    if s in self.plugin_manager.get_all_plugin_names():
+                        status = self.plugin_manager._plugin_statuses.get(s, "enabled")
+                        if status == "enabled":
+                            valid_steps.append(s)
+                        else:
+                            logger.warning(f"Plugin '{s}' is disabled due to missing credentials or dependencies. Skipping.")
+                    else:
+                        logger.warning(f"Plugin '{s}' not found in registry. Skipping.")
+                steps = valid_steps
+
                 await self.storage.log_timeline_event(TimelineEvent(
                     target_id=target_id,
                     event_type=TimelineEventType.PLANNING_COMPLETED,

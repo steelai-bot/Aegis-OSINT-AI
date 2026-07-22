@@ -73,7 +73,9 @@ class AIPlanner:
         try:
             model = "gpt-3.5-turbo" if getattr(provider, 'provider', '') == "openrouter" else getattr(provider, '_default_model', 'gpt-3.5-turbo')
             response = await provider.chat(prompt, model)
-            plugins = [p.strip() for p in response.content.split(",") if p.strip()]
+            suggested = [p.strip() for p in response.content.split(",") if p.strip()]
+            valid_known = {"dns_lookup", "whois_lookup", "cert_transparency", "ip_geolocation", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"}
+            plugins = [p for p in suggested if p in valid_known]
             logger.info(f"AI Planner suggested: {plugins}")
             return plugins
         except Exception as e:

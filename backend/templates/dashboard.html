@@ -49,18 +49,18 @@
                     }
                 } catch (_) {}
                 if (resultDiv) {
-                    resultDiv.innerHTML = '<div class=" bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                    resultDiv.innerHTML = `<div class=" bg-red-500/10 border border-red-500/30 rounded-lg p-4">
     <p class="text-red-400 text-sm font-mono flex items-center gap-2"><i data-lucide="alert-triangle"
-            class="w-4 h-4"></i> ' + errText + '</p>
-</div>';
+            class="w-4 h-4"></i> ${errText}</p>
+</div>`;
 lucide.createIcons();
 }
 }
 } catch (e) {
 if (resultDiv) {
-resultDiv.innerHTML = '<div class=\"bg-red-500/10 border border-red-500/30 rounded-lg p-4\">
-    <p class=\"text-red-400 text-sm\">Network error: ' + e.message + '</p>
-</div>';
+resultDiv.innerHTML = `<div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+    <p class="text-red-400 text-sm">Network error: ${e.message}</p>
+</div>`;
 lucide.createIcons();
 }
 } finally {

@@ -2,10 +2,12 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
-from datetime import datetime
+from contextvars import ContextVar
+from datetime import date, datetime
 from typing import Any
 
 import aiosqlite
+from pydantic import BaseModel
 
 from backend.models import (
     Entity,
@@ -22,6 +24,22 @@ MAX_EVIDENCE_STRING_LENGTH = 10000
 MAX_EVIDENCE_LIST_LENGTH = 100
 
 
+def _safe_json_dumps(obj: Any) -> str:
+    """Safely serialize an object to JSON, handling Pydantic models, datetime/date objects, and arbitrary fallbacks."""
+    def default_serializer(o: Any) -> Any:
+        if isinstance(o, BaseModel):
+            return o.model_dump()
+        if isinstance(o, (datetime, date)):
+            return o.isoformat()
+        if hasattr(o, "dict") and callable(o.dict):
+            return o.dict()
+        return str(o)
+
+    try:
+        return json.dumps(obj, default=default_serializer)
+    except Exception:
+        # Fallback to stringifying everything recursively or top-level if needed
+        return json.dumps(str(obj))
 def _truncate_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Truncate large values in evidence to reduce DB size and memory usage."""
     truncated = []
@@ -94,27 +112,28 @@ class SQLiteStorage(StorageInterface):
     def __init__(self, db_path: str):
         self.db_path = db_path
         self._connection: aiosqlite.Connection | None = None
-        self._transaction_active: bool = False
+        self._transaction_active: ContextVar[bool] = ContextVar("_transaction_active", default=False)
 
     @asynccontextmanager
     async def transaction(self):
-        self._transaction_active = True
+        token = self._transaction_active.set(True)
         try:
             yield self
             if self._connection:
                 try:
                     await self._connection.commit()
-                except Exception:
-                    pass
+                except Exception as commit_err:
+                    logger.error(f"Failed to commit transaction: {commit_err}")
+                    raise
         except Exception:
             if self._connection:
                 try:
                     await self._connection.rollback()
-                except Exception:
-                    pass
+                except Exception as rollback_err:
+                    logger.error(f"Failed to rollback transaction: {rollback_err}")
             raise
         finally:
-            self._transaction_active = False
+            self._transaction_active.reset(token)
 
     async def _get_connection(self) -> aiosqlite.Connection:
         """Get or create persistent connection with WAL mode and connection reuse"""
@@ -252,7 +271,7 @@ class SQLiteStorage(StorageInterface):
                 "RETURNING id",
                 (entity.type.value, entity.value, entity.display_name,
                  entity.first_seen.isoformat(), entity.last_seen.isoformat(),
-                 entity.confidence, json.dumps(entity.metadata_json))
+                 entity.confidence, _safe_json_dumps(entity.metadata_json))
             )
             row = await cursor.fetchone()
             entity_id = row[0] if row else None
@@ -260,7 +279,7 @@ class SQLiteStorage(StorageInterface):
                 await cursor.execute("SELECT id FROM entities WHERE type = ? AND value = ?", (entity.type.value, entity.value))
                 row = await cursor.fetchone()
                 entity_id = row[0] if row else None
-            if not self._transaction_active:
+            if not self._transaction_active.get():
                 await conn.commit()
             return entity_id or 0
         except Exception as e:
@@ -293,7 +312,7 @@ class SQLiteStorage(StorageInterface):
             (relationship.source_entity_id, relationship.target_entity_id, relationship.relationship_type.value,
              relationship.confidence, relationship.source_plugin, relationship.created_at.isoformat())
         )
-        if not self._transaction_active:
+        if not self._transaction_active.get():
             await conn.commit()
         return cursor.lastrowid
 
@@ -305,7 +324,7 @@ class SQLiteStorage(StorageInterface):
             (event.target_id, event.timestamp.isoformat(), event.event_type.value,
              event.plugin, event.severity, event.description, event.entity_id)
         )
-        if not self._transaction_active:
+        if not self._transaction_active.get():
             await conn.commit()
         return cursor.lastrowid
 
@@ -325,7 +344,7 @@ class SQLiteStorage(StorageInterface):
             "INSERT INTO timeline_events (target_id, timestamp, event_type, plugin, severity, description, entity_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
             values
         )
-        if not self._transaction_active:
+        if not self._transaction_active.get():
             await conn.commit()
         return []
 
@@ -388,7 +407,7 @@ class SQLiteStorage(StorageInterface):
         conn = await self._get_connection()
         cursor = await conn.cursor()
         await cursor.execute("UPDATE targets SET status = ? WHERE id = ?", (status, target_id))
-        if not self._transaction_active:
+        if not self._transaction_active.get():
             await conn.commit()
 
     async def save_finding(self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]):
@@ -398,7 +417,7 @@ class SQLiteStorage(StorageInterface):
         for item in evidence:
             await cursor.execute(
                 "INSERT INTO findings (target_id, source, category, severity, confidence, data) VALUES (?, ?, ?, ?, ?, ?)",
-                (target_id, provider, "osint_discovery", "info", confidence, json.dumps(item))
+                (target_id, provider, "osint_discovery", "info", confidence, _safe_json_dumps(item))
             )
-        if not self._transaction_active:
+        if not self._transaction_active.get():
             await conn.commit()
