@@ -403,6 +403,74 @@ async def list_targets(request: Request, format: str = "json", limit: int | None
     return format_response(targets)
 
 
+@app.delete("/api/targets/{target_id}")
+async def delete_target(target_id: int, request: Request):
+    """Delete target and associated findings from database."""
+    conn_gen = get_db()
+    conn = None
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM findings WHERE target_id = ?", (target_id,))
+        cursor.execute("DELETE FROM reports WHERE target_id = ?", (target_id,))
+        cursor.execute("DELETE FROM targets WHERE id = ?", (target_id,))
+        conn.commit()
+    finally:
+        if conn:
+            conn.close()
+
+    if request.headers.get("HX-Request"):
+        return HTMLResponse(content="")
+    return format_response({"message": f"Target {target_id} deleted successfully."})
+
+
+@app.get("/api/stats")
+async def get_stats(request: Request = None):
+    """Get system stats overview."""
+    conn_gen = get_db()
+    conn = None
+    targets_count = 0
+    findings_count = 0
+    try:
+        conn = next(conn_gen)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM targets")
+        targets_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM findings")
+        findings_count = cursor.fetchone()[0]
+    finally:
+        if conn:
+            conn.close()
+
+    storage = getattr(request.app.state, "storage", None) if hasattr(request, "app") else getattr(app.state, "storage", None)
+    entities_count = 0
+    if storage:
+        conn_gen = get_db()
+        conn = None
+        try:
+            conn = next(conn_gen)
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM entities")
+            entities_count = cursor.fetchone()[0]
+        except Exception:
+            entities_count = 0
+        finally:
+            if conn:
+                conn.close()
+
+    from backend.plugin_manager import PluginManager
+    pm = PluginManager()
+    plugins_count = len(pm.list_plugins())
+
+    return format_response({
+        "targets": targets_count,
+        "findings": findings_count,
+        "entities": entities_count,
+        "plugins": plugins_count
+    })
+
+
+
 @app.post("/api/search")
 async def search(request: Request, query: str = Form(...), target_type: str | None = Form("auto"), format: str = "json"):
     """Start investigation and return JSON or HTML partial."""
@@ -411,18 +479,23 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
     from backend.models import TargetType
     try:
         if target_type_str == "auto":
-            if re.match(r'^\d{11}$', query):
-                target_type = TargetType.ABN
-            elif re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', query):
-                target_type = TargetType.DOMAIN
-            elif re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', query):
-                target_type = TargetType.IP
+            query_clean = query.strip()
+            if re.match(r'^\d{11}$', query_clean):
+                target_type_obj = TargetType.ABN
+            elif re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', query_clean):
+                target_type_obj = TargetType.EMAIL
+            elif re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', query_clean):
+                target_type_obj = TargetType.IP
+            elif re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', query_clean):
+                target_type_obj = TargetType.DOMAIN
+            elif re.match(r'^\+?[0-9\s\-()]{7,15}$', query_clean):
+                target_type_obj = TargetType.PHONE
             else:
-                target_type = TargetType.COMPANY
+                target_type_obj = TargetType.USERNAME
         else:
-            target_type = TargetType(target_type_str)
+            target_type_obj = TargetType(target_type_str)
     except ValueError:
-        target_type = TargetType.COMPANY
+        target_type_obj = TargetType.DOMAIN
 
     # 2. Create target in DB
     conn_gen = get_db()
@@ -432,7 +505,7 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO targets (query, target_type, status) VALUES (?, ?, ?)",
-            (query, target_type.value, "pending")
+            (query, target_type_obj.value, "pending")
         )
         target_id = cursor.lastrowid
         conn.commit()
@@ -440,20 +513,25 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
         if conn:
             conn.close()
 
-    # 3. Run investigation
+    # 3. Run investigation safely
     from backend.engine import InvestigationEngine
     engine = InvestigationEngine.get_instance(DATABASE_PATH)
     if not engine._initialized:
         await engine.initialize()
 
-    result = await engine.run_investigation(target_id, target_type, query)
+    try:
+        result = await engine.run_investigation(target_id, target_type_obj, query)
+    except Exception as exc:
+        logger.error(f"Investigation execution failed for target {target_id}: {exc}", exc_info=True)
+        result = {"status": "failed", "error": str(exc), "results": []}
 
     storage = app.state.storage
     entities = [e.model_dump() for e in await storage.get_entities_for_target(target_id)]
     relationships = [r.model_dump() for r in await storage.get_relationships_for_target(target_id)]
     timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
 
-    if format == "html" or request.headers.get("HX-Request"):
+    is_html_req = format == "html" or request.headers.get("HX-Request") or "text/html" in request.headers.get("accept", "")
+    if is_html_req:
         return templates.TemplateResponse(
             request=request,
             name="components/investigation_result.html",
@@ -714,10 +792,41 @@ async def graph_data(target_id: int):
     entities = await storage.get_entities_for_target(target_id)
     relationships = await storage.get_relationships_for_target(target_id)
 
-    nodes = [{"id": e.id, "value": e.value, "type": e.type.value} for e in entities]
-    edges = [{"from": r.source_entity_id, "to": r.target_entity_id, "type": r.relationship_type.value} for r in relationships]
+    nodes = [
+        {
+            "id": e.id,
+            "value": e.value,
+            "type": e.type.value,
+            "display_name": e.display_name if hasattr(e, 'display_name') else e.value,
+            "confidence": int(e.confidence * 100) if hasattr(e, 'confidence') and e.confidence is not None and e.confidence <= 1.0 else (int(e.confidence) if e.confidence is not None else 100),
+            "first_seen": e.first_seen.strftime('%Y-%m-%d %H:%M') if hasattr(e, 'first_seen') and e.first_seen and hasattr(e.first_seen, 'strftime') else (str(e.first_seen) if hasattr(e, 'first_seen') and e.first_seen else None),
+            "metadata": e.metadata_json if hasattr(e, 'metadata_json') else None
+        } for e in entities
+    ]
+    edges = [
+        {
+            "from": r.source_entity_id,
+            "to": r.target_entity_id,
+            "type": r.relationship_type.value,
+            "confidence": int(r.confidence * 100) if hasattr(r, 'confidence') and r.confidence is not None and r.confidence <= 1.0 else (int(r.confidence) if r.confidence is not None else 100),
+            "source_plugin": r.source_plugin if hasattr(r, 'source_plugin') else None
+        } for r in relationships
+    ]
 
-    return {"nodes": nodes, "edges": edges}
+    stats = {
+        "total_nodes": len(nodes),
+        "total_edges": len(edges),
+        "entity_types": {},
+        "relationship_types": {}
+    }
+    for n in nodes:
+        t = n["type"]
+        stats["entity_types"][t] = stats["entity_types"].get(t, 0) + 1
+    for e in edges:
+        t = e["type"]
+        stats["relationship_types"][t] = stats["relationship_types"].get(t, 0) + 1
+
+    return {"nodes": nodes, "edges": edges, "stats": stats}
 
 @app.get("/htmx/providers", response_class=HTMLResponse)
 async def htmx_providers_list(request: Request):

@@ -1,10 +1,5 @@
-import asyncio
 import logging
 import re
-import json
-import string
-import random
-from typing import List, Dict, Any
 
 from backend.models import PluginMetadata, PluginResponse, TargetType
 from backend.plugins.base import BasePlugin
@@ -33,7 +28,7 @@ class DockerScannerPlugin(BasePlugin):
             min_app_version="1.0.0"
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
 
         if target_type == TargetType.DOMAIN:
@@ -51,7 +46,7 @@ class DockerScannerPlugin(BasePlugin):
 
         return findings
 
-    async def _analyze_domain_docker_config(self, domain: str) -> List[PluginResponse]:
+    async def _analyze_domain_docker_config(self, domain: str) -> list[PluginResponse]:
         """Analyze potential Docker configurations for domains."""
         results = []
 
@@ -98,13 +93,13 @@ class DockerScannerPlugin(BasePlugin):
 
         return results
 
-    async def _generate_docker_configs(self, target: str) -> List[dict]:
+    async def _generate_docker_configs(self, target: str) -> list[dict]:
         """Generate example Docker configurations with potential exposures."""
         configs = []
 
         dockerfile = {
             "type": "Dockerfile",
-            "content": f"FROM node:16\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nEXPOSE 3000 8080\nENV DB_PASSWORD=supersecret123\nENV API_KEY=sk_test_123456789\nCMD [\"node\", \"index.js\"]",
+            "content": "FROM node:16\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nEXPOSE 3000 8080\nENV DB_PASSWORD=supersecret123\nENV API_KEY=sk_test_123456789\nCMD [\"node\", \"index.js\"]",
             "vulnerabilities": ["hardcoded_password", "exposed_port", "hardcoded_api_key"],
             "risk_level": "HIGH"
         }
@@ -128,7 +123,7 @@ class DockerScannerPlugin(BasePlugin):
 
         safe_config = {
             "type": "Dockerfile",
-            "content": f"FROM node:16-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --only=production\nCOPY . .\nEXPOSE 3000\nUSER node\nHEALTHCHECK --interval=30s --timeout=3s \"curl -f http://localhost:3000/health\"",
+            "content": "FROM node:16-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install --only=production\nCOPY . .\nEXPOSE 3000\nUSER node\nHEALTHCHECK --interval=30s --timeout=3s \"curl -f http://localhost:3000/health\"",
             "vulnerabilities": [],
             "risk_level": "LOW"
         }
@@ -136,7 +131,7 @@ class DockerScannerPlugin(BasePlugin):
 
         return configs
 
-    def _check_docker_exposures(self, configs: List[dict]) -> dict:
+    def _check_docker_exposures(self, configs: list[dict]) -> dict:
         """Check generated Docker configurations for security exposures."""
         vulnerabilities = []
         risk_score = 0
@@ -155,7 +150,7 @@ class DockerScannerPlugin(BasePlugin):
             "recommendations": self._generate_recommendations(risk_score)
         }
 
-    def _generate_recommendations(self, risk_score: int) -> List[str]:
+    def _generate_recommendations(self, risk_score: int) -> list[str]:
         """Generate remediation recommendations based on risk score."""
         recs = []
 
@@ -175,7 +170,7 @@ class DockerScannerPlugin(BasePlugin):
 
         return recs
 
-    async def _generate_docker_creds_for_user(self, username: str) -> List[PluginResponse]:
+    async def _generate_docker_creds_for_user(self, username: str) -> list[PluginResponse]:
         """Generate example Docker configurations with usernames as credentials."""
         results = []
 
@@ -226,7 +221,7 @@ class DockerScannerPlugin(BasePlugin):
 
         return results
 
-    async def _analyze_email_in_docker(self, email: str) -> List[PluginResponse]:
+    async def _analyze_email_in_docker(self, email: str) -> list[PluginResponse]:
         """Analyze how email addresses might be embedded in Docker configurations."""
         results = []
 
@@ -287,7 +282,7 @@ class DockerScannerPlugin(BasePlugin):
 
         return results
 
-    async def _check_ip_exposed_configs(self, ip: str) -> List[PluginResponse]:
+    async def _check_ip_exposed_configs(self, ip: str) -> list[PluginResponse]:
         """Check how IP addresses are exposed in Docker configurations."""
         results = []
 
@@ -354,7 +349,7 @@ class DockerScannerPlugin(BasePlugin):
 
         return results
 
-    async def _mask_phone_in_docker_config(self, phone: str) -> List[PluginResponse]:
+    async def _mask_phone_in_docker_config(self, phone: str) -> list[PluginResponse]:
         """Analyze phone numbers in Docker configurations and show examples with proper masking."""
         results = []
 
@@ -364,7 +359,7 @@ class DockerScannerPlugin(BasePlugin):
 
         phone_examples.append({
             "context": "Admin contact in Dockerfile",
-            "before_masked": f"MAINTAINER=admin@phone-services.com",
+            "before_masked": "MAINTAINER=admin@phone-services.com",
             "after_masked": f"MAINTAINER={masked_phone}@phone-services.com",
             "risk": "MEDIUM",
             "issue": "Phone number exposes admin contact"
@@ -435,7 +430,7 @@ class DockerScannerPlugin(BasePlugin):
 
         return results
 
-    async def _analyze_generic_docker_config(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def _analyze_generic_docker_config(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         """Analyze generic Docker configurations."""
         results = []
 
@@ -509,7 +504,6 @@ class DockerScannerPlugin(BasePlugin):
         This is a simple example of how to mask sensitive information like phone numbers
         while maintaining utility for logging or debugging.
         """
-        import re
 
         country_code = ""
         phone_digits = re.sub(r'\D', '', phone)

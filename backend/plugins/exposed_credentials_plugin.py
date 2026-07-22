@@ -1,7 +1,4 @@
-import asyncio
 import logging
-import os
-from typing import List
 
 from backend.http_client import SharedHTTPClient
 from backend.models import PluginMetadata, PluginResponse, TargetType
@@ -33,38 +30,38 @@ class ExposedCredentialsPlugin(BasePlugin):
             min_app_version="1.0.0"
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         client = await SharedHTTPClient.get_client()
-        
+
         # Use passive Intelligence sources that don't require API keys
         if target_type == TargetType.EMAIL:
             findings.extend(await self._scan_email_breaches(client, query))
-        
+
         elif target_type == TargetType.PHONE:
             findings.extend(await self._scan_phone_breaches(client, query))
-        
+
         elif target_type == TargetType.USERNAME:
             findings.extend(await self._scan_username_breaches(client, query))
-        
+
         else:
             findings.extend(await self._scan_all_types(client, query, target_type))
-        
+
         return findings
 
-    async def _scan_email_breaches(self, client, email: str) -> List[PluginResponse]:
+    async def _scan_email_breaches(self, client, email: str) -> list[PluginResponse]:
         """Scan breach databases for exposed email addresses."""
         results = []
-        
+
         # Check against Have I Been Pwned (free) - uses k-anonymity
         try:
             # k-anonymity HTTP endpoint for privacy-safe password hash lookup
             import hashlib
             hash_obj = hashlib.sha1(email.encode()).hexdigest()
             prefix, suffix = hash_obj[:5], hash_obj[5:]
-            
+
             url = f"https://api.pwnedpasswords.com/range/{prefix}"
-            
+
             async with client.get(url) as response:
                 if response.status == 200:
                     content = await response.text()
@@ -93,18 +90,18 @@ class ExposedCredentialsPlugin(BasePlugin):
                             ))
         except Exception as e:
             logger.warning(f"Have I Been Pwned API error: {e}")
-        
+
         return results
 
-    async def _scan_phone_breaches(self, client, phone: str) -> List[PluginResponse]:
+    async def _scan_phone_breaches(self, client, phone: str) -> list[PluginResponse]:
         """Scan for exposed phone numbers using passive sources."""
         results = []
-        
+
         # Try to normalize phone number
         normalized_phone = self._normalize_phone(phone)
         if not normalized_phone:
             return results
-        
+
         # Note: In production, this would use specialized breach databases
         # For now, we'll simulate with a simple demonstration that shows the framework
         results.append(PluginResponse(
@@ -127,19 +124,19 @@ class ExposedCredentialsPlugin(BasePlugin):
                 "note": "Free passive scanning available, but enterprise API needed for comprehensive phone breach detection"
             }
         ))
-        
+
         return results
 
-    async def _scan_username_breaches(self, client, username: str) -> List[PluginResponse]:
+    async def _scan_username_breaches(self, client, username: str) -> list[PluginResponse]:
         """Scan dark web forums and paste sites for username mentions."""
         results = []
-        
+
         # Search common paste sites and forums for username mentions
         paste_sites = [
             "https://www.pastebin.com/api/embed/{username}",
             "https://paste.ubuntu.com/api/embed/{username}",
         ]
-        
+
         usernames_found = []
         for site in paste_sites:
             try:
@@ -155,7 +152,7 @@ class ExposedCredentialsPlugin(BasePlugin):
             except Exception as e:
                 logger.debug(f"Failed to search {site}: {e}")
                 continue
-        
+
         if usernames_found:
             results.append(PluginResponse(
                 provider=self.metadata.name,
@@ -176,13 +173,13 @@ class ExposedCredentialsPlugin(BasePlugin):
                     "scan_date": "2026-01-01"
                 }
             ))
-        
+
         return results
 
-    async def _scan_all_types(self, client, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def _scan_all_types(self, client, query: str, target_type: TargetType) -> list[PluginResponse]:
         """Attempt to scan for any exposed credential related data."""
         results = []
-        
+
         # Generic scanning for credential-related content
         # This is a framework that can be expanded
         results.append(PluginResponse(
@@ -212,20 +209,20 @@ class ExposedCredentialsPlugin(BasePlugin):
                 "api_keys_needed": self.metadata.required_api_keys
             }
         ))
-        
+
         return results
 
     def _normalize_phone(self, phone: str) -> str:
         """Normalize phone number for consistent scanning."""
         import re
-        
+
         # Remove non-digit characters except leading +
         normalized = re.sub(r'^[+]?1?\d{1,3}\s?\d{3}', '', phone)
         normalized = re.sub(r'\s+', '', normalized)
-        
+
         # Check if it's a valid international format (between 10-15 digits)
         digits = re.sub(r'\D', '', normalized)
         if len(digits) >= 10 and len(digits) <= 15:
             return digits
-        
+
         return None

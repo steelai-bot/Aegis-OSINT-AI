@@ -2,23 +2,31 @@
 {% if relationships %}
 <div class="space-y-3">
     {% for rel in relationships %}
-    <div class="bg-background border border-border rounded-lg p-4">
-        <div class="flex items-center gap-3">
-            <div class="flex-1 text-sm">
-                <span class="font-medium">Entity {{ rel.source_entity_id }}</span>
-                <span class="text-muted mx-2">→</span>
-                <span class="font-medium">Entity {{ rel.target_entity_id }}</span>
-            </div>
-            <span class="px-2 py-1 text-xs rounded bg-primary/20 text-primary">
-                {{ rel.relationship_type.value }}
-            </span>
+    {% set conf = (rel.confidence * 100)|int if rel.confidence <= 1 else rel.confidence|int %}
+    <div class="bg-background border border-border rounded-xl p-4 hover:border-primary/50 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex items-center gap-3 font-mono text-sm">
+            <span class="px-2 py-1 bg-card border border-border rounded text-xs text-foreground font-semibold">Entity #{{ rel.source_entity_id }}</span>
+            <span class="text-primary font-bold">→ [{{ rel.relationship_type.value }}] →</span>
+            <span class="px-2 py-1 bg-card border border-border rounded text-xs text-foreground font-semibold">Entity #{{ rel.target_entity_id }}</span>
         </div>
-        <div class="text-xs text-muted mt-2">
-            Plugin: {{ rel.source_plugin }} | Confidence: {{ (rel.confidence * 100)|int }}%
+
+        <div class="flex items-center gap-4 text-xs font-mono text-muted">
+            <span class="flex items-center gap-1.5 bg-card px-2.5 py-1 rounded border border-border">
+                <i data-lucide="cpu" class="w-3 h-3 text-primary"></i>
+                {{ rel.source_plugin }}
+            </span>
+            <span class="flex items-center gap-1">
+                <span>Confidence:</span>
+                <span class="font-semibold {% if conf >= 80 %}text-emerald-400{% elif conf >= 50 %}text-amber-400{% else %}text-red-400{% endif %}">{{ conf }}%</span>
+            </span>
         </div>
     </div>
     {% endfor %}
 </div>
+<script>lucide.createIcons();</script>
 {% else %}
-<p class="text-center text-muted py-8">No relationships discovered yet</p>
+<div class="text-center py-12 text-muted font-mono text-xs">
+    <i data-lucide="git-merge" class="w-12 h-12 mx-auto mb-3 opacity-40 text-primary"></i>
+    <p>No entity relationships mapped yet.</p>
+</div>
 {% endif %}

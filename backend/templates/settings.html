@@ -1,62 +1,102 @@
 {% extends "base.html" %}
 
-{% block title %}Settings - Aegis OSINT AI{% endblock %}
+{% block title %}Settings & Providers - Aegis OSINT AI{% endblock %}
 
 {% block content %}
-<div class="p-6" x-data="{ activeSection: 'providers' }">
+<div class="p-8 max-w-7xl mx-auto space-y-6" x-data="{ activeSection: 'providers' }">
     <!-- Header -->
-    <div class="mb-6">
-        <h2 class="text-3xl font-bold mb-2">Settings</h2>
-        <p class="text-muted">Configure AI providers and API keys</p>
+    <div>
+        <h2 class="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+            <i data-lucide="sliders" class="w-8 h-8 text-primary"></i>
+            Command Settings
+        </h2>
+        <p class="text-muted mt-1">Configure API credentials, AI LLM providers, and external OSINT integrations.</p>
     </div>
 
-    <!-- Settings Sections -->
-    <div class="grid grid-cols-4 gap-6">
-        <!-- Sidebar -->
-        <div class="col-span-1 bg-card rounded-lg border border-border p-4">
+    <!-- Layout Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- Settings Sidebar Navigation -->
+        <div class="lg:col-span-1 bg-card rounded-xl border border-border p-4 space-y-2 h-fit shadow-xl">
             <button @click="activeSection = 'providers'"
-                    :class="activeSection === 'providers' ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-background'"
-                    class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors mb-1">
-                AI Providers
+                    :class="activeSection === 'providers' ? 'bg-primary/20 text-primary border border-primary/40 font-semibold' : 'text-muted hover:bg-background hover:text-foreground'"
+                    class="w-full text-left px-4 py-3 rounded-lg text-sm transition-all flex items-center gap-3">
+                <i data-lucide="key" class="w-4 h-4"></i>
+                AI & OSINT Providers
             </button>
             <button @click="activeSection = 'general'"
-                    :class="activeSection === 'general' ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-background'"
-                    class="w-full text-left px-3 py-2 rounded-md text-sm transition-colors mb-1">
-                General
+                    :class="activeSection === 'general' ? 'bg-primary/20 text-primary border border-primary/40 font-semibold' : 'text-muted hover:bg-background hover:text-foreground'"
+                    class="w-full text-left px-4 py-3 rounded-lg text-sm transition-all flex items-center gap-3">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+                General Parameters
             </button>
         </div>
 
-        <!-- Content -->
-        <div class="col-span-3 bg-card rounded-lg border border-border p-6">
-            <!-- AI Providers -->
+        <!-- Settings Content Pane -->
+        <div class="lg:col-span-3 bg-card rounded-xl border border-border p-6 shadow-xl">
+            <!-- Providers Section -->
             <div x-show="activeSection === 'providers'" x-cloak>
-                <h3 class="text-xl font-semibold mb-4">Provider Configuration</h3>
-                <p class="text-sm text-muted mb-6">Configure API keys for AI providers and OSINT tools</p>
+                <div class="flex items-center justify-between mb-6 pb-4 border-b border-border">
+                    <div>
+                        <h3 class="text-xl font-semibold text-foreground">Provider Credentials Matrix</h3>
+                        <p class="text-sm text-muted">Manage API keys for OpenAI, Anthropic, Gemini, Shodan, SecurityTrails, etc.</p>
+                    </div>
+                    <span class="text-xs font-mono px-3 py-1 bg-background border border-border rounded text-primary">SECURE VAULT</span>
+                </div>
 
                 <div hx-get="/htmx/providers"
                      hx-trigger="load"
                      hx-target="this"
                      hx-swap="innerHTML">
-                    <div class="flex items-center justify-center py-12 text-muted">
-                        <svg class="animate-spin h-6 w-6 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <div class="flex items-center justify-center py-16 text-muted font-mono text-xs">
+                        <svg class="animate-spin h-6 w-6 mr-3 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Loading providers...
+                        Decrypting provider vault...
                     </div>
                 </div>
             </div>
 
-            <!-- General Settings -->
-            <div x-show="activeSection === 'general'" x-cloak>
-                <h3 class="text-xl font-semibold mb-4">General Settings</h3>
-                <p class="text-muted">General configuration options will appear here.</p>
+            <!-- General Settings Section -->
+            <div x-show="activeSection === 'general'" x-cloak class="space-y-6">
+                <div class="pb-4 border-b border-border">
+                    <h3 class="text-xl font-semibold text-foreground">General Engine Parameters</h3>
+                    <p class="text-sm text-muted">Configure default timeout limits, logging levels, and storage paths.</p>
+                </div>
+
+                <div class="space-y-4 text-sm">
+                    <div class="p-4 bg-background border border-border rounded-lg flex items-center justify-between">
+                        <div>
+                            <span class="font-medium text-foreground block">Database Location</span>
+                            <span class="text-xs text-muted font-mono">data/aegis.db (SQLite)</span>
+                        </div>
+                        <span class="text-xs font-mono text-success bg-success/10 px-2.5 py-1 rounded">CONNECTED</span>
+                    </div>
+
+                    <div class="p-4 bg-background border border-border rounded-lg flex items-center justify-between">
+                        <div>
+                            <span class="font-medium text-foreground block">Default Request Timeout</span>
+                            <span class="text-xs text-muted">Maximum execution time per plugin worker</span>
+                        </div>
+                        <span class="text-xs font-mono text-primary bg-primary/10 px-2.5 py-1 rounded">30 SECONDS</span>
+                    </div>
+
+                    <div class="p-4 bg-background border border-border rounded-lg flex items-center justify-between">
+                        <div>
+                            <span class="font-medium text-foreground block">AI Planner Mode</span>
+                            <span class="text-xs text-muted">Dynamic LLM-driven plugin sequencing or static execution</span>
+                        </div>
+                        <span class="text-xs font-mono text-success bg-success/10 px-2.5 py-1 rounded">ADAPTIVE</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<style>
-    [x-cloak] { display: none !important; }
-</style>
+<script>
+    document.body.addEventListener('htmx:afterSwap', function() {
+        lucide.createIcons();
+    });
+</script>
 {% endblock %}

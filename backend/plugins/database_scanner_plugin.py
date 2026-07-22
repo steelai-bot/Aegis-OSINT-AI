@@ -1,8 +1,5 @@
-import asyncio
-import json
 import logging
-import re
-from typing import List
+import os
 
 from backend.http_client import SharedHTTPClient
 from backend.models import PluginMetadata, PluginResponse, TargetType
@@ -32,10 +29,10 @@ class DatabaseScannerPlugin(BasePlugin):
             min_app_version="1.0.0"
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         client = await SharedHTTPClient.get_client()
-        
+
         if target_type == TargetType.DOMAIN:
             findings.extend(await self._scan_domain_databases(client, query))
         elif target_type == TargetType.EMAIL:
@@ -46,13 +43,13 @@ class DatabaseScannerPlugin(BasePlugin):
             findings.extend(await self._scan_ip_exposed_databases(client, query))
         else:
             findings.extend(await self._scan_generic_databases(client, query))
-        
+
         return findings
 
-    async def _scan_domain_databases(self, client, domain: str) -> List[PluginResponse]:
+    async def _scan_domain_databases(self, client, domain: str) -> list[PluginResponse]:
         """Scan for databases exposed or leaked from specific domains."""
         results = []
-        
+
         # Search leaked sources and breach databases for domain mentions
         try:
             # Query breach databases using IntelX API (if available)
@@ -61,7 +58,7 @@ class DatabaseScannerPlugin(BasePlugin):
                 # This is a conceptual implementation - actual IntelX API usage would require
                 # the enterprise version with specific endpoint patterns
                 pass
-            
+
             # Search common leak sites
             search_queries = [
                 f"{domain} database dump",
@@ -71,13 +68,13 @@ class DatabaseScannerPlugin(BasePlugin):
                 f"{domain} mongodb backup",
                 f"{domain} sqlite database",
             ]
-            
+
             exposed_dumps = []
             for query in search_queries:
                 dump_info = await self._search_breach_db(client, query)
                 if dump_info:
                     exposed_dumps.append(dump_info)
-            
+
             if exposed_dumps:
                 results.append(PluginResponse(
                     provider=self.metadata.name,
@@ -104,19 +101,19 @@ class DatabaseScannerPlugin(BasePlugin):
                         "threat_level": "HIGH" if len(exposed_dumps) > 2 else "MEDIUM"
                     }
                 ))
-                
+
         except Exception as e:
             logger.warning(f"DatabaseScanner error: {e}")
-        
+
         return results
 
-    async def _scan_email_databases(self, client, email: str) -> List[PluginResponse]:
+    async def _scan_email_databases(self, client, email: str) -> list[PluginResponse]:
         """Scan for database exposures containing specific email addresses."""
         results = []
-        
+
         # Find databases that may contain this email
         email_samples = []
-        
+
         # Search breach databases for this email
         try:
             intelx_key = os.getenv("INTELX_API_KEY")
@@ -127,7 +124,7 @@ class DatabaseScannerPlugin(BasePlugin):
                     email_samples.append(email_info)
         except Exception as e:
             logger.warning(f"Email database scan error: {e}")
-        
+
         if email_samples:
             results.append(PluginResponse(
                 provider=self.metadata.name,
@@ -154,15 +151,15 @@ class DatabaseScannerPlugin(BasePlugin):
                     "risk_level": "CRITICAL"
                 }
             ))
-        
+
         return results
 
-    async def _scan_username_databases(self, client, username: str) -> List[PluginResponse]:
+    async def _scan_username_databases(self, client, username: str) -> list[PluginResponse]:
         """Scan for database leaks containing specific usernames."""
         results = []
-        
+
         username_releases = []
-        
+
         # Search common paste sites and breach databases
         try:
             # Query breach databases for this username
@@ -171,7 +168,7 @@ class DatabaseScannerPlugin(BasePlugin):
                 username_releases.append(leak_info)
         except Exception as e:
             logger.warning(f"Username database scan error: {e}")
-        
+
         if username_releases:
             results.append(PluginResponse(
                 provider=self.metadata.name,
@@ -190,15 +187,15 @@ class DatabaseScannerPlugin(BasePlugin):
                     "leaked_databases": username_releases
                 }
             ))
-        
+
         return results
 
-    async def _scan_ip_exposed_databases(self, client, ip: str) -> List[PluginResponse]:
+    async def _scan_ip_exposed_databases(self, client, ip: str) -> list[PluginResponse]:
         """Scan for databases exposed on specific IP addresses."""
         results = []
-        
+
         ip_exposures = []
-        
+
         try:
             # Check Shodan for exposed databases
             shodan_key = os.getenv("SHODAN_API_KEY")
@@ -209,7 +206,7 @@ class DatabaseScannerPlugin(BasePlugin):
                     ip_exposures.append(ip_info)
         except Exception as e:
             logger.warning(f"IP database scan error: {e}")
-        
+
         if ip_exposures:
             results.append(PluginResponse(
                 provider=self.metadata.name,
@@ -233,13 +230,13 @@ class DatabaseScannerPlugin(BasePlugin):
                     "exposed_databases": ip_exposures
                 }
             ))
-        
+
         return results
 
-    async def _scan_generic_databases(self, client, query: str) -> List[PluginResponse]:
+    async def _scan_generic_databases(self, client, query: str) -> list[PluginResponse]:
         """Perform generic database-related scanning."""
         results = []
-        
+
         # Base results framework
         results.append(PluginResponse(
             provider=self.metadata.name,
@@ -250,7 +247,7 @@ class DatabaseScannerPlugin(BasePlugin):
                 "supported_targets": ["domain", "email", "username", "ip"],
                 "recommended_actions": [
                     "Use domain scanning for specific organizations",
-                    "Use email scanning for credential compromise detection", 
+                    "Use email scanning for credential compromise detection",
                     "Use username scanning for account enumeration",
                     "Use IP scanning for infrastructure assessment"
                 ],
@@ -267,7 +264,7 @@ class DatabaseScannerPlugin(BasePlugin):
                 "services_available": ["Breach Database Search", "Paste Site Monitor", "Exposed Service Detection"]
             }
         ))
-        
+
         return results
 
     async def _search_breach_db(self, client, query: str) -> dict | None:

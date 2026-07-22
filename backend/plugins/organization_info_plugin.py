@@ -1,8 +1,6 @@
-import asyncio
 import logging
-import re
 import random
-from typing import List, Any
+import re
 
 from backend.http_client import SharedHTTPClient
 from backend.models import PluginMetadata, PluginResponse, TargetType
@@ -32,7 +30,7 @@ class OrganizationInfoPlugin(BasePlugin):
             min_app_version="1.0.0"
         )
 
-    async def execute(self, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         client = await SharedHTTPClient.get_client()
 
@@ -51,7 +49,7 @@ class OrganizationInfoPlugin(BasePlugin):
 
         return findings
 
-    async def _search_company_registry(self, client, company_name: str) -> List[PluginResponse]:
+    async def _search_company_registry(self, client, company_name: str) -> list[PluginResponse]:
         """Search business registries for company information."""
         results = []
 
@@ -123,7 +121,7 @@ class OrganizationInfoPlugin(BasePlugin):
 
         return results
 
-    async def _search_abn_registry(self, client, abn: str) -> List[PluginResponse]:
+    async def _search_abn_registry(self, client, abn: str) -> list[PluginResponse]:
         """Search Australian Business Number registry."""
         results = []
 
@@ -199,7 +197,7 @@ class OrganizationInfoPlugin(BasePlugin):
 
         return results
 
-    async def _search_email_company(self, client, email: str) -> List[PluginResponse]:
+    async def _search_email_company(self, client, email: str) -> list[PluginResponse]:
         """Find company associated with an email address."""
         results = []
 
@@ -261,7 +259,7 @@ class OrganizationInfoPlugin(BasePlugin):
 
         return results
 
-    async def _lookup_domain_registrar(self, client, domain: str) -> List[PluginResponse]:
+    async def _lookup_domain_registrar(self, client, domain: str) -> list[PluginResponse]:
         """Look up domain registrar and registration details."""
         results = []
 
@@ -312,7 +310,7 @@ class OrganizationInfoPlugin(BasePlugin):
 
         return results
 
-    async def _search_nz_company_registry(self, client, company_name: str) -> List[PluginResponse]:
+    async def _search_nz_company_registry(self, client, company_name: str) -> list[PluginResponse]:
         """Search New Zealand company registry."""
         results = []
 
@@ -376,7 +374,7 @@ class OrganizationInfoPlugin(BasePlugin):
 
         return results
 
-    async def _perform_generic_org_search(self, client, query: str, target_type: TargetType) -> List[PluginResponse]:
+    async def _perform_generic_org_search(self, client, query: str, target_type: TargetType) -> list[PluginResponse]:
         """Perform generic organizational search."""
         results = []
 
