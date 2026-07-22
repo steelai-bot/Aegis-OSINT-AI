@@ -4,7 +4,7 @@ Compact instructions for OpenCode agents working in this repository.
 
 ## Project Overview
 
-**Aegis OSINT AI** - Lightweight OSINT investigation framework with FastAPI backend (Python 3.12+) and Jinja2 templates. Plugin architecture for extensible intelligence gathering.
+**Aegis OSINT AI** - Lightweight OSINT investigation framework with FastAPI backend (Python 3.12+), Jinja2 templates, Tailwind CSS, Alpine.js, and Vis.js Network. Plugin architecture for extensible intelligence gathering.
 
 ## Critical Commands
 
@@ -23,9 +23,9 @@ run.bat          # Windows
 .venv\Scripts\python.exe -m backend.main   # Windows
 python -m backend.main                      # Linux/macOS
 
-# Frontend build (if frontend/ dir exists)
-npm install
-npm run build --prefix frontend
+# Docker containerization
+docker build -t aegis-osint .
+docker compose up
 ```
 
 ## Test / Lint / Typecheck
@@ -56,11 +56,11 @@ mypy backend --ignore-missing-imports
 
 | Layer | File | Responsibility |
 |-------|------|----------------|
-| Entry | `backend/main.py` | FastAPI app, endpoints, lifespan (DB init, plugin discovery) |
-| Orchestration | `backend/engine.py` | `InvestigationEngine` - plans → executes plugins → extracts entities → logs timeline |
+| Entry | `backend/main.py` | FastAPI app, endpoints, lifespan (DB init, plugin discovery), health check |
+| Orchestration | `backend/engine.py` | `InvestigationEngine` - plans → executes plugins (with plugin validation) → extracts entities → logs timeline |
 | Plugins | `backend/plugin_manager.py` | Singleton `PluginManager` - discovery, validation, execution, hot-reload |
-| Planning | `backend/planner.py` | `AIPlanner` - template or LLM-driven plugin sequence planning |
-| Storage | `backend/storage.py` | `SQLiteStorage` - all DB operations (targets, findings, entities, relations, timeline) |
+| Planning | `backend/planner.py` | `AIPlanner` - template or sanitized LLM-driven plugin sequence planning |
+| Storage | `backend/storage.py` | `SQLiteStorage` - task-safe transactions (`ContextVar`), safe JSON dumps (`_safe_json_dumps`), DB operations |
 | Providers | `backend/provider_manager.py` | Centralized AI provider credentials (OpenAI, Anthropic, Gemini, etc.) |
 | Models | `backend/models.py` | Pydantic v2 models for all domain objects |
 | Config | `backend/config/settings.py` | Pydantic Settings from `.env` (auto-created from `config/.env.example`) |
@@ -90,15 +90,19 @@ async def execute(self, query: str, target_type: TargetType) -> List[PluginRespo
 
 1. `POST /api/search` → target saved with `pending` status
 2. `InvestigationEngine.run_investigation()`:
+   - Validates planned steps against discovered and enabled plugins
    - `AIPlanner.plan_investigation()` determines plugin order
    - Plugins executed via `PluginManager.execute_plugin()`
    - Results saved as findings, entities extracted, relationships mapped
    - Timeline events logged at each step
 3. Status → `completed` or `failed`
 
-## Database
+## Database & Transactions
 
-SQLite at `data/aegis.db` (configurable via `DATABASE` env). Tables: `targets`, `findings`, `entities`, `relationships`, `timeline`, `reports`. Always use `SQLiteStorage` methods, not raw SQL.
+SQLite at `data/aegis.db` (configurable via `DATABASE` env). WAL mode enabled.
+- **Transaction isolation**: `SQLiteStorage` tracks active transactions per async task using `ContextVar`.
+- **Safe Serialization**: `_safe_json_dumps()` handles Pydantic models, datetimes, and arbitrary objects with `default=str` fallback, preventing transaction rollbacks on unserializable evidence.
+- Always use `SQLiteStorage` methods, not raw SQL.
 
 ## Key Environment Variables
 
@@ -139,12 +143,13 @@ Loaded from `.env` (auto-created from `config/.env.example`).
 
 ## Frontend Note
 
-React frontend was replaced with Jinja2 templates in `backend/templates/`. Static files in `backend/static/`. No `frontend/` dir exists currently.
+React frontend was replaced with Jinja2 templates in `backend/templates/` styled with Tailwind CSS, Alpine.js, and Vis.js Network. Static files in `backend/static/`.
 
 ## Common Gotchas
 
 - **Plugin version must be semver** (X.Y.Z) - rejected otherwise
 - **Use `SQLiteStorage` methods** - don't write raw SQL in endpoints
+- **Transaction state** - isolated per async task via `ContextVar`
 - **ProviderManager is singleton** - instantiated at module level in `main.py`
 - **Lifespan handler** (`main.py:90`) initializes DB and discovers plugins
 - **Settings from `.env`** - use `from backend.config.settings import settings`
