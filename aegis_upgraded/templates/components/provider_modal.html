@@ -1,0 +1,112 @@
+<!-- Provider Configuration Modal -->
+<div x-show="configOpen"
+     x-on:keydown.escape.window="configOpen = false"
+     x-cloak>
+    <!-- Backdrop -->
+    <div x-show="configOpen"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="modal-backdrop"
+         @click="configOpen = false">
+    </div>
+
+    <!-- Modal -->
+    <div x-show="configOpen"
+         class="modal-container"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+
+        <div class="modal-content" @click.away="configOpen = false">
+            <!-- Header -->
+            <div class="modal-header">
+                <div>
+                    <h3 class="text-xl font-semibold">Configure {{ provider.name }}</h3>
+                    <p class="text-sm text-muted mt-1">{{ provider.description }}</p>
+                </div>
+                <button @click="configOpen = false"
+                        class="text-muted hover:text-foreground transition-colors p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <form hx-post="/api/providers/{{ provider.id }}/configure"
+                  hx-target="#toast-container"
+                  hx-swap="afterbegin"
+                  @htmx:after-request="if($event.detail.successful) configOpen = false"
+                  class="modal-body space-y-4">
+
+                <!-- API Key Input -->
+                {% if provider.auth_type == 'api_key' %}
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <input type="password"
+                           name="api_key"
+                           placeholder="Enter your API key"
+                           class="form-input"
+                           required>
+                    <p class="form-hint">
+                        {% if provider.id == 'openrouter' %}
+                        Get your key from <a href="https://openrouter.ai/keys" target="_blank" class="text-primary hover:underline">OpenRouter Keys</a>
+                        {% elif provider.id == 'openai' %}
+                        Get your key from <a href="https://platform.openai.com/api-keys" target="_blank" class="text-primary hover:underline">OpenAI Platform</a>
+                        {% elif provider.id == 'anthropic' %}
+                        Get your key from <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-primary hover:underline">Anthropic Console</a>
+                        {% elif provider.id == 'gemini' %}
+                        Get your key from <a href="https://makersuite.google.com/app/apikey" target="_blank" class="text-primary hover:underline">Google AI Studio</a>
+                        {% elif provider.id == 'github' %}
+                        Get your token from <a href="https://github.com/settings/tokens" target="_blank" class="text-primary hover:underline">GitHub Tokens</a>
+                        {% else %}
+                        Enter your {{ provider.name }} API key
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
+
+                <!-- Username/Password for other auth types -->
+                {% if provider.auth_type == 'basic' %}
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text"
+                           name="username"
+                           placeholder="Enter username"
+                           class="form-input"
+                           required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password"
+                           name="password"
+                           placeholder="Enter password"
+                           class="form-input"
+                           required>
+                </div>
+                {% endif %}
+
+                <!-- Footer -->
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-border">
+                    <button type="button"
+                            @click="configOpen = false"
+                            class="btn btn-secondary">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="btn btn-primary">
+                        <i data-lucide="save" class="w-4 h-4"></i>
+                        Save Configuration
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>lucide.createIcons();</script>

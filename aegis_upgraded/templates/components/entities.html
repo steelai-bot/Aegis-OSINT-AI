@@ -1,0 +1,43 @@
+<!-- Entities list partial -->
+{% if entities %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for entity in entities %}
+    {% set conf = (entity.confidence * 100)|int if entity.confidence <= 1 else entity.confidence|int %}
+    <div class="bg-background border border-border rounded-xl p-4 hover:border-primary/50 transition-all shadow-sm">
+        <div class="flex items-start justify-between mb-3">
+            <span class="px-2.5 py-1 text-xs font-mono rounded-md font-semibold uppercase tracking-wider
+                        {% if entity.type.value == 'domain' %}bg-blue-500/15 text-blue-400 border border-blue-500/30
+                        {% elif entity.type.value == 'email' %}bg-emerald-500/15 text-emerald-400 border border-emerald-500/30
+                        {% elif entity.type.value == 'ip' %}bg-purple-500/15 text-purple-400 border border-purple-500/30
+                        {% elif entity.type.value == 'github' %}bg-indigo-500/15 text-indigo-400 border border-indigo-500/30
+                        {% else %}bg-gray-500/15 text-gray-400 border border-gray-500/30{% endif %}">
+                {{ entity.type.value }}
+            </span>
+            <div class="flex items-center gap-1.5 font-mono text-xs">
+                <span class="text-muted">Conf:</span>
+                <span class="font-semibold {% if conf >= 80 %}text-emerald-400{% elif conf >= 50 %}text-amber-400{% else %}text-red-400{% endif %}">{{ conf }}%</span>
+            </div>
+        </div>
+
+        <div class="font-mono text-sm font-semibold text-foreground mb-2 break-all bg-card/50 p-2.5 rounded-lg border border-border">
+            {{ entity.value }}
+        </div>
+
+        {% if entity.display_name and entity.display_name != entity.value %}
+        <div class="text-xs text-muted mb-2"><span class="text-foreground font-medium">Display:</span> {{ entity.display_name }}</div>
+        {% endif %}
+
+        <div class="flex items-center justify-between text-[11px] text-muted font-mono pt-2 border-t border-border/60 mt-2">
+            <span>First Seen</span>
+            <span>{{ entity.first_seen.strftime('%Y-%m-%d %H:%M') if entity.first_seen and hasattr(entity.first_seen, 'strftime') else entity.first_seen }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<script>lucide.createIcons();</script>
+{% else %}
+<div class="text-center py-12 text-muted font-mono text-xs">
+    <i data-lucide="database" class="w-12 h-12 mx-auto mb-3 opacity-40 text-primary"></i>
+    <p>No entities discovered in this reconnaissance run yet.</p>
+</div>
+{% endif %}
