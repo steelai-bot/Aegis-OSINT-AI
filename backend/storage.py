@@ -154,7 +154,7 @@ class SQLiteStorage(StorageInterface):
             await self._connection.execute("PRAGMA synchronous=NORMAL")
             await self._connection.execute("PRAGMA cache_size=-64000")
             await self._connection.execute("PRAGMA temp_store=MEMORY")
-            await self._connection.execute("PRAGMA busy_timeout=5000")
+            await self._connection.execute("PRAGMA busy_timeout=30000")
             await self._init_db()
         return self._connection
 

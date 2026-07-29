@@ -50,63 +50,71 @@ class InvestigationEngine:
     async def run_investigation(self, target_id: int, target_type: TargetType, query: str, use_dynamic: bool = False) -> dict[str, Any]:
         """
         The main entry point for running an investigation.
-        Executes plugins in parallel, then persists all results in a single DB transaction.
+        Executes plugins in parallel WITHOUT holding a DB transaction (plugin
+        network calls can take 30s+ and must never hold the SQLite write lock,
+        otherwise concurrent requests fail with 'database is locked'), then
+        persists all results in a short transaction.
         """
         logger.info(f"Starting investigation for target {target_id} ({target_type}): {query}")
 
         try:
+            # Short transaction: record investigation start (fast, local writes only)
             async with self.storage.transaction():
                 await self.storage.log_timeline_event(TimelineEvent(
                     target_id=target_id,
                     event_type=TimelineEventType.INVESTIGATION_CREATED,
                     description=f"Investigation started for {query} ({target_type.value})"
                 ))
-
                 await self.storage.update_target_status(target_id, InvestigationStatus.RUNNING.value)
 
-                steps = await self.planner.plan_investigation(target_type, query, use_dynamic)
-                logger.info(f"Plan generated: {steps}")
+            # Planning can involve LLM calls - runs outside any DB transaction
+            steps = await self.planner.plan_investigation(target_type, query, use_dynamic)
+            logger.info(f"Plan generated: {steps}")
 
-                if not self.plugin_manager._plugins:
-                    self.plugin_manager.discover_plugins()
+            if not self.plugin_manager._plugins:
+                self.plugin_manager.discover_plugins()
 
-                valid_steps = []
-                for s in steps:
-                    if s in self.plugin_manager.get_all_plugin_names():
-                        status = self.plugin_manager._plugin_statuses.get(s, "enabled")
-                        if status == "enabled":
-                            valid_steps.append(s)
-                        else:
-                            logger.warning(f"Plugin '{s}' is disabled due to missing credentials or dependencies. Skipping.")
+            valid_steps = []
+            for s in steps:
+                if s in self.plugin_manager.get_all_plugin_names():
+                    status = self.plugin_manager._plugin_statuses.get(s, "enabled")
+                    if status == "enabled":
+                        valid_steps.append(s)
                     else:
-                        logger.warning(f"Plugin '{s}' not found in registry. Skipping.")
-                steps = valid_steps
+                        logger.warning(f"Plugin '{s}' is disabled due to missing credentials or dependencies. Skipping.")
+                else:
+                    logger.warning(f"Plugin '{s}' not found in registry. Skipping.")
+            steps = valid_steps
 
+            async with self.storage.transaction():
                 await self.storage.log_timeline_event(TimelineEvent(
                     target_id=target_id,
                     event_type=TimelineEventType.PLANNING_COMPLETED,
                     description=f"Planning completed. Steps: {', '.join(steps)}"
                 ))
 
-                all_results: list[PluginResponse] = []
-                failed_count = 0
-                timeline_buffer: list[TimelineEvent] = []
+            all_results: list[PluginResponse] = []
+            failed_count = 0
+            timeline_buffer: list[TimelineEvent] = []
 
-                if steps:
-                    logger.info(f"Executing {len(steps)} plugins in parallel...")
-                    plugin_tasks = [
-                        self._execute_plugin(plugin_name, query, target_type, target_id, timeline_buffer)
-                        for plugin_name in steps
-                    ]
-                    plugin_results = await asyncio.gather(*plugin_tasks, return_exceptions=True)
+            # Plugin execution is network-bound - must NOT hold the DB write lock
+            if steps:
+                logger.info(f"Executing {len(steps)} plugins in parallel...")
+                plugin_tasks = [
+                    self._execute_plugin(plugin_name, query, target_type, target_id, timeline_buffer)
+                    for plugin_name in steps
+                ]
+                plugin_results = await asyncio.gather(*plugin_tasks, return_exceptions=True)
 
-                    for result in plugin_results:
-                        if isinstance(result, Exception):
-                            logger.error(f"Plugin execution failed: {result}")
-                            failed_count += 1
-                        elif isinstance(result, list):
-                            all_results.extend(result)
+                for result in plugin_results:
+                    if isinstance(result, Exception):
+                        logger.error(f"Plugin execution failed: {result}")
+                        failed_count += 1
+                    elif isinstance(result, list):
+                        all_results.extend(result)
 
+            # Short transaction: persist all results (fast, local writes only)
+            async with self.storage.transaction():
                 for res in all_results:
                     await self.storage.save_finding(target_id, res.provider, res.confidence, res.evidence)
                     entities = self.extract_entities(res, target_id)

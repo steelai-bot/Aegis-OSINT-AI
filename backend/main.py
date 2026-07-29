@@ -35,10 +35,15 @@ DATABASE_PATH = settings.database_path
 # --- Database Context Manager ---
 @contextmanager
 def get_db():
-    """Context manager for SQLite connections - auto-closes on exit."""
+    """Context manager for SQLite connections - auto-closes on exit.
+
+    Uses a 30s busy timeout so short lock contention with the async
+    SQLiteStorage writer doesn't fail immediately with 'database is locked'.
+    """
     os.makedirs(os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True)
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout=30000")
     try:
         yield conn
     finally:
@@ -48,7 +53,7 @@ def get_db():
 def init_db():
     """Initialize SQLite database with schema."""
     os.makedirs(os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True)
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=30)
     cursor = conn.cursor()
 
     cursor.execute('''
@@ -401,6 +406,14 @@ async def delete_target(target_id: int, request: Request):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM findings WHERE target_id = ?", (target_id,))
         cursor.execute("DELETE FROM reports WHERE target_id = ?", (target_id,))
+        cursor.execute("DELETE FROM timeline_events WHERE target_id = ?", (target_id,))
+        # Remove relationships that are no longer reachable from any remaining
+        # timeline event (entities are shared across targets, so keep them)
+        cursor.execute("""
+            DELETE FROM relationships
+            WHERE NOT EXISTS (SELECT 1 FROM timeline_events te WHERE te.entity_id = relationships.source_entity_id)
+              AND NOT EXISTS (SELECT 1 FROM timeline_events te WHERE te.entity_id = relationships.target_entity_id)
+        """)
         cursor.execute("DELETE FROM targets WHERE id = ?", (target_id,))
         conn.commit()
 
