@@ -29,6 +29,7 @@ class ShodanPlugin(BasePlugin):
             description="Shodan IoT search engine for host discovery, IP analysis, domain scanning, and vulnerability detection",
             version="2.0.0",
             supported_entity_types=[TargetType.IP, TargetType.DOMAIN, TargetType.COMPANY],
+            required_api_keys=["SHODAN_API_KEY"],
             tags=["shodan", "iot", "vulnerability", "passive"],
             execution_cost=2.0,
             estimated_time=5,

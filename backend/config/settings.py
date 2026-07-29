@@ -52,6 +52,7 @@ class AegisSettings(BaseSettings):
     urlscan_api_key: str | None = None
     google_search_api_key: str | None = None
     google_search_cx: str | None = None
+    google_api_key: str | None = None
 
     # Server settings
     host: str = "0.0.0.0"
@@ -91,10 +92,12 @@ INTELX_API_KEY=
 CENSYS_API_KEY=
 ABUSEIPDB_API_KEY=
 URLSCAN_API_KEY=
+SECURITYTRAILS_API_KEY=
 
-# Google Custom Search
+# Google (Custom Search + organization_info)
 GOOGLE_SEARCH_API_KEY=
 GOOGLE_SEARCH_CX=
+GOOGLE_API_KEY=
 
 # GitHub
 GITHUB_TOKEN=
@@ -155,6 +158,7 @@ PORT=8000
             "urlscan_api_key": "URLSCAN_API_KEY",
             "google_search_api_key": "GOOGLE_SEARCH_API_KEY",
             "google_search_cx": "GOOGLE_SEARCH_CX",
+            "google_api_key": "GOOGLE_API_KEY",
         }
         for attr, env_key in key_map.items():
             val = getattr(self, attr, None)
