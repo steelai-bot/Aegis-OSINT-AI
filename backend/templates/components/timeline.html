@@ -8,7 +8,7 @@
                     {% elif event.event_type.value == 'entity_discovered' %}border-l-primary
                     {% else %}border-l-border{% endif %}">
             <div class="text-muted w-20 flex-shrink-0 pt-0.5">
-                {{ event.timestamp.strftime('%H:%M:%S') if event.timestamp and hasattr(event.timestamp, 'strftime') else '00:00:00' }}
+                {{ event.timestamp.strftime('%H:%M:%S') if event.timestamp and event.timestamp.strftime is defined else '00:00:00' }}
             </div>
             <div class="flex-1 space-y-1">
                 <div class="font-semibold text-foreground text-sm font-sans">{{ event.description }}</div>

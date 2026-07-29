@@ -29,7 +29,7 @@
 
         <div class="flex items-center justify-between text-[11px] text-muted font-mono pt-2 border-t border-border/60 mt-2">
             <span>First Seen</span>
-            <span>{{ entity.first_seen.strftime('%Y-%m-%d %H:%M') if entity.first_seen and hasattr(entity.first_seen, 'strftime') else entity.first_seen }}</span>
+            <span>{{ entity.first_seen.strftime('%Y-%m-%d %H:%M') if entity.first_seen and entity.first_seen.strftime is defined else entity.first_seen }}</span>
         </div>
     </div>
     {% endfor %}
