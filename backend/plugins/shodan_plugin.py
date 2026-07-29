@@ -4,6 +4,7 @@ Provides host lookup, IP analysis, domain scanning, and vulnerability detection
 """
 
 import os
+from typing import Any
 from urllib.parse import quote
 
 from backend.http_client import EnhancedHTTPClient
@@ -50,7 +51,8 @@ class ShodanPlugin(BasePlugin):
         """Execute Shodan OSINT gathering based on target type"""
         try:
             api_key = await self._get_api_key()
-            client = await EnhancedHTTPClient.get_client()
+            client = await EnhancedHTTPClient().get_client()
+
 
             results = []
 
@@ -194,10 +196,12 @@ class ShodanPlugin(BasePlugin):
                 }
 
                 # Group records by type
-                records_by_type = {}
+                records_by_type: dict[str, list[dict[str, Any]]] = {}
+
                 for record in records:
                     if isinstance(record, dict):
-                        rtype = record.get("type")
+                        rtype: str = record.get("type") or "unknown"
+
                         if rtype not in records_by_type:
                             records_by_type[rtype] = []
                         records_by_type[rtype].append({
@@ -284,7 +288,8 @@ class ShodanPlugin(BasePlugin):
                 evidence = {
                     "organization": org_name,
                     "total_results": data.get("total", 0),
-                    "unique_ips": len(set(m.get("ip_str") for m in matches if isinstance(m, dict))),
+                    "unique_ips": len({m.get("ip_str") for m in matches if isinstance(m, dict)}),
+
                     "top_ports": facets.get("port", []),
                     "top_countries": facets.get("country", []),
                     "top_os": facets.get("os", [])

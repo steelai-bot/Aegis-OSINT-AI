@@ -51,9 +51,10 @@ def _safe_json_dumps(obj: Any) -> str:
 
 def _truncate_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Truncate large values in evidence to reduce DB size and memory usage."""
-    truncated = []
+    truncated: list[dict[str, Any]] = []
     for item in evidence:
-        new_item = {}
+        new_item: dict[str, Any] = {}
+
         for key, val in item.items():
             if isinstance(val, str):
                 new_item[key] = val[:MAX_EVIDENCE_STRING_LENGTH]
@@ -324,9 +325,12 @@ class SQLiteStorage(StorageInterface):
         )
         if not self._transaction_active.get():
             await conn.commit()
-        return cursor.lastrowid
+        row_id = cursor.lastrowid
+        assert row_id is not None, "INSERT did not return a row id"
+        return row_id
 
     async def log_timeline_event(self, event: TimelineEvent) -> int:
+
         conn = await self._get_connection()
         cursor = await conn.cursor()
         await cursor.execute(
@@ -336,9 +340,12 @@ class SQLiteStorage(StorageInterface):
         )
         if not self._transaction_active.get():
             await conn.commit()
-        return cursor.lastrowid
+        row_id = cursor.lastrowid
+        assert row_id is not None, "INSERT did not return a row id"
+        return row_id
 
     async def log_timeline_events_batch(self, events: list[TimelineEvent]) -> list[int]:
+
         """Batch insert timeline events for 80% better write performance"""
         if not events:
             return []

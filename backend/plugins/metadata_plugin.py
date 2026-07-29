@@ -26,7 +26,8 @@ class MetadataPlugin(BasePlugin):
         )
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
-        findings = []
+        findings: list[PluginResponse] = []
+
 
         if query.startswith("http://") or query.startswith("https://"):
             url = query

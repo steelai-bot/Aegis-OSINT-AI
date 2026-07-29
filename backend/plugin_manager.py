@@ -1,14 +1,16 @@
+import asyncio
 import importlib
 import inspect
 import logging
 import os
 import pkgutil
 import re
+import time
 from pathlib import Path
 from typing import Any, Optional
 
 from backend.models import PluginResponse, TargetType
-from backend.plugins.base import BasePlugin
+from backend.plugins.base import BasePlugin, PluginExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +42,10 @@ class PluginManager:
     Supports hot reload detection, version validation, dependency checking, and result caching.
     """
     _instance: Optional['PluginManager'] = None
+    _initialized: bool
 
     def __new__(cls):
+
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
@@ -56,7 +60,13 @@ class PluginManager:
         self._file_mtimes: dict[str, float] = {}
         self._result_cache: dict[str, tuple[list[PluginResponse], float]] = {}
         self._cache_ttl: float = 3600.0
+        # Per-plugin execution timeout (seconds) - prevents a hung plugin
+        # from blocking the whole investigation.
+        self._execution_timeout: float = 120.0
+        # Runtime execution statistics keyed by plugin name.
+        self._execution_stats: dict[str, dict[str, Any]] = {}
         self._initialized = True
+
         logger.info("PluginManager initialized.")
 
     def _validate_plugin_metadata(self, plugin_instance: BasePlugin, plugin_name: str) -> str | None:
@@ -183,11 +193,42 @@ class PluginManager:
         """Retrieve a plugin by its name."""
         return self._plugins.get(plugin_name)
 
+    def _record_execution(
+        self,
+        plugin_name: str,
+        duration_ms: float,
+        success: bool,
+        error: str | None = None,
+    ) -> None:
+        """Record runtime statistics for a plugin execution."""
+        stats = self._execution_stats.setdefault(
+            plugin_name,
+            {"runs": 0, "failures": 0, "last_error": None, "last_duration_ms": 0.0, "last_run_at": None},
+        )
+        stats["runs"] += 1
+        if not success:
+            stats["failures"] += 1
+            stats["last_error"] = error
+        else:
+            stats["last_error"] = None
+        stats["last_duration_ms"] = round(duration_ms, 2)
+        stats["last_run_at"] = time.time()
+
+    def get_plugin_stats(self, plugin_name: str | None = None) -> dict[str, Any]:
+        """Return runtime execution stats for one plugin or all plugins."""
+        if plugin_name is not None:
+            return self._execution_stats.get(plugin_name, {})
+        return dict(self._execution_stats)
+
     async def execute_plugin(self, plugin_name: str, query: str, target_type: TargetType) -> list[PluginResponse]:
         """
-        Execute a specific plugin with TTL-based result caching.
+        Execute a specific plugin with TTL-based result caching, a per-plugin
+        execution timeout, and runtime statistics tracking.
+
+        Only successful executions are cached - failures raise PluginExecutionError
+        so callers (e.g. the engine) can log proper ERROR timeline events instead
+        of silently treating a crash as "no results".
         """
-        import time
         cache_key = f"{plugin_name}:{query}:{target_type.value}"
         now = time.time()
 
@@ -201,28 +242,55 @@ class PluginManager:
 
         plugin = self.get_plugin(plugin_name)
         if not plugin:
-            logger.error(f"Plugin '{plugin_name}' not found.")
-            return []
+            raise PluginExecutionError(plugin_name, "Plugin not found in registry")
 
+        if target_type not in plugin.metadata.supported_entity_types:
+            logger.warning(
+                f"Plugin '{plugin_name}' does not officially support target type "
+                f"'{target_type.value}', executing anyway"
+            )
+
+        started = time.perf_counter()
         try:
             logger.info(f"Executing plugin: {plugin_name} for query: {query}")
-            results = await plugin.execute(query, target_type)
+            results = await asyncio.wait_for(
+                plugin.execute(query, target_type),
+                timeout=self._execution_timeout,
+            )
+            duration_ms = (time.perf_counter() - started) * 1000
+            self._record_execution(plugin_name, duration_ms, success=True)
             self._result_cache[cache_key] = (results, now)
             return results
+        except TimeoutError as e:
+            duration_ms = (time.perf_counter() - started) * 1000
+            msg = f"Execution timed out after {self._execution_timeout}s"
+            self._record_execution(plugin_name, duration_ms, success=False, error=msg)
+            logger.error(f"Plugin '{plugin_name}' {msg}")
+            raise PluginExecutionError(plugin_name, msg, cause=e) from e
+        except PluginExecutionError:
+            duration_ms = (time.perf_counter() - started) * 1000
+            self._record_execution(plugin_name, duration_ms, success=False, error="Plugin raised PluginExecutionError")
+            raise
         except Exception as e:
+            duration_ms = (time.perf_counter() - started) * 1000
+            self._record_execution(plugin_name, duration_ms, success=False, error=str(e))
             logger.error(f"Error executing plugin '{plugin_name}': {e}", exc_info=True)
-            return []  # Sandbox plugin failures: never crash the app
+            raise PluginExecutionError(plugin_name, str(e), cause=e) from e
+
 
     def list_plugins(self) -> list[dict[str, Any]]:
-        """Return metadata for all discovered plugins."""
+        """Return metadata, status, and runtime stats for all discovered plugins."""
         result = []
         for name, plugin in self._plugins.items():
             data = plugin.metadata.model_dump()
             data["status"] = self._plugin_statuses.get(name, "unknown")
             if name in self._plugin_errors:
                 data["error"] = self._plugin_errors[name]
+            if name in self._execution_stats:
+                data["stats"] = self._execution_stats[name]
             result.append(data)
         return result
+
 
     def get_all_plugin_names(self) -> list[str]:
         """Return names of all discovered plugins."""

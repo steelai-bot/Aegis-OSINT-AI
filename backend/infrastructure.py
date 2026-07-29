@@ -10,7 +10,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -176,18 +176,20 @@ class CircuitBreakerOpen(Exception):
 
 
 @dataclass
-class CacheEntry(Generic[T]):
+class CacheEntry[T]:
     """Cache entry with metadata"""
     value: T
+
     created_at: float
     last_accessed: float
     access_count: int = 0
     ttl: float | None = None
 
 
-class LRUCacheWithTTL(Generic[T]):
+class LRUCacheWithTTL[T]:
     """
     LRU cache with TTL expiration and background cleanup.
+
     Combines least-recently-used eviction with time-based expiration.
     """
 
@@ -542,6 +544,7 @@ class InfrastructureManager:
     """
 
     _instance = None
+    _initialized: bool
     _lock = asyncio.Lock()
 
     def __new__(cls):
@@ -555,6 +558,7 @@ class InfrastructureManager:
             return
 
         self._circuit_breakers: dict[str, CircuitBreaker] = {}
+
         self._caches: dict[str, LRUCacheWithTTL] = {}
         self._rate_limiters: dict[str, TokenBucketRateLimiter] = {}
         self._retriers: dict[str, AsyncRetryWithBackoff] = {}

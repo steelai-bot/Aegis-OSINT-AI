@@ -36,7 +36,8 @@ class UsernamePlugin(BasePlugin):
             estimated_time=8
         )
 
-    async def _check_platform(self, client, platform: dict, username: str) -> dict:
+    async def _check_platform(self, client, platform: dict, username: str) -> dict | None:
+
         url = platform["url"].format(username=username)
         try:
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})

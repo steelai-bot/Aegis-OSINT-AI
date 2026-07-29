@@ -131,7 +131,8 @@ app.add_middleware(
 )
 
 
-def format_response(data: Any = None, success: bool = True, errors: list[str] = None, metadata: dict = None):
+def format_response(data: Any = None, success: bool = True, errors: list[str] | None = None, metadata: dict | None = None):
+
     return {
         "success": success,
         "data": data if data is not None else {},
@@ -409,7 +410,9 @@ async def delete_target(target_id: int, request: Request):
 
 
 @app.get("/api/stats")
-async def get_stats(request: Request = None):
+async def get_stats(request: Request):
+
+
     """Get system stats overview."""
     with get_db() as conn:
         cursor = conn.cursor()
@@ -676,10 +679,11 @@ async def chat(payload: ChatRequest):
     from backend.providers import AIProviderFactory
 
     message = payload.message
-    provider = payload.provider
+    provider = payload.provider or "openrouter"
     model = payload.model
 
     provider_inst = AIProviderFactory.get_provider(provider)
+
     if not provider_inst:
         return format_response(
             data={
@@ -692,8 +696,14 @@ async def chat(payload: ChatRequest):
 
     # Use default model if none specified
     if not model:
-        model = getattr(provider_inst, '_default_model', None) or \
-                {"openrouter": "gpt-3.5-turbo", "openai": "gpt-4", "anthropic": "claude-3-haiku-20240307", "gemini": "gemini-1.5-flash"}.get(provider, model)
+        default_models = {
+            "openrouter": "gpt-3.5-turbo",
+            "openai": "gpt-4",
+            "anthropic": "claude-3-haiku-20240307",
+            "gemini": "gemini-1.5-flash",
+        }
+        model = provider_inst._default_model or default_models.get(provider, "gpt-3.5-turbo")
+
 
     # Support multimodal chat (image/video URLs)
     image_urls = payload.image_urls
@@ -753,12 +763,13 @@ async def graph_data(target_id: int):
         } for r in relationships
     ]
 
-    stats = {
+    stats: dict[str, Any] = {
         "total_nodes": len(nodes),
         "total_edges": len(edges),
         "entity_types": {},
         "relationship_types": {}
     }
+
     for n in nodes:
         t = n["type"]
         stats["entity_types"][t] = stats["entity_types"].get(t, 0) + 1

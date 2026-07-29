@@ -468,7 +468,10 @@ class OrganizationInfoPlugin(BasePlugin):
             logger.debug(f"Failed to fetch from {source['name']}: {e}")
             return None
 
+        return None
+
     async def _fetch_whois_info(self, domain: str) -> dict | None:
+
         """Fetch WHOIS information for a domain."""
         try:
             return {

@@ -208,7 +208,10 @@ class InvestigationEngine:
                 severity="error",
                 description=f"Plugin {plugin_name} failed: {str(plugin_exc)}"
             ))
-            return []
+            # Re-raise so asyncio.gather counts this as a failure and the
+            # investigation status correctly reflects plugin failures.
+            raise
+
 
     def extract_entities(self, response: PluginResponse, target_id: int) -> list[Entity]:
         """Parse plugin evidence to identify entities (domain, email, github, etc.)."""
@@ -230,7 +233,7 @@ class InvestigationEngine:
                     ))
 
         # Pre-compiled patterns (imported from storage module)
-        from backend.storage import EMAIL_PATTERN, DOMAIN_PATTERN, IPV4_PATTERN, GITHUB_PATTERN
+        from backend.storage import DOMAIN_PATTERN, EMAIL_PATTERN, GITHUB_PATTERN, IPV4_PATTERN
 
         # Extract from evidence
         for ev in response.evidence:
@@ -282,8 +285,11 @@ class InvestigationEngine:
 
         for domain in domains:
             for email in emails:
+                if domain.id is None or email.id is None:
+                    continue
                 if email.value.lower().endswith(domain.value.lower()):
                     relationships.append(Relationship(
+
                         source_entity_id=domain.id,
                         target_entity_id=email.id,
                         relationship_type=RelationshipType.REGISTERED_TO,

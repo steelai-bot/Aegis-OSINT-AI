@@ -33,8 +33,9 @@ class ReportGenerator:
         ]
 
     def generate(self, format: str, target: dict[str, Any], findings: list[dict[str, Any]],
-                 entities: list[dict[str, Any]] = None, relationships: list[dict[str, Any]] = None,
-                 timeline: list[dict[str, Any]] = None) -> str:
+                 entities: list[dict[str, Any]] | None = None, relationships: list[dict[str, Any]] | None = None,
+                 timeline: list[dict[str, Any]] | None = None) -> str:
+
         """
         Assemble the report by calling each section generator.
         """
@@ -102,8 +103,9 @@ class ReportGenerator:
         sorted_findings = sorted(findings, key=lambda x: severity_order.get(x.get("severity", "info").lower(), 4))
         return sorted_findings[:5]
 
-    def _generate_section_evidence(self, target, findings, risk, entities, relationships, timeline) -> list[dict[str, Any]]:
+    def _generate_section_evidence(self, target, findings: list[dict[str, Any]], risk, entities, relationships, timeline) -> list[dict[str, Any]]:
         return findings
+
 
     def _generate_section_relationships(self, target, findings, risk, entities, relationships, timeline) -> list[dict[str, Any]]:
         return relationships or []
@@ -219,7 +221,8 @@ class ReportGenerator:
             return {"score": 0, "grade": "A", "breakdown": {}}
 
         SEVERITY_WEIGHTS = {"critical": 10, "high": 7, "medium": 4, "low": 1, "info": 0}
-        category_scores = {}
+        category_scores: dict[str, float] = {}
+
         raw_total = 0.0
 
         for finding in findings:

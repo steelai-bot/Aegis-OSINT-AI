@@ -16,7 +16,8 @@ class ProviderManager:
         # Default providers that don't come from plugins (like AI providers)
         # and known OSINT providers. We will expand this dynamically if needed,
         # but for now we define a static list for the UI.
-        self.known_providers = [
+        self.known_providers: list[dict[str, Any]] = [
+
             {"id": "openrouter", "name": "OpenRouter", "description": "AI model routing platform", "supported_authentication": ["api_key"]},
             {"id": "openai", "name": "OpenAI", "description": "OpenAI API (GPT models)", "supported_authentication": ["api_key"]},
             {"id": "anthropic", "name": "Anthropic", "description": "Anthropic API (Claude models)", "supported_authentication": ["api_key"]},

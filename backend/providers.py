@@ -22,9 +22,11 @@ class AIProvider:
     """Base class for AI providers."""
     def __init__(self, api_key: str):
         self.api_key = api_key
+        self._default_model: str | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
-        return await SharedHTTPClient.get_client()
+        return await SharedHTTPClient().get_client()
+
 
     async def chat(self, prompt: str, model: str) -> AIResponse:
         raise NotImplementedError

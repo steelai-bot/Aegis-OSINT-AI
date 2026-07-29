@@ -16,12 +16,17 @@ class AIPlanner:
         self.templates: dict[TargetType, InvestigationTemplate] = {
             TargetType.DOMAIN: InvestigationTemplate(
                 target_type=TargetType.DOMAIN,
-                steps=["dns_lookup", "whois_lookup", "cert_transparency", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"]
+                steps=["dns_lookup", "whois_lookup", "cert_transparency", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"]
             ),
             TargetType.NZ_DOMAIN: InvestigationTemplate(
                 target_type=TargetType.NZ_DOMAIN,
-                steps=["dns_lookup", "whois_lookup", "cert_transparency", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"]
+                steps=["dns_lookup", "whois_lookup", "cert_transparency", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"]
             ),
+            TargetType.SUBDOMAIN: InvestigationTemplate(
+                target_type=TargetType.SUBDOMAIN,
+                steps=["dns_lookup", "wayback_machine", "web_recon"]
+            ),
+
             TargetType.IP: InvestigationTemplate(
                 target_type=TargetType.IP,
                 steps=["ip_geolocation"]
@@ -66,6 +71,7 @@ class AIPlanner:
             f"You are an OSINT expert. Given a target of type '{target_type}' with the value '{query}', "
             f"which of the following plugins should be executed in order to gather the most intelligence? "
             f"Available plugins: dns_lookup, whois_lookup, cert_transparency, ip_geolocation, "
+            f"wayback_machine, web_recon, "
             f"email_discovery, github_discovery, username_enumeration, google_dorking, metadata_extraction. "
             f"Return ONLY a comma-separated list of plugin names. Example: dns_lookup,whois_lookup"
         )
@@ -74,7 +80,8 @@ class AIPlanner:
             model = "gpt-3.5-turbo" if getattr(provider, 'provider', '') == "openrouter" else getattr(provider, '_default_model', 'gpt-3.5-turbo')
             response = await provider.chat(prompt, model)
             suggested = [p.strip() for p in response.content.split(",") if p.strip()]
-            valid_known = {"dns_lookup", "whois_lookup", "cert_transparency", "ip_geolocation", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"}
+            valid_known = {"dns_lookup", "whois_lookup", "cert_transparency", "ip_geolocation", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"}
+
             plugins = [p for p in suggested if p in valid_known]
             logger.info(f"AI Planner suggested: {plugins}")
             return plugins

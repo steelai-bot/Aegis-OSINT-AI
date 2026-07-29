@@ -5,6 +5,8 @@ Provides connection pooling, circuit breakers, rate limiting, and automatic retr
 
 import asyncio
 import logging
+from collections.abc import Callable
+from typing import Any, cast
 
 import httpx
 
@@ -25,8 +27,10 @@ class EnhancedHTTPClient:
     Combines connection pooling with circuit breakers, rate limiters, and retries.
     """
     _instance = None
+    _initialized: bool
     _client: httpx.AsyncClient | None = None
     _lock = asyncio.Lock()
+
 
     def __new__(cls):
         if cls._instance is None:
@@ -86,6 +90,7 @@ class EnhancedHTTPClient:
     def _get_circuit_breaker(self, domain: str) -> CircuitBreaker:
         """Get or create circuit breaker for specific domain"""
         if domain not in self._circuit_breakers:
+            assert self._infrastructure is not None, "HTTP client not initialized"
             config = CircuitBreakerConfig(
                 failure_threshold=5,
                 success_threshold=3,
@@ -100,6 +105,7 @@ class EnhancedHTTPClient:
     def _get_rate_limiter(self, domain: str) -> TokenBucketRateLimiter:
         """Get or create rate limiter for specific domain"""
         if domain not in self._rate_limiters:
+            assert self._infrastructure is not None, "HTTP client not initialized"
             # Default rate limits per domain
             self._rate_limiters[domain] = self._infrastructure.get_rate_limiter(
                 f"http_{domain}",
@@ -113,7 +119,9 @@ class EnhancedHTTPClient:
         """Get underlying HTTP client"""
         if self._client is None:
             await self.initialize()
+        assert self._client is not None, "HTTP client failed to initialize"
         return self._client
+
 
     async def request(
         self,
@@ -139,6 +147,8 @@ class EnhancedHTTPClient:
 
         if self._client is None:
             await self.initialize()
+        assert self._client is not None, "HTTP client failed to initialize"
+        client = self._client
 
         # Extract domain for per-domain protection
         parsed = urlparse(url)
@@ -148,7 +158,7 @@ class EnhancedHTTPClient:
         cb = self._get_circuit_breaker(domain) if use_circuit_breaker else None
         rl = self._get_rate_limiter(domain) if use_rate_limiter else None
 
-        async def _make_request():
+        async def _make_request() -> httpx.Response:
             # Rate limiting
             if rl:
                 acquired = await rl.acquire(timeout=30.0)
@@ -156,7 +166,7 @@ class EnhancedHTTPClient:
                     raise httpx.TimeoutException(f"Rate limit timeout for {domain}")
 
             # Make request
-            response = await self._client.request(method, url, **kwargs)
+            response = await client.request(method, url, **kwargs)
 
             # Adaptive rate limiting - detect rate limit headers
             if rl and rl.adaptive:
@@ -168,22 +178,20 @@ class EnhancedHTTPClient:
 
         # Wrap with circuit breaker
         if cb:
-            async def wrapped_call():
-                return await cb.call(_make_request)
+            async def wrapped_call() -> httpx.Response:
+                return await cb.call(cast(Callable[..., httpx.Response], _make_request))
         else:
             wrapped_call = _make_request
 
         # Execute with retry logic
         if use_retry and self._retry_config:
             return await self._retry_config.execute(
-                wrapped_call,
+                cast(Callable[..., httpx.Response], wrapped_call),
                 operation_name=f"{method} {url}"
             )
-        else:
-            result = wrapped_call()
-            if asyncio.iscoroutine(result):
-                return await result
-            return result
+        return await wrapped_call()
+
+
 
     async def get(self, url: str, **kwargs) -> httpx.Response:
         """GET request with full resilience"""
@@ -202,11 +210,12 @@ class EnhancedHTTPClient:
 
     def get_stats(self) -> dict:
         """Get comprehensive statistics"""
-        stats = {
+        stats: dict[str, Any] = {
             "client_initialized": self._client is not None,
             "circuit_breakers": {},
             "rate_limiters": {}
         }
+
 
         for name, cb in self._circuit_breakers.items():
             stats["circuit_breakers"][name] = cb.get_stats()

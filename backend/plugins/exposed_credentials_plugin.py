@@ -62,32 +62,33 @@ class ExposedCredentialsPlugin(BasePlugin):
 
             url = f"https://api.pwnedpasswords.com/range/{prefix}"
 
-            async with client.get(url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    if suffix in content:
-                        # Found in breach database
-                        count_line = [line for line in content.split('\n') if line.startswith(suffix)]
-                        if count_line:
-                            count = int(count_line[0].split(':')[0])
-                            results.append(PluginResponse(
-                                provider=self.metadata.name,
-                                entity_type=TargetType.EMAIL,
-                                confidence=0.95 if count < 1000 else 0.8,
-                                evidence=[{
-                                    "breached": True,
-                                    "breach_count": count,
-                                    "hash_suffix": suffix,
-                                    "source": "Have I Been Pwned",
-                                    "description": f"Email found in {count} data breaches",
-                                    "recommendation": "Immediately change passwords on affected accounts"
-                                }],
-                                raw={
-                                    "hashes": [prefix + suffix],
-                                    "breach_count": count,
-                                    "message": "Your password has previously appeared in data breaches. Check hiberqode.com to see if you have an account there."
-                                }
-                            ))
+            response = await client.get(url)
+            if response.status_code == 200:
+                content = response.text
+                if suffix in content:
+                    # Found in breach database
+                    count_line = [line for line in content.split('\n') if line.startswith(suffix)]
+                    if count_line:
+                        count = int(count_line[0].split(':')[1])
+                        results.append(PluginResponse(
+                            provider=self.metadata.name,
+                            entity_type=TargetType.EMAIL,
+                            confidence=0.95 if count < 1000 else 0.8,
+                            evidence=[{
+                                "breached": True,
+                                "breach_count": count,
+                                "hash_suffix": suffix,
+                                "source": "Have I Been Pwned",
+                                "description": f"Email found in {count} data breaches",
+                                "recommendation": "Immediately change passwords on affected accounts"
+                            }],
+                            raw={
+                                "hashes": [prefix + suffix],
+                                "breach_count": count,
+                                "message": "Your password has previously appeared in data breaches."
+                            }
+                        ))
+
         except Exception as e:
             logger.warning(f"Have I Been Pwned API error: {e}")
 
@@ -95,7 +96,8 @@ class ExposedCredentialsPlugin(BasePlugin):
 
     async def _scan_phone_breaches(self, client, phone: str) -> list[PluginResponse]:
         """Scan for exposed phone numbers using passive sources."""
-        results = []
+        results: list[PluginResponse] = []
+
 
         # Try to normalize phone number
         normalized_phone = self._normalize_phone(phone)
@@ -141,17 +143,18 @@ class ExposedCredentialsPlugin(BasePlugin):
         for site in paste_sites:
             try:
                 url = site.format(username=username)
-                async with client.get(url) as response:
-                    if response.status == 200:
-                        content = await response.text()
-                        if content:
-                            usernames_found.append({
-                                "source": site,
-                                "content": content[:500] + "..." if len(content) > 500 else content
-                            })
+                response = await client.get(url)
+                if response.status_code == 200:
+                    content = response.text
+                    if content:
+                        usernames_found.append({
+                            "source": site,
+                            "content": content[:500] + "..." if len(content) > 500 else content
+                        })
             except Exception as e:
                 logger.debug(f"Failed to search {site}: {e}")
                 continue
+
 
         if usernames_found:
             results.append(PluginResponse(
@@ -212,8 +215,9 @@ class ExposedCredentialsPlugin(BasePlugin):
 
         return results
 
-    def _normalize_phone(self, phone: str) -> str:
+    def _normalize_phone(self, phone: str) -> str | None:
         """Normalize phone number for consistent scanning."""
+
         import re
 
         # Remove non-digit characters except leading +
