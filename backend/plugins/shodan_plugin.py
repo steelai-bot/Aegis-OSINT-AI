@@ -3,7 +3,6 @@ Shodan OSINT Plugin - Internet of Things Search Engine
 Provides host lookup, IP analysis, domain scanning, and vulnerability detection
 """
 
-import asyncio
 import os
 from urllib.parse import quote
 
@@ -52,33 +51,33 @@ class ShodanPlugin(BasePlugin):
         try:
             api_key = await self._get_api_key()
             client = await EnhancedHTTPClient.get_client()
-            
+
             results = []
-            
+
             if target_type == TargetType.IP:
                 # IP-focused searches
                 results.extend(await self._ip_host_lookup(client, query, api_key))
                 results.extend(await self._ip_analysis(client, query, api_key))
-                
+
             elif target_type == TargetType.DOMAIN:
                 # Domain-focused searches
                 results.extend(await self._domain_dns_scan(client, query, api_key))
                 results.extend(await self._domain_reverse_dns(client, query, api_key))
-                
+
             elif target_type == TargetType.COMPANY:
                 # Organization-focused searches
                 results.extend(await self._organization_search(client, query, api_key))
-            
+
             # Always attempt vulnerability search for IPs
             if target_type in [TargetType.IP, TargetType.DOMAIN]:
                 results.extend(await self._vulnerability_search(client, query, api_key))
-            
+
             return results
-            
-        except ValueError as e:
+
+        except ValueError:
             # Missing API key
             return []
-        except Exception as e:
+        except Exception:
             return []
 
     async def _ip_host_lookup(self, client, ip: str, api_key: str) -> list[PluginResponse]:
@@ -89,12 +88,12 @@ class ShodanPlugin(BasePlugin):
         try:
             url = f"{self._base_url}/shodan/host/{quote(ip)}"
             params = {"key": api_key}
-            
+
             resp = await client.get(url, params=params)
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
+
                 evidence = {
                     "ip": data.get("ip_str"),
                     "ports": data.get("ports", []),
@@ -107,7 +106,7 @@ class ShodanPlugin(BasePlugin):
                     "last_update": data.get("last_update"),
                     "services_count": len(data.get("data", []))
                 }
-                
+
                 # Extract service details
                 services = []
                 for service in data.get("data", [])[:10]:  # Limit to first 10
@@ -118,11 +117,11 @@ class ShodanPlugin(BasePlugin):
                         "version": service.get("version"),
                         "banner": service.get("data", "")[:200]
                     })
-                
+
                 evidence["services"] = services
-                
+
                 confidence = 0.95 if data.get("ports") else 0.7
-                
+
                 return [PluginResponse(
                     provider=self.metadata.name,
                     entity_type=TargetType.IP,
@@ -130,10 +129,10 @@ class ShodanPlugin(BasePlugin):
                     evidence=[evidence],
                     raw=data
                 )]
-                
-        except Exception as e:
+
+        except Exception:
             pass
-        
+
         return []
 
     async def _ip_analysis(self, client, ip: str, api_key: str) -> list[PluginResponse]:
@@ -144,18 +143,18 @@ class ShodanPlugin(BasePlugin):
         try:
             url = f"{self._base_url}/shodan/host/{quote(ip)}/count"
             params = {"key": api_key}
-            
+
             resp = await client.get(url, params=params)
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
+
                 evidence = {
                     "analysis_type": "ip_extended",
                     "total_results": data.get("total", 0),
                     "query": ip
                 }
-                
+
                 return [PluginResponse(
                     provider=self.metadata.name,
                     entity_type=TargetType.IP,
@@ -163,10 +162,10 @@ class ShodanPlugin(BasePlugin):
                     evidence=[evidence],
                     raw=data
                 )]
-                
+
         except Exception:
             pass
-        
+
         return []
 
     async def _domain_dns_scan(self, client, domain: str, api_key: str) -> list[PluginResponse]:
@@ -177,23 +176,23 @@ class ShodanPlugin(BasePlugin):
         try:
             url = f"{self._base_url}/dns/domain/{quote(domain)}"
             params = {"key": api_key}
-            
+
             resp = await client.get(url, params=params)
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
+
                 subdomains = data.get("subdomains", [])
                 records = data.get("data", [])
-                
+
                 evidence = {
                     "domain": domain,
                     "subdomains_found": len(subdomains),
                     "subdomains": subdomains[:20],  # Limit output
-                    "record_types": list(set(r.get("type") for r in records if isinstance(r, dict))),
+                    "record_types": list({r.get("type") for r in records if isinstance(r, dict)}),
                     "total_records": len(records)
                 }
-                
+
                 # Group records by type
                 records_by_type = {}
                 for record in records:
@@ -205,11 +204,11 @@ class ShodanPlugin(BasePlugin):
                             "value": record.get("value"),
                             "last_seen": record.get("last_seen")
                         })
-                
+
                 evidence["records_by_type"] = records_by_type
-                
+
                 confidence = 0.9 if subdomains else 0.6
-                
+
                 return [PluginResponse(
                     provider=self.metadata.name,
                     entity_type=TargetType.DOMAIN,
@@ -217,10 +216,10 @@ class ShodanPlugin(BasePlugin):
                     evidence=[evidence],
                     raw=data
                 )]
-                
+
         except Exception:
             pass
-        
+
         return []
 
     async def _domain_reverse_dns(self, client, domain: str, api_key: str) -> list[PluginResponse]:
@@ -231,23 +230,23 @@ class ShodanPlugin(BasePlugin):
         try:
             url = f"{self._base_url}/dns/reverse/{quote(domain)}"
             params = {"key": api_key}
-            
+
             resp = await client.get(url, params=params)
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
+
                 ips = data.get("ips", [])
-                
+
                 evidence = {
                     "lookup_type": "reverse_dns",
                     "domain": domain,
                     "ips_found": len(ips),
                     "ips": ips[:50]  # Limit output
                 }
-                
+
                 confidence = 0.85 if ips else 0.5
-                
+
                 return [PluginResponse(
                     provider=self.metadata.name,
                     entity_type=TargetType.DOMAIN,
@@ -255,10 +254,10 @@ class ShodanPlugin(BasePlugin):
                     evidence=[evidence],
                     raw=data
                 )]
-                
+
         except Exception:
             pass
-        
+
         return []
 
     async def _organization_search(self, client, org_name: str, api_key: str) -> list[PluginResponse]:
@@ -273,15 +272,15 @@ class ShodanPlugin(BasePlugin):
                 "query": f'org:"{org_name}"',
                 "facets": "port:5,country:5,os:5"
             }
-            
+
             resp = await client.get(url, params=params)
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
+
                 matches = data.get("matches", [])
                 facets = data.get("facets", {})
-                
+
                 evidence = {
                     "organization": org_name,
                     "total_results": data.get("total", 0),
@@ -290,7 +289,7 @@ class ShodanPlugin(BasePlugin):
                     "top_countries": facets.get("country", []),
                     "top_os": facets.get("os", [])
                 }
-                
+
                 # Sample of discovered services
                 sample_services = []
                 for match in matches[:5]:
@@ -301,11 +300,11 @@ class ShodanPlugin(BasePlugin):
                             "product": match.get("product"),
                             "version": match.get("version")
                         })
-                
+
                 evidence["sample_services"] = sample_services
-                
+
                 confidence = 0.8 if data.get("total", 0) > 0 else 0.5
-                
+
                 return [PluginResponse(
                     provider=self.metadata.name,
                     entity_type=TargetType.COMPANY,
@@ -313,10 +312,10 @@ class ShodanPlugin(BasePlugin):
                     evidence=[evidence],
                     raw=data
                 )]
-                
+
         except Exception:
             pass
-        
+
         return []
 
     async def _vulnerability_search(self, client, query: str, api_key: str) -> list[PluginResponse]:
@@ -332,15 +331,15 @@ class ShodanPlugin(BasePlugin):
                 "query": f'hostname:"{query}" vuln:*',
                 "facets": "vuln:10"
             }
-            
+
             resp = await client.get(url, params=params)
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
+
                 matches = data.get("matches", [])
                 facets = data.get("facets", {})
-                
+
                 if matches:
                     vulns = []
                     for match in matches:
@@ -351,7 +350,7 @@ class ShodanPlugin(BasePlugin):
                                     "verified": vuln_data.get("verified", False),
                                     "references": vuln_data.get("references", [])[:3]
                                 })
-                    
+
                     evidence = {
                         "search_type": "vulnerability",
                         "target": query,
@@ -359,9 +358,9 @@ class ShodanPlugin(BasePlugin):
                         "vulnerabilities": vulns[:10],  # Limit output
                         "vuln_facets": facets.get("vuln", [])
                     }
-                    
+
                     confidence = 0.9 if vulns else 0.4
-                    
+
                     return [PluginResponse(
                         provider=self.metadata.name,
                         entity_type=TargetType.IP,
@@ -369,8 +368,8 @@ class ShodanPlugin(BasePlugin):
                         evidence=[evidence],
                         raw=data
                     )]
-                
+
         except Exception:
             pass
-        
+
         return []

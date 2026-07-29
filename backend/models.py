@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -10,7 +10,7 @@ def _utcnow():
     return datetime.now(UTC)
 
 
-class TargetType(str, Enum):
+class TargetType(StrEnum):
     DOMAIN = "domain"
     SUBDOMAIN = "subdomain"
     EMAIL = "email"
@@ -28,7 +28,7 @@ class TargetType(str, Enum):
     AUTO = "auto"
 
 
-class InvestigationStatus(str, Enum):
+class InvestigationStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -70,7 +70,7 @@ class InvestigationTemplate(BaseModel):
     steps: list[str] = Field(..., description="Standard sequence of plugins for this target type")
 
 
-class EntityType(str, Enum):
+class EntityType(StrEnum):
     DOMAIN = "domain"
     SUBDOMAIN = "subdomain"
     EMAIL = "email"
@@ -94,7 +94,7 @@ class Entity(BaseModel):
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
-class RelationshipType(str, Enum):
+class RelationshipType(StrEnum):
     RESOLVES_TO = "resolves_to"
     BELONGS_TO = "belongs_to"
     REGISTERED_TO = "registered_to"
@@ -114,7 +114,7 @@ class Relationship(BaseModel):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
-class TimelineEventType(str, Enum):
+class TimelineEventType(StrEnum):
     INVESTIGATION_CREATED = "investigation_created"
     PLANNING_COMPLETED = "planning_completed"
     PLUGIN_STARTED = "plugin_started"

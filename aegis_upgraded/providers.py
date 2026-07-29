@@ -37,7 +37,7 @@ class AIProvider:
         video_urls: list[str] | None = None,
     ) -> AIResponse:
         """Send a multimodal request (text + optional images/video).
-        
+
         Default implementation falls back to text-only chat.
         Override in providers that support vision/multimodal inputs.
         """
@@ -130,7 +130,7 @@ class GeminiProvider(AIProvider):
 class NvidiaProvider(AIProvider):
     """
     NVIDIA NIM provider with support for MiniMax-M3 and other models.
-    
+
     MiniMax-M3 is multimodal. To send images or video, set a message's
     "content" to an array of parts (a public URL or a base64 data URI):
         messages: [{ role: "user", content: [

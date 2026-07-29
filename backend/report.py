@@ -74,8 +74,10 @@ class ReportGenerator:
         high = sum(1 for f in findings if f.get("severity") == "high")
 
         status = "MANAGEABLE"
-        if risk.get("score", 0) >= 70: status = "SEVERE"
-        elif risk.get("score", 0) >= 40: status = "ELEVATED"
+        if risk.get("score", 0) >= 70:
+            status = "SEVERE"
+        elif risk.get("score", 0) >= 40:
+            status = "ELEVATED"
 
         return {
             "title": "Executive Summary",

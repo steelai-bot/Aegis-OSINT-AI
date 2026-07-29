@@ -261,7 +261,7 @@ async def get_provider(provider: str):
     try:
         return format_response(provider_manager.get_provider(provider))
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @app.get("/api/providers/{provider}/status")
@@ -270,7 +270,7 @@ async def get_provider_status(provider: str):
         p = provider_manager.get_provider(provider)
         return format_response({"status": p["status"]})
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @app.post("/api/providers/{provider}/configure")
@@ -279,7 +279,7 @@ async def configure_provider(provider: str, api_key: str | None = Form(None), us
     try:
         provider_manager.get_provider(provider)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
         config_data = {}
@@ -292,7 +292,7 @@ async def configure_provider(provider: str, api_key: str | None = Form(None), us
         provider_manager.configure_provider(provider, config_data)
         return format_response({"message": f"{provider} configured successfully."})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/providers/{provider}/test")
@@ -304,7 +304,7 @@ async def test_provider(provider: str):
         else:
             return format_response(success=False, errors=["Missing or invalid credentials."])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.delete("/api/providers/{provider}")
@@ -313,7 +313,7 @@ async def disconnect_provider(provider: str):
         provider_manager.disconnect_provider(provider)
         return format_response({"message": f"{provider} disconnected successfully."})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # Settings endpoints using Pydantic settings

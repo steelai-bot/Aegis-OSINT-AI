@@ -19,11 +19,11 @@ class BasePlugin(ABC):
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         """
         Execute the plugin's search logic.
-        
+
         Args:
             query: The target string (domain, IP, email, etc.)
             target_type: The type of the target.
-            
+
         Returns:
             A list of PluginResponse objects containing the findings.
         """

@@ -83,7 +83,7 @@ class PluginManager:
     def discover_plugins(self, package_path: str = "backend.plugins", watch_for_changes: bool = True):
         """
         Dynamically discovers and instantiates plugins from the specified package.
-        
+
         Args:
             package_path: Path to the plugins package
             watch_for_changes: If True, only rediscover if file modification times have changed
@@ -114,7 +114,7 @@ class PluginManager:
 
         try:
             package = importlib.import_module(package_path)
-            for loader, module_name, is_pkg in pkgutil.iter_modules(package.__path__):
+            for _loader, module_name, _is_pkg in pkgutil.iter_modules(package.__path__):
                 if module_name == "base":
                     continue
 

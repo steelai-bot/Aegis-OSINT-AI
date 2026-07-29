@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class ExposedCredentialsPlugin(BasePlugin):
     """
     Plugin to find exposed credentials (emails, passwords, phone numbers) in breach databases and paste sites.
-    
+
     This plugin uses free breach databases (Have I Been Pwned) and public paste sites to find
     exposed credentials without requiring API keys for basic functionality.
     """

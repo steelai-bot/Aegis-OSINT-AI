@@ -5,7 +5,6 @@ Provides comprehensive device discovery, vulnerability detection, and service en
 
 import logging
 import os
-from typing import Optional
 
 from backend.http_client import EnhancedHTTPClient
 from backend.models import PluginMetadata, PluginResponse, TargetType
@@ -22,8 +21,8 @@ class ShodanPlugin(BasePlugin):
     """
 
     def __init__(self):
-        self._client: Optional[EnhancedHTTPClient] = None
-        self._api_key: Optional[str] = None
+        self._client: EnhancedHTTPClient | None = None
+        self._api_key: str | None = None
 
     @property
     def metadata(self) -> PluginMetadata:
@@ -49,7 +48,7 @@ class ShodanPlugin(BasePlugin):
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         self._api_key = os.getenv("SHODAN_API_KEY")
-        
+
         if not self._api_key:
             logger.warning("ShodanPlugin: SHODAN_API_KEY not configured")
             return []
@@ -58,21 +57,21 @@ class ShodanPlugin(BasePlugin):
             client = await self._get_client()
             base_url = "https://api.shodan.io"
             headers = {"Authorization": f"Bearer {self._api_key}"}
-            
+
             if target_type == TargetType.IP:
                 # Host lookup for specific IP
                 findings.extend(await self._host_lookup(client, base_url, headers, query))
                 # Search for related devices
                 findings.extend(await self._ip_search(client, base_url, headers, query))
-                
+
             elif target_type == TargetType.DOMAIN:
                 # DNS resolution and domain search
                 findings.extend(await self._domain_search(client, base_url, headers, query))
-                
+
             elif target_type == TargetType.COMPANY:
                 # Organization search
                 findings.extend(await self._org_search(client, base_url, headers, query))
-            
+
             # Vulnerability scan if CVEs found
             if any(f.evidence for f in findings if 'vulns' in str(f.raw)):
                 findings.extend(await self._vuln_scan(client, base_url, headers, query))
@@ -83,25 +82,25 @@ class ShodanPlugin(BasePlugin):
         return findings
 
     async def _host_lookup(
-        self, 
-        client: EnhancedHTTPClient, 
-        base_url: str, 
-        headers: dict, 
+        self,
+        client: EnhancedHTTPClient,
+        base_url: str,
+        headers: dict,
         ip: str
     ) -> list[PluginResponse]:
         """Detailed host information lookup"""
         try:
             url = f"{base_url}/shodan/host/{ip}"
             params = {"minify": False}
-            
+
             resp = await client.get(
-                url, 
-                headers=headers, 
+                url,
+                headers=headers,
                 params=params,
                 use_cache=True,
                 cache_ttl=3600.0  # Cache for 1 hour
             )
-            
+
             if resp.status_code == 200:
                 data = resp.json()
                 evidence = {
@@ -116,7 +115,7 @@ class ShodanPlugin(BasePlugin):
                     "last_update": data.get("last_update"),
                     "vulnerabilities": data.get("vulns", {}).keys() if data.get("vulns") else []
                 }
-                
+
                 # Extract services with details
                 services = []
                 for banner in data.get("data", []):
@@ -127,11 +126,11 @@ class ShodanPlugin(BasePlugin):
                         "version": banner.get("version"),
                         "banner": banner.get("data", "")[:500]  # Truncate long banners
                     })
-                
+
                 evidence["services"] = services
-                
+
                 confidence = 0.95 if data.get("ports") else 0.7
-                
+
                 return [PluginResponse(
                     provider=self.metadata.name,
                     entity_type=TargetType.IP,
@@ -139,10 +138,10 @@ class ShodanPlugin(BasePlugin):
                     evidence=[evidence],
                     raw=data
                 )]
-                
+
         except Exception as e:
             logger.error(f"Shodan host lookup failed for {ip}: {e}")
-        
+
         return []
 
     async def _ip_search(
@@ -160,7 +159,7 @@ class ShodanPlugin(BasePlugin):
                 "page": 1,
                 "minify": False
             }
-            
+
             resp = await client.get(
                 url,
                 headers=headers,
@@ -168,18 +167,18 @@ class ShodanPlugin(BasePlugin):
                 use_cache=True,
                 cache_ttl=1800.0
             )
-            
+
             if resp.status_code == 200:
                 data = resp.json()
                 total = data.get("total", 0)
-                
+
                 evidence = {
                     "search_type": "ip",
                     "query": ip,
                     "total_results": total,
                     "matches": []
                 }
-                
+
                 for match in data.get("matches", [])[:10]:  # Limit to 10 results
                     evidence["matches"].append({
                         "ip": match.get("ip_str"),
@@ -187,7 +186,7 @@ class ShodanPlugin(BasePlugin):
                         "country": match.get("geo", {}).get("country_name"),
                         "org": match.get("org")
                     })
-                
+
                 if total > 0:
                     return [PluginResponse(
                         provider=self.metadata.name,
@@ -196,10 +195,10 @@ class ShodanPlugin(BasePlugin):
                         evidence=[evidence],
                         raw=data
                     )]
-                    
+
         except Exception as e:
             logger.error(f"Shodan IP search failed for {ip}: {e}")
-        
+
         return []
 
     async def _domain_search(
@@ -212,30 +211,30 @@ class ShodanPlugin(BasePlugin):
         """Search for domain-related hosts"""
         try:
             url = f"{base_url}/dns/domain/{domain}"
-            
+
             resp = await client.get(
                 url,
                 headers=headers,
                 use_cache=True,
                 cache_ttl=3600.0
             )
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
+
                 evidence = {
                     "domain": domain,
                     "subdomains": [],
                     "record_types": set()
                 }
-                
+
                 for record in data.get("data", []):
                     evidence["subdomains"].append(record.get("subdomain"))
                     evidence["record_types"].add(record.get("type"))
-                
+
                 evidence["record_types"] = list(evidence["record_types"])
                 evidence["total_records"] = len(data.get("data", []))
-                
+
                 if evidence["subdomains"]:
                     return [PluginResponse(
                         provider=self.metadata.name,
@@ -244,10 +243,10 @@ class ShodanPlugin(BasePlugin):
                         evidence=[evidence],
                         raw=data
                     )]
-                    
+
         except Exception as e:
             logger.error(f"Shodan domain search failed for {domain}: {e}")
-        
+
         return []
 
     async def _org_search(
@@ -265,7 +264,7 @@ class ShodanPlugin(BasePlugin):
                 "page": 1,
                 "minify": False
             }
-            
+
             resp = await client.get(
                 url,
                 headers=headers,
@@ -273,10 +272,10 @@ class ShodanPlugin(BasePlugin):
                 use_cache=True,
                 cache_ttl=1800.0
             )
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
+
                 evidence = {
                     "organization": org_name,
                     "total_hosts": data.get("total", 0),
@@ -284,20 +283,20 @@ class ShodanPlugin(BasePlugin):
                     "countries": set(),
                     "top_services": {}
                 }
-                
+
                 for match in data.get("matches", [])[:20]:
                     for port in match.get("ports", []):
                         evidence["unique_ports"].add(port)
-                    
+
                     country = match.get("geo", {}).get("country_name", "Unknown")
                     evidence["countries"].add(country)
-                    
+
                     # Count services
                     for banner in match.get("data", []):
                         service = banner.get("product", "unknown")
                         evidence["top_services"][service] = evidence["top_services"].get(service, 0) + 1
-                
-                evidence["unique_ports"] = sorted(list(evidence["unique_ports"]))
+
+                evidence["unique_ports"] = sorted(evidence["unique_ports"])
                 evidence["countries"] = list(evidence["countries"])
                 evidence["top_services"] = dict(
                     sorted(
@@ -306,7 +305,7 @@ class ShodanPlugin(BasePlugin):
                         reverse=True
                     )[:10]
                 )
-                
+
                 if data.get("total", 0) > 0:
                     return [PluginResponse(
                         provider=self.metadata.name,
@@ -315,10 +314,10 @@ class ShodanPlugin(BasePlugin):
                         evidence=[evidence],
                         raw=data
                     )]
-                    
+
         except Exception as e:
             logger.error(f"Shodan org search failed for {org_name}: {e}")
-        
+
         return []
 
     async def _vuln_scan(
@@ -335,7 +334,7 @@ class ShodanPlugin(BasePlugin):
                 "query": f'vuln:{query}',
                 "page": 1
             }
-            
+
             resp = await client.get(
                 url,
                 headers=headers,
@@ -343,16 +342,16 @@ class ShodanPlugin(BasePlugin):
                 use_cache=True,
                 cache_ttl=900.0
             )
-            
+
             if resp.status_code == 200:
                 data = resp.json()
-                
+
                 evidence = {
                     "vulnerability_search": query,
                     "affected_hosts": data.get("total", 0),
                     "cve_details": []
                 }
-                
+
                 for match in data.get("matches", [])[:5]:
                     vulns = match.get("vulns", {})
                     for cve, details in vulns.items():
@@ -361,7 +360,7 @@ class ShodanPlugin(BasePlugin):
                             "verified": details.get("verified", False),
                             "references": details.get("references", [])[:3]
                         })
-                
+
                 if evidence["affected_hosts"] > 0:
                     return [PluginResponse(
                         provider=self.metadata.name,
@@ -370,8 +369,8 @@ class ShodanPlugin(BasePlugin):
                         evidence=[evidence],
                         raw=data
                     )]
-                    
+
         except Exception as e:
             logger.error(f"Shodan vulnerability scan failed: {e}")
-        
+
         return []
