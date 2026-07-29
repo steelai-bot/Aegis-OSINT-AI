@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -23,6 +24,12 @@ logger = logging.getLogger(__name__)
 MAX_EVIDENCE_STRING_LENGTH = 10000
 MAX_EVIDENCE_LIST_LENGTH = 100
 
+# Pre-compiled regex for common patterns in entity extraction
+EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+DOMAIN_PATTERN = re.compile(r'^[a-zA-Z0-9.-]+\.(com|net|org|io|co|dev|edu|gov|mil|int)$', re.IGNORECASE)
+IPV4_PATTERN = re.compile(r'^(\d{1,3}\.){3}\d{1,3}$')
+GITHUB_PATTERN = re.compile(r'github\.com/[\w-]+/?[\w-]*')
+
 
 def _safe_json_dumps(obj: Any) -> str:
     """Safely serialize an object to JSON, handling Pydantic models, datetime/date objects, and arbitrary fallbacks."""
@@ -36,10 +43,12 @@ def _safe_json_dumps(obj: Any) -> str:
         return str(o)
 
     try:
-        return json.dumps(obj, default=default_serializer)
+        return json.dumps(obj, default=default_serializer, separators=(',', ':'))
     except Exception:
         # Fallback to stringifying everything recursively or top-level if needed
-        return json.dumps(str(obj))
+        return json.dumps(str(obj), separators=(',', ':'))
+
+
 def _truncate_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Truncate large values in evidence to reduce DB size and memory usage."""
     truncated = []
@@ -144,6 +153,7 @@ class SQLiteStorage(StorageInterface):
             await self._connection.execute("PRAGMA synchronous=NORMAL")
             await self._connection.execute("PRAGMA cache_size=-64000")
             await self._connection.execute("PRAGMA temp_store=MEMORY")
+            await self._connection.execute("PRAGMA busy_timeout=5000")
             await self._init_db()
         return self._connection
 
@@ -414,10 +424,15 @@ class SQLiteStorage(StorageInterface):
         conn = await self._get_connection()
         cursor = await conn.cursor()
         evidence = _truncate_evidence(evidence)
-        for item in evidence:
-            await cursor.execute(
+        # Batch insert for better performance
+        values = [
+            (target_id, provider, "osint_discovery", "info", confidence, _safe_json_dumps(item))
+            for item in evidence
+        ]
+        if values:
+            await cursor.executemany(
                 "INSERT INTO findings (target_id, source, category, severity, confidence, data) VALUES (?, ?, ?, ?, ?, ?)",
-                (target_id, provider, "osint_discovery", "info", confidence, _safe_json_dumps(item))
+                values
             )
-        if not self._transaction_active.get():
-            await conn.commit()
+            if not self._transaction_active.get():
+                await conn.commit()

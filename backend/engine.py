@@ -213,57 +213,61 @@ class InvestigationEngine:
     def extract_entities(self, response: PluginResponse, target_id: int) -> list[Entity]:
         """Parse plugin evidence to identify entities (domain, email, github, etc.)."""
         entities: list[Entity] = []
+        seen_values: set[str] = set()
 
         # Helper to add entity if not duplicate
         def add_entity(etype: EntityType, value: str, confidence: float = 0.8, display: str | None = None):
             if value and value.strip():
-                entities.append(Entity(
-                    type=etype,
-                    value=value.strip(),
-                    display_name=display,
-                    confidence=confidence,
-                    metadata_json={"source": response.provider}
-                ))
+                normalized = value.strip().lower()
+                if normalized not in seen_values:
+                    seen_values.add(normalized)
+                    entities.append(Entity(
+                        type=etype,
+                        value=value.strip(),
+                        display_name=display,
+                        confidence=confidence,
+                        metadata_json={"source": response.provider}
+                    ))
+
+        # Pre-compiled patterns (imported from storage module)
+        from backend.storage import EMAIL_PATTERN, DOMAIN_PATTERN, IPV4_PATTERN, GITHUB_PATTERN
 
         # Extract from evidence
         for ev in response.evidence:
             if not isinstance(ev, dict):
                 continue
 
-            # Common patterns
             for _key, val in ev.items():
                 if isinstance(val, str):
-                    # Email
-                    if '@' in val and '.' in val.split('@')[-1]:
+                    # Email - use regex for accuracy
+                    if EMAIL_PATTERN.match(val):
                         add_entity(EntityType.EMAIL, val, response.confidence)
-                    # Domain
-                    elif '.' in val and ' ' not in val and not val.startswith('http'):
-                        if any(tld in val.lower() for tld in ['.com', '.net', '.org', '.io', '.co', '.dev']):
-                            add_entity(EntityType.DOMAIN, val, response.confidence)
-                    # GitHub
-                    elif 'github.com/' in val:
+                    # Domain - use regex
+                    elif DOMAIN_PATTERN.match(val):
+                        add_entity(EntityType.DOMAIN, val, response.confidence)
+                    # GitHub URL
+                    elif GITHUB_PATTERN.search(val):
                         add_entity(EntityType.GITHUB, val, response.confidence)
-                    # IP
-                    elif val.replace('.', '').isdigit() and val.count('.') == 3:
+                    # IPv4 address
+                    elif IPV4_PATTERN.match(val):
                         add_entity(EntityType.IP, val, response.confidence)
 
                 # Handle lists of values
-                if isinstance(val, list):
+                elif isinstance(val, list):
                     for item in val:
-                        if isinstance(item, str) and '@' in item:
+                        if isinstance(item, str) and EMAIL_PATTERN.match(item):
                             add_entity(EntityType.EMAIL, item, response.confidence)
 
         # Extract from raw data
         raw = response.raw
         if isinstance(raw, dict):
-            # Check for common keys
             if 'emails' in raw:
                 for email in raw['emails']:
-                    if isinstance(email, str):
+                    if isinstance(email, str) and EMAIL_PATTERN.match(email):
                         add_entity(EntityType.EMAIL, email, response.confidence)
             if 'domains' in raw:
                 for domain in raw['domains']:
-                    if isinstance(domain, str):
+                    if isinstance(domain, str) and DOMAIN_PATTERN.match(domain):
                         add_entity(EntityType.DOMAIN, domain, response.confidence)
 
         return entities
