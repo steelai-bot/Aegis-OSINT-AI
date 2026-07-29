@@ -49,17 +49,17 @@
                     }
                 } catch (_) {}
                 if (resultDiv) {
-                    resultDiv.innerHTML = `<div class=" bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-    <p class="text-red-400 text-sm font-mono flex items-center gap-2"><i data-lucide="alert-triangle"
-            class="w-4 h-4"></i> ${errText}</p>
+                    resultDiv.innerHTML = `<div class='bg-red-500/10 border border-red-500/30 rounded-lg p-4'>
+    <p class='text-red-400 text-sm font-mono flex items-center gap-2'><i data-lucide='alert-triangle'
+            class='w-4 h-4'></i> ${errText}</p>
 </div>`;
 lucide.createIcons();
 }
 }
 } catch (e) {
 if (resultDiv) {
-resultDiv.innerHTML = `<div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-    <p class="text-red-400 text-sm">Network error: ${e.message}</p>
+resultDiv.innerHTML = `<div class='bg-red-500/10 border border-red-500/30 rounded-lg p-4'>
+    <p class='text-red-400 text-sm'>Network error: ${e.message}</p>
 </div>`;
 lucide.createIcons();
 }
@@ -276,10 +276,10 @@ if (spinner) spinner.classList.add('hidden');
             }
         } catch (e) {
             console.error('Failed to load dashboard stats:', e);
-            document.getElementById('stat-targets')?.textContent = '0';
-            document.getElementById('stat-findings')?.textContent = '0';
-            document.getElementById('stat-entities')?.textContent = '0';
-            document.getElementById('stat-plugins')?.textContent = '0';
+            ['stat-targets', 'stat-findings', 'stat-entities', 'stat-plugins'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '0';
+            });
         }
     }
 
