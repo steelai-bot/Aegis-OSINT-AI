@@ -1,0 +1,55 @@
+<!-- Investigations list partial -->
+{% if targets %}
+<div class="divide-y divide-border">
+    {% for target in targets %}
+    <div class="p-5 hover:bg-background/40 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary flex-shrink-0 mt-0.5">
+                <i data-lucide="target" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-3 mb-1.5 flex-wrap">
+                    <h4 class="font-semibold text-foreground text-base font-mono">{{ target['query'] }}</h4>
+                    <span class="px-2.5 py-0.5 text-xs font-mono rounded-full font-semibold uppercase tracking-wider
+                                {% if target['status'] == 'completed' %}bg-success/15 text-success border border-success/30
+                                {% elif target['status'] == 'running' %}bg-primary/15 text-primary border border-primary/30 animate-pulse
+                                {% elif target['status'] == 'failed' %}bg-danger/15 text-danger border border-danger/30
+                                {% else %}bg-gray-500/15 text-gray-400 border border-gray-500/30{% endif %}">
+                        {{ target['status'] }}
+                    </span>
+                </div>
+                <div class="text-xs font-mono text-muted flex items-center gap-4">
+                    <span>Vector: <strong class="text-foreground uppercase">{{ target['target_type'] or 'auto' }}</strong></span>
+                    <span>Created: <strong class="text-foreground">{{ target['created_at'] }}</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="/results/{{ target['id'] }}"
+               class="px-4 py-2 bg-primary text-background font-semibold rounded-lg hover:bg-primary-dark transition-colors text-xs flex items-center gap-2 shadow-sm">
+                <i data-lucide="eye" class="w-4 h-4"></i>
+                View Intelligence
+            </a>
+            <button hx-delete="/api/targets/{{ target['id'] }}"
+                    hx-confirm="Are you sure you want to delete investigation {{ target['query'] }}?"
+                    hx-target="closest .p-5"
+                    hx-swap="outerHTML"
+                    class="px-3 py-2 bg-danger/10 text-danger border border-danger/30 font-semibold rounded-lg hover:bg-danger hover:text-white transition-colors text-xs flex items-center gap-1.5 shadow-sm">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                Delete
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<script>lucide.createIcons();</script>
+{% else %}
+<div class="p-12 text-center text-muted font-mono text-xs">
+    <i data-lucide="radar" class="w-16 h-16 mx-auto mb-4 opacity-40 text-primary"></i>
+    <p class="mb-4 text-sm font-sans">No investigation records found in storage.</p>
+    <a href="/" class="px-5 py-2.5 bg-primary text-background font-semibold rounded-lg hover:bg-primary-dark transition-colors inline-block text-xs">
+        Initialize First Target
+    </a>
+</div>
+{% endif %}

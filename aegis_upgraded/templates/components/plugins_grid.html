@@ -1,0 +1,65 @@
+<!-- Plugin Cards Grid Component -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+{% if plugins %}
+    {% for plugin in plugins %}
+    <div class="bg-card rounded-lg border border-border p-5 hover:border-primary/50 transition-colors">
+        <div class="flex items-start justify-between mb-3">
+            <div>
+                <h4 class="font-semibold text-lg">{{ plugin.name }}</h4>
+                <span class="text-xs text-muted">v{{ plugin.version }}</span>
+            </div>
+            {% if plugin.status == "enabled" %}
+            <span class="px-2 py-1 text-xs bg-green-500/10 text-green-400 rounded-full">Enabled</span>
+            {% elif plugin.status == "disabled" %}
+            <span class="px-2 py-1 text-xs bg-red-500/10 text-red-400 rounded-full">Disabled</span>
+            {% else %}
+            <span class="px-2 py-1 text-xs bg-yellow-500/10 text-yellow-400 rounded-full">Unknown</span>
+            {% endif %}
+        </div>
+
+        <p class="text-sm text-muted mb-3">{{ plugin.description }}</p>
+
+        {% if plugin.error %}
+        <div class="bg-red-500/10 border border-red-500/30 rounded p-2 mb-3">
+            <p class="text-xs text-red-400">{{ plugin.error }}</p>
+        </div>
+        {% endif %}
+
+        {% if plugin.supported_entity_types %}
+        <div class="flex flex-wrap gap-1 mb-3">
+            {% for entity_type in plugin.supported_entity_types %}
+            <span class="px-2 py-0.5 text-xs bg-primary/10 text-primary rounded">{{ entity_type }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="text-xs text-muted space-y-1">
+            {% if plugin.required_api_keys %}
+            <div class="flex items-center gap-2">
+                <i data-lucide="key" class="w-3 h-3"></i>
+                <span>Requires: {{ plugin.required_api_keys | join(", ") }}</span>
+            </div>
+            {% endif %}
+            {% if plugin.dependencies %}
+            <div class="flex items-center gap-2">
+                <i data-lucide="link" class="w-3 h-3"></i>
+                <span>Dependencies: {{ plugin.dependencies | join(", ") }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="col-span-full text-center py-12 text-muted">
+        <i data-lucide="package" class="w-16 h-16 mx-auto mb-4 opacity-50"></i>
+        <p>No plugins discovered</p>
+    </div>
+{% endif %}
+</div>
+
+<script>
+    document.body.addEventListener('htmx:afterSwap', () => {
+        lucide.createIcons();
+    });
+    lucide.createIcons();
+</script>
