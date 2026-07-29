@@ -52,7 +52,7 @@ class UsernamePlugin(BasePlugin):
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         found = []
-        client = await SharedHTTPClient.get_client()
+        client = await SharedHTTPClient().get_client()
 
         tasks = [self._check_platform(client, platform, query) for platform in PLATFORMS]
         results = await asyncio.gather(*tasks, return_exceptions=True)

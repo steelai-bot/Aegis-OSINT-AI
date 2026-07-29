@@ -28,7 +28,7 @@ class EmailPlugin(BasePlugin):
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
         api_key = os.getenv("HUNTER_API_KEY")
-        client = await SharedHTTPClient.get_client()
+        client = await SharedHTTPClient().get_client()
 
         if api_key:
             try:

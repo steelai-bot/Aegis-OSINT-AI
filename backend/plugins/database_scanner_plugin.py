@@ -31,7 +31,7 @@ class DatabaseScannerPlugin(BasePlugin):
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
-        client = await SharedHTTPClient.get_client()
+        client = await SharedHTTPClient().get_client()
 
         if target_type == TargetType.DOMAIN:
             findings.extend(await self._scan_domain_databases(client, query))

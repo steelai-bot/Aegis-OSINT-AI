@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import sqlite3
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -33,6 +33,7 @@ DATABASE_PATH = settings.database_path
 
 
 # --- Database Context Manager ---
+@contextmanager
 def get_db():
     """Context manager for SQLite connections - auto-closes on exit."""
     os.makedirs(os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True)
@@ -109,8 +110,8 @@ async def lifespan(app: FastAPI):
     # Cleanup on shutdown
     if hasattr(app.state, 'storage'):
         await app.state.storage.close()
-    from backend.http_client import SharedHTTPClient
-    await SharedHTTPClient.close()
+    from backend.http_client import close_shared_client
+    await close_shared_client()
 
 
 # Initialize FastAPI app
@@ -141,6 +142,7 @@ def format_response(data: Any = None, success: bool = True, errors: list[str] = 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled exception: {exc}")
     return JSONResponse(
         status_code=500,
         content=format_response(success=False, errors=[str(exc)])
@@ -351,10 +353,7 @@ async def save_app_settings(payload: dict[str, str]):
 
 @app.post("/api/targets")
 async def create_target(payload: TargetCreate):
-    conn_gen = get_db()
-    conn = None
-    try:
-        conn = next(conn_gen)
+    with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO targets (query, target_type) VALUES (?, ?)",
@@ -362,9 +361,6 @@ async def create_target(payload: TargetCreate):
         )
         target_id = cursor.lastrowid
         conn.commit()
-    finally:
-        if conn:
-            conn.close()
 
     return format_response({
         "id": target_id,
@@ -378,19 +374,13 @@ async def create_target(payload: TargetCreate):
 @app.get("/api/targets")
 async def list_targets(request: Request, format: str = "json", limit: int | None = None):
     """Return targets as JSON or HTML partial."""
-    conn_gen = get_db()
-    conn = None
-    try:
-        conn = next(conn_gen)
+    with get_db() as conn:
         cursor = conn.cursor()
         if limit:
             cursor.execute("SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC LIMIT ?", (limit,))
         else:
             cursor.execute("SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC")
         rows = cursor.fetchall()
-    finally:
-        if conn:
-            conn.close()
 
     targets = [{"id": r[0], "query": r[1], "target_type": r[2], "status": r[3], "created_at": r[4]} for r in rows]
 
@@ -406,18 +396,12 @@ async def list_targets(request: Request, format: str = "json", limit: int | None
 @app.delete("/api/targets/{target_id}")
 async def delete_target(target_id: int, request: Request):
     """Delete target and associated findings from database."""
-    conn_gen = get_db()
-    conn = None
-    try:
-        conn = next(conn_gen)
+    with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM findings WHERE target_id = ?", (target_id,))
         cursor.execute("DELETE FROM reports WHERE target_id = ?", (target_id,))
         cursor.execute("DELETE FROM targets WHERE id = ?", (target_id,))
         conn.commit()
-    finally:
-        if conn:
-            conn.close()
 
     if request.headers.get("HX-Request"):
         return HTMLResponse(content="")
@@ -427,36 +411,23 @@ async def delete_target(target_id: int, request: Request):
 @app.get("/api/stats")
 async def get_stats(request: Request = None):
     """Get system stats overview."""
-    conn_gen = get_db()
-    conn = None
-    targets_count = 0
-    findings_count = 0
-    try:
-        conn = next(conn_gen)
+    with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM targets")
         targets_count = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM findings")
         findings_count = cursor.fetchone()[0]
-    finally:
-        if conn:
-            conn.close()
 
     storage = getattr(request.app.state, "storage", None) if hasattr(request, "app") else getattr(app.state, "storage", None)
     entities_count = 0
     if storage:
-        conn_gen = get_db()
-        conn = None
         try:
-            conn = next(conn_gen)
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM entities")
-            entities_count = cursor.fetchone()[0]
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM entities")
+                entities_count = cursor.fetchone()[0]
         except Exception:
             entities_count = 0
-        finally:
-            if conn:
-                conn.close()
 
     from backend.plugin_manager import PluginManager
     pm = PluginManager()
@@ -470,9 +441,8 @@ async def get_stats(request: Request = None):
     })
 
 
-
 @app.post("/api/search")
-async def search(request: Request, query: str = Form(...), target_type: str | None = Form("auto"), format: str = "json"):
+async def search(request: Request, query: str = Form(...), target_type: str | None = Form("auto")):
     """Start investigation and return JSON or HTML partial."""
     # 1. Determine target type
     target_type_str = target_type or "auto"
@@ -498,10 +468,7 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
         target_type_obj = TargetType.DOMAIN
 
     # 2. Create target in DB
-    conn_gen = get_db()
-    conn = None
-    try:
-        conn = next(conn_gen)
+    with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO targets (query, target_type, status) VALUES (?, ?, ?)",
@@ -509,9 +476,6 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
         )
         target_id = cursor.lastrowid
         conn.commit()
-    finally:
-        if conn:
-            conn.close()
 
     # 3. Run investigation safely
     from backend.engine import InvestigationEngine
@@ -530,7 +494,7 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
     relationships = [r.model_dump() for r in await storage.get_relationships_for_target(target_id)]
     timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
 
-    is_html_req = format == "html" or request.headers.get("HX-Request") or "text/html" in request.headers.get("accept", "")
+    is_html_req = request.headers.get("HX-Request") or "text/html" in request.headers.get("accept", "")
     if is_html_req:
         return templates.TemplateResponse(
             request=request,
@@ -612,10 +576,7 @@ async def list_plugins(request: Request):
 
 @app.get("/api/findings")
 async def list_findings(target_id: int | None = None):
-    conn_gen = get_db()
-    conn = None
-    try:
-        conn = next(conn_gen)
+    with get_db() as conn:
         cursor = conn.cursor()
 
         if target_id:
@@ -624,9 +585,6 @@ async def list_findings(target_id: int | None = None):
             cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings ORDER BY created_at DESC")
 
         rows = cursor.fetchall()
-    finally:
-        if conn:
-            conn.close()
 
     findings = [
         {
@@ -640,19 +598,13 @@ async def list_findings(target_id: int | None = None):
 
 @app.post("/api/reports")
 async def create_report(payload: ReportRequest):
-    conn_gen = get_db()
-    conn = None
-    try:
-        conn = next(conn_gen)
+    with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, query, target_type, status, created_at FROM targets WHERE id = ?", (payload.target_id,))
         target_row = cursor.fetchone()
 
         cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (payload.target_id,))
         finding_rows = cursor.fetchall()
-    finally:
-        if conn:
-            conn.close()
 
     if not target_row:
         raise HTTPException(status_code=404, detail="Target not found")
@@ -683,20 +635,14 @@ async def create_report(payload: ReportRequest):
     generator = ReportGenerator()
     report_content = generator.generate(payload.format, target, findings, entities, relationships, timeline)
 
-    conn_gen2 = get_db()
-    conn2 = None
-    try:
-        conn2 = next(conn_gen2)
-        cursor = conn2.cursor()
+    with get_db() as conn:
+        cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO reports (target_id, format, content) VALUES (?, ?, ?)",
             (payload.target_id, payload.format, report_content)
         )
         report_id = cursor.lastrowid
-        conn2.commit()
-    finally:
-        if conn2:
-            conn2.close()
+        conn.commit()
 
     return format_response({
         "report_id": report_id,
@@ -708,16 +654,10 @@ async def create_report(payload: ReportRequest):
 
 @app.get("/api/reports/{report_id}")
 async def get_report(report_id: int):
-    conn_gen = get_db()
-    conn = None
-    try:
-        conn = next(conn_gen)
+    with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, target_id, format, content, created_at FROM reports WHERE id = ?", (report_id,))
         row = cursor.fetchone()
-    finally:
-        if conn:
-            conn.close()
 
     if not row:
         raise HTTPException(status_code=404, detail="Report not found")

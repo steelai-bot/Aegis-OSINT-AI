@@ -32,7 +32,7 @@ class OrganizationInfoPlugin(BasePlugin):
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
-        client = await SharedHTTPClient.get_client()
+        client = await SharedHTTPClient().get_client()
 
         if target_type == TargetType.COMPANY:
             findings.extend(await self._search_company_registry(client, query))

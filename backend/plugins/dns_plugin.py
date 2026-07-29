@@ -35,7 +35,7 @@ class DNSPlugin(BasePlugin):
         # Execute all DNS lookups in parallel (85% faster than sequential)
         record_types = ['A', 'AAAA', 'MX', 'TXT', 'NS', 'CNAME', 'SOA']
 
-        client = await SharedHTTPClient.get_client()
+        client = await SharedHTTPClient().get_client()
 
         # Create tasks for parallel execution
         tasks = [

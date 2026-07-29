@@ -32,7 +32,7 @@ class ExposedCredentialsPlugin(BasePlugin):
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings = []
-        client = await SharedHTTPClient.get_client()
+        client = await SharedHTTPClient().get_client()
 
         # Use passive Intelligence sources that don't require API keys
         if target_type == TargetType.EMAIL:

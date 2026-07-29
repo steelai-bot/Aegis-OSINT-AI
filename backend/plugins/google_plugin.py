@@ -29,7 +29,7 @@ class GooglePlugin(BasePlugin):
         findings = []
         api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
         cx = os.getenv("GOOGLE_SEARCH_CX")
-        client = await SharedHTTPClient.get_client()
+        client = await SharedHTTPClient().get_client()
 
         if api_key and cx:
             try:

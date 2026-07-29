@@ -36,7 +36,7 @@ class MetadataPlugin(BasePlugin):
             return findings
 
         try:
-            client = await SharedHTTPClient.get_client()
+            client = await SharedHTTPClient().get_client()
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
             if resp.status_code == 200:
                 content = resp.text

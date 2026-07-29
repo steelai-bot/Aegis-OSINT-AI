@@ -32,7 +32,7 @@ class GithubPlugin(BasePlugin):
         headers = {"Authorization": f"token {token}"} if token else {}
 
         try:
-            client = await SharedHTTPClient.get_client()
+            client = await SharedHTTPClient().get_client()
             # Search for users matching the query
             url = f"https://api.github.com/search/users?q={query}"
             resp = await client.get(url, headers=headers)

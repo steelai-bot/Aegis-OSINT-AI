@@ -29,7 +29,7 @@ class CertTransparencyPlugin(BasePlugin):
             return []
 
         try:
-            client = await SharedHTTPClient.get_client()
+            client = await SharedHTTPClient().get_client()
             url = f'https://crt.sh/?q=%.{quote(domain)}&output=json'
             resp = await client.get(url)
             if resp.status_code == 200:

@@ -65,8 +65,8 @@ class EnhancedHTTPClient:
                 self._client = httpx.AsyncClient(
                     timeout=httpx.Timeout(30.0, connect=10.0),
                     limits=httpx.Limits(
-                        max_connections=100,          # Increased from 50
-                        max_keepalive_connections=50   # Increased from 20
+                        max_connections=100,
+                        max_keepalive_connections=50
                     ),
                     follow_redirects=True,
                     headers={
@@ -168,7 +168,8 @@ class EnhancedHTTPClient:
 
         # Wrap with circuit breaker
         if cb:
-            wrapped_call = lambda: cb.call(_make_request)
+            async def wrapped_call():
+                return await cb.call(_make_request)
         else:
             wrapped_call = _make_request
 
@@ -218,3 +219,29 @@ class EnhancedHTTPClient:
 
 # Backward compatibility alias
 SharedHTTPClient = EnhancedHTTPClient
+
+# Module-level singleton instance for easy access
+_shared_instance: EnhancedHTTPClient | None = None
+
+
+async def get_shared_client() -> EnhancedHTTPClient:
+    """Get the shared HTTP client instance (creates if needed)."""
+    global _shared_instance
+    if _shared_instance is None:
+        _shared_instance = EnhancedHTTPClient()
+        await _shared_instance.initialize()
+    return _shared_instance
+
+
+async def get_client() -> httpx.AsyncClient:
+    """Get the underlying httpx.AsyncClient from the shared instance."""
+    instance = await get_shared_client()
+    return await instance.get_client()
+
+
+async def close_shared_client():
+    """Close the shared HTTP client."""
+    global _shared_instance
+    if _shared_instance:
+        await _shared_instance.close()
+        _shared_instance = None

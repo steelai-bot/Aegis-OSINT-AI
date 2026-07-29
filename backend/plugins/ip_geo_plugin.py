@@ -26,7 +26,7 @@ class IPGeoPlugin(BasePlugin):
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         ip = query
         try:
-            client = await SharedHTTPClient.get_client()
+            client = await SharedHTTPClient().get_client()
             url = f'http://ip-api.com/json/{ip}?fields=status,country,countryCode,regionName,city,isp,org,as'
             resp = await client.get(url)
             if resp.status_code == 200:
