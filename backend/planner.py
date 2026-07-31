@@ -16,11 +16,11 @@ class AIPlanner:
         self.templates: dict[TargetType, InvestigationTemplate] = {
             TargetType.DOMAIN: InvestigationTemplate(
                 target_type=TargetType.DOMAIN,
-                steps=["dns_lookup", "whois_lookup", "cert_transparency", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"]
+                steps=["dns_lookup", "whois_lookup", "cert_transparency", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction", "leaked_db", "darkweb_monitor"]
             ),
             TargetType.NZ_DOMAIN: InvestigationTemplate(
                 target_type=TargetType.NZ_DOMAIN,
-                steps=["dns_lookup", "whois_lookup", "cert_transparency", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"]
+                steps=["dns_lookup", "whois_lookup", "cert_transparency", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction", "leaked_db", "darkweb_monitor"]
             ),
             TargetType.SUBDOMAIN: InvestigationTemplate(
                 target_type=TargetType.SUBDOMAIN,
@@ -30,6 +30,26 @@ class AIPlanner:
             TargetType.IP: InvestigationTemplate(
                 target_type=TargetType.IP,
                 steps=["ip_geolocation"]
+            ),
+            TargetType.EMAIL: InvestigationTemplate(
+                target_type=TargetType.EMAIL,
+                steps=["email_discovery", "breach_check", "exposed_credentials", "stealer_logs", "darkweb_monitor", "telegram_osint"]
+            ),
+            TargetType.USERNAME: InvestigationTemplate(
+                target_type=TargetType.USERNAME,
+                steps=["username_enumeration", "exposed_credentials", "stealer_logs", "darkweb_monitor", "telegram_osint"]
+            ),
+            TargetType.PHONE: InvestigationTemplate(
+                target_type=TargetType.PHONE,
+                steps=["exposed_credentials", "breach_check", "stealer_logs", "telegram_osint"]
+            ),
+            TargetType.PERSON: InvestigationTemplate(
+                target_type=TargetType.PERSON,
+                steps=["username_enumeration", "exposed_credentials", "stealer_logs", "darkweb_monitor", "telegram_osint"]
+            ),
+            TargetType.LEAK: InvestigationTemplate(
+                target_type=TargetType.LEAK,
+                steps=["leaked_db", "stealer_logs", "darkweb_monitor", "breach_check"]
             ),
             TargetType.COMPANY: InvestigationTemplate(
                 target_type=TargetType.COMPANY,
@@ -72,7 +92,8 @@ class AIPlanner:
             f"which of the following plugins should be executed in order to gather the most intelligence? "
             f"Available plugins: dns_lookup, whois_lookup, cert_transparency, ip_geolocation, "
             f"wayback_machine, web_recon, "
-            f"email_discovery, github_discovery, username_enumeration, google_dorking, metadata_extraction. "
+            f"email_discovery, github_discovery, username_enumeration, google_dorking, metadata_extraction, "
+            f"breach_check, exposed_credentials, stealer_logs, darkweb_monitor, leaked_db, telegram_osint. "
             f"Return ONLY a comma-separated list of plugin names. Example: dns_lookup,whois_lookup"
         )
 
@@ -80,7 +101,7 @@ class AIPlanner:
             model = "gpt-3.5-turbo" if getattr(provider, 'provider', '') == "openrouter" else getattr(provider, '_default_model', 'gpt-3.5-turbo')
             response = await provider.chat(prompt, model)
             suggested = [p.strip() for p in response.content.split(",") if p.strip()]
-            valid_known = {"dns_lookup", "whois_lookup", "cert_transparency", "ip_geolocation", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"}
+            valid_known = {"dns_lookup", "whois_lookup", "cert_transparency", "ip_geolocation", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction", "breach_check", "exposed_credentials", "stealer_logs", "darkweb_monitor", "leaked_db", "telegram_osint"}
 
             plugins = [p for p in suggested if p in valid_known]
             logger.info(f"AI Planner suggested: {plugins}")

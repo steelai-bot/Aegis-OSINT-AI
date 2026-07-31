@@ -1,0 +1,152 @@
+<!-- Dark Web search results partial -->
+{% set category_meta = {
+    'stealer_log': ('file-warning', 'Stealer Logs', 'text-danger'),
+    'breach': ('shield-alert', 'Data Breaches', 'text-danger'),
+    'database_dump': ('database', 'Database Dumps', 'text-warning'),
+    'paste': ('clipboard-paste', 'Pastes', 'text-warning'),
+    'telegram': ('send', 'Telegram', 'text-primary'),
+    'forum_mention': ('message-square', 'Forum Mentions', 'text-muted'),
+} %}
+
+<div class="space-y-6">
+    <!-- Summary bar -->
+    <div class="bg-card rounded-xl border border-border p-5 shadow-xl">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                    <i data-lucide="scan-line" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-foreground font-mono text-sm">{{ query }}</h3>
+                    <p class="text-xs text-muted font-mono">
+                        TYPE: <span class="text-foreground uppercase">{{ target_type }}</span>
+                        &nbsp;|&nbsp; HITS: <span class="text-foreground">{{ hits|length }}</span>
+                        &nbsp;|&nbsp; SOURCES: <span class="text-foreground">{{ sources_used|length }}</span>
+                        &nbsp;|&nbsp; TOR: <span class="{% if tor_available %}text-success{% else %}text-warning{% endif %}">{{ 'ONLINE' if tor_available else 'OFFLINE' }}</span>
+                    </p>
+                </div>
+            </div>
+            {% if hits_by_category %}
+            <div class="flex flex-wrap gap-2">
+                {% for cat, count in hits_by_category.items() %}
+                <span class="px-2.5 py-1 text-xs font-mono rounded-lg bg-background border border-border text-muted uppercase">
+                    {{ cat.replace('_', ' ') }}: <strong class="text-foreground">{{ count }}</strong>
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if hits %}
+    <!-- Grouped results -->
+    {% for cat, meta in category_meta.items() %}
+    {% set cat_hits = hits | selectattr('category', 'equalto', cat) | list %}
+    {% if cat_hits %}
+    <div class="bg-card rounded-xl border border-border shadow-xl overflow-hidden">
+        <div class="p-4 border-b border-border flex items-center justify-between bg-sidebar/50">
+            <div class="flex items-center gap-2">
+                <i data-lucide="{{ meta[0] }}" class="w-4 h-4 {{ meta[2] }}"></i>
+                <h3 class="font-semibold text-sm tracking-wide">{{ meta[1] }}</h3>
+            </div>
+            <span class="text-xs font-mono text-muted">{{ cat_hits|length }} RESULT{{ 'S' if cat_hits|length != 1 }}</span>
+        </div>
+        <div class="divide-y divide-border">
+            {% for hit in cat_hits %}
+            <div class="p-4 hover:bg-background/40 transition-colors">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap mb-1">
+                            <span class="px-2 py-0.5 text-[10px] font-mono rounded font-semibold uppercase tracking-wider
+                                        {% if hit.severity == 'critical' %}bg-danger/15 text-danger border border-danger/30
+                                        {% elif hit.severity == 'warning' %}bg-warning/15 text-warning border border-warning/30
+                                        {% else %}bg-gray-500/15 text-gray-400 border border-gray-500/30{% endif %}">
+                                {{ hit.severity }}
+                            </span>
+                            <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-primary/10 text-primary border border-primary/20 uppercase">
+                                {{ hit.source }}
+                            </span>
+                            {% if hit.tor %}
+                            <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                                .ONION
+                            </span>
+                            {% endif %}
+                            {% if hit.date %}
+                            <span class="text-[10px] font-mono text-muted">{{ hit.date }}</span>
+                            {% endif %}
+                        </div>
+                        <h4 class="font-semibold text-foreground text-sm break-all">{{ hit.title }}</h4>
+                        {% if hit.snippet %}
+                        <p class="text-xs text-muted mt-1 break-all font-mono leading-relaxed">{{ hit.snippet }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                        {% if hit.url %}
+                        <a href="{{ hit.url }}" target="_blank" rel="noopener noreferrer"
+                           class="px-3 py-1.5 bg-primary/10 text-primary border border-primary/30 font-semibold rounded-lg hover:bg-primary hover:text-background transition-colors text-xs flex items-center gap-1.5">
+                            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                            Open
+                        </a>
+                        {% endif %}
+                        {% if hit.download_url %}
+                        <a href="{{ hit.download_url }}" target="_blank" rel="noopener noreferrer"
+                           class="px-3 py-1.5 bg-success/10 text-success border border-success/30 font-semibold rounded-lg hover:bg-success hover:text-background transition-colors text-xs flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                            Download
+                        </a>
+                        {% endif %}
+                        <span class="text-[10px] font-mono text-muted">CONF: {{ (hit.confidence * 100) | int }}%</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <!-- Uncategorized hits (safety net for unexpected categories) -->
+    {% set known_cats = category_meta.keys() | list %}
+    {% set other_hits = hits | rejectattr('category', 'in', known_cats) | list %}
+    {% if other_hits %}
+    <div class="bg-card rounded-xl border border-border shadow-xl overflow-hidden">
+        <div class="p-4 border-b border-border flex items-center gap-2 bg-sidebar/50">
+            <i data-lucide="folder-search" class="w-4 h-4 text-muted"></i>
+            <h3 class="font-semibold text-sm tracking-wide">Other Results</h3>
+        </div>
+        <div class="divide-y divide-border">
+            {% for hit in other_hits %}
+            <div class="p-4 hover:bg-background/40 transition-colors flex items-start justify-between gap-4">
+                <div class="flex-1 min-w-0">
+                    <h4 class="font-semibold text-foreground text-sm break-all">{{ hit.title }}</h4>
+                    {% if hit.snippet %}<p class="text-xs text-muted mt-1 break-all font-mono">{{ hit.snippet }}</p>{% endif %}
+                </div>
+                {% if hit.url %}
+                <a href="{{ hit.url }}" target="_blank" rel="noopener noreferrer"
+                   class="px-3 py-1.5 bg-primary/10 text-primary border border-primary/30 font-semibold rounded-lg hover:bg-primary hover:text-background transition-colors text-xs flex items-center gap-1.5 flex-shrink-0">
+                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Open
+                </a>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- Empty state -->
+    <div class="bg-card rounded-xl border border-border p-12 text-center shadow-xl">
+        <i data-lucide="shield-check" class="w-14 h-14 mx-auto mb-4 text-success opacity-60"></i>
+        <h3 class="text-lg font-semibold text-foreground mb-2">No Dark Web Exposure Found</h3>
+        <p class="text-sm text-muted max-w-md mx-auto">
+            <span class="font-mono text-foreground">{{ query }}</span> was not found in any scanned source
+            (stealer logs, breaches, pastes, dumps, forums, Telegram).
+            {% if not tor_available %}Start a Tor proxy to also scan .onion sources.{% endif %}
+        </p>
+        {% if sources_used %}
+        <p class="text-xs font-mono text-muted mt-4">SCANNED: {{ sources_used | join(', ') }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+<script>lucide.createIcons();</script>

@@ -192,6 +192,74 @@ class SaveSettingsRequest(BaseModel):
     api_key: str | None = None
 
 
+class DarkWebSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    target_type: str | None = "auto"
+    use_tor: bool = True
+
+
+# Dark-web plugin subset used by the /api/darkweb/search endpoint
+DARKWEB_PLUGINS = [
+    "stealer_logs",
+    "darkweb_monitor",
+    "breach_check",
+    "leaked_db",
+    "telegram_osint",
+    "exposed_credentials",
+]
+
+
+def _detect_target_type(query: str):
+    """Auto-detect target type from query string (shared by /api/search and /api/darkweb/search)."""
+    from backend.models import TargetType
+    query_clean = query.strip()
+    if re.match(r'^\d{11}$', query_clean):
+        return TargetType.ABN
+    if re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', query_clean):
+        return TargetType.EMAIL
+    if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', query_clean):
+        return TargetType.IP
+    if re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', query_clean):
+        return TargetType.DOMAIN
+    if re.match(r'^\+?[0-9\s\-()]{7,15}$', query_clean):
+        return TargetType.PHONE
+    return TargetType.USERNAME
+
+
+def _evidence_to_hits(responses: list) -> list:
+    """Normalize dark-web plugin PluginResponse evidence into DarkWebHit models."""
+    from backend.models import DarkWebHit
+    hits: list = []
+    for res in responses:
+        for ev in res.evidence:
+            if not isinstance(ev, dict):
+                continue
+            category = ev.get("type") or ev.get("category") or "forum_mention"
+            title = ev.get("title") or ev.get("description") or ev.get("note") or "Untitled result"
+            extra_val = ev.get("extra")
+            if not isinstance(extra_val, dict):
+                extra_val = {}
+            try:
+                hits.append(DarkWebHit(
+                    source=ev.get("source") or res.provider,
+                    category=str(category),
+                    title=str(title),
+                    snippet=str(ev.get("snippet") or ev.get("description") or "")[:500],
+                    url=ev.get("url") if isinstance(ev.get("url"), str) else None,
+                    download_url=ev.get("download_url") if isinstance(ev.get("download_url"), str) else None,
+                    date=ev.get("date") if isinstance(ev.get("date"), str) else None,
+                    severity=str(ev.get("severity")) if ev.get("severity") in ("info", "warning", "critical") else "info",
+                    confidence=res.confidence,
+                    tor=bool(ev.get("tor", False)),
+                    extra=extra_val,
+                ))
+            except Exception:
+                continue
+    severity_order = {"critical": 0, "warning": 1, "info": 2}
+    hits.sort(key=lambda h: (severity_order.get(h.severity, 3), -(h.confidence or 0)))
+    return hits
+
+
 # --- Jinja2 Templates ---
 templates = Jinja2Templates(directory="backend/templates")
 
@@ -250,6 +318,120 @@ async def settings_page(request: Request):
         name="settings.html",
         context={"active_page": "settings"}
     )
+
+
+@app.get("/darkweb", response_class=HTMLResponse)
+async def darkweb_page(request: Request):
+    """Dark Web search page - stealer logs, breaches, forums, dumps, Telegram."""
+    return templates.TemplateResponse(
+        request=request,
+        name="darkweb.html",
+        context={"active_page": "darkweb"}
+    )
+
+
+@app.get("/api/darkweb/status")
+async def darkweb_status():
+    """Tor availability + enabled state of dark-web plugins."""
+    from backend.plugin_manager import PluginManager
+    from backend.tor_client import TorClient
+
+    tor_status = await TorClient.get_instance().status()
+    pm = PluginManager()
+    if not pm._plugins:
+        pm.discover_plugins()
+    plugins = []
+    for name in DARKWEB_PLUGINS:
+        plugins.append({
+            "name": name,
+            "status": pm._plugin_statuses.get(name, "not_found"),
+            "error": pm.get_plugin_error(name),
+        })
+    return format_response({**tor_status, "plugins": plugins})
+
+
+@app.post("/api/darkweb/search")
+async def darkweb_search(request: Request, query: str = Form(...), target_type: str | None = Form("auto")):
+    """On-demand dark-web search across stealer logs, breaches, forums, dumps and Telegram.
+
+    Runs only the dark-web plugin subset (not a full investigation) and returns
+    normalized DarkWebHit records, or an HTML partial for HTMX requests.
+    """
+    import asyncio
+
+    from backend.models import TargetType
+    from backend.plugin_manager import PluginManager
+
+    # 1. Resolve target type
+    try:
+        target_type_obj = _detect_target_type(query) if (target_type or "auto") == "auto" else TargetType(str(target_type))
+    except ValueError:
+        target_type_obj = TargetType.USERNAME
+
+    # 2. Select enabled dark-web plugins supporting this type
+    pm = PluginManager()
+    if not pm._plugins:
+        pm.discover_plugins()
+
+    runnable: list[str] = []
+    for name in DARKWEB_PLUGINS:
+        plugin = pm.get_plugin(name)
+        if not plugin:
+            continue
+        if pm._plugin_statuses.get(name, "enabled") != "enabled":
+            continue
+        if target_type_obj in plugin.metadata.supported_entity_types:
+            runnable.append(name)
+
+    # 3. Execute in parallel; a failing plugin never fails the whole search
+    async def _safe_execute(name: str):
+        try:
+            return await pm.execute_plugin(name, query, target_type_obj)
+        except Exception as exc:
+            logger.warning(f"darkweb search plugin '{name}' failed: {exc}")
+            return []
+
+    gathered = await asyncio.gather(*(_safe_execute(n) for n in runnable))
+
+    responses = []
+    sources_used = []
+    for name, result in zip(runnable, gathered, strict=False):
+        if result:
+            responses.extend(result)
+            sources_used.append(name)
+
+    # 4. Normalize + categorize
+    hits = _evidence_to_hits(responses)
+    hits_by_category: dict[str, int] = {}
+    for hit in hits:
+        hits_by_category[hit.category] = hits_by_category.get(hit.category, 0) + 1
+
+    from backend.tor_client import TorClient
+    tor_available = await TorClient.get_instance().is_available()
+
+    is_html_req = request.headers.get("HX-Request") or "text/html" in request.headers.get("accept", "")
+    if is_html_req:
+        return templates.TemplateResponse(
+            request=request,
+            name="components/darkweb_results.html",
+            context={
+                "query": query,
+                "target_type": target_type_obj.value,
+                "hits": hits,
+                "hits_by_category": hits_by_category,
+                "sources_used": sources_used,
+                "tor_available": tor_available,
+            }
+        )
+
+    return format_response({
+        "query": query,
+        "target_type": target_type_obj.value,
+        "tor_available": tor_available,
+        "hits": [h.model_dump() for h in hits],
+        "hits_by_category": hits_by_category,
+        "sources_used": sources_used,
+    })
 
 
 @app.get("/health")

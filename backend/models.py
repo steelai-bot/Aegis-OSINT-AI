@@ -134,3 +134,22 @@ class TimelineEvent(BaseModel):
     severity: str = "info"  # info, warning, critical
     description: str
     entity_id: int | None = None
+
+
+class DarkWebHit(BaseModel):
+    """Normalized single dark-web/breach result for the Dark Web UI page.
+
+    Transport/UI-only model - not persisted directly; plugin findings carry the
+    same fields inside their evidence dicts.
+    """
+    source: str = Field(..., description="Plugin/source name, e.g. 'ahmia', 'psbdmp', 'hibp_pastes', 'telegram'")
+    category: str = Field(..., description="stealer_log | breach | forum_mention | database_dump | telegram | paste")
+    title: str
+    snippet: str = ""
+    url: str | None = None
+    download_url: str | None = None
+    date: str | None = None
+    severity: str = "info"  # info | warning | critical
+    confidence: float = Field(0.7, ge=0.0, le=1.0)
+    tor: bool = Field(False, description="True when the hit was fetched via the Tor proxy")
+    extra: dict[str, Any] = Field(default_factory=dict)

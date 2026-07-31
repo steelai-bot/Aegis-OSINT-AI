@@ -268,16 +268,13 @@ class DatabaseScannerPlugin(BasePlugin):
         return results
 
     async def _search_breach_db(self, client, query: str) -> dict | None:
-        """Search breach databases for query (conceptual)."""
-        # This is a placeholder for actual breach database search
-        # In production, this would use actual APIs like Dehashed, Virgil Security, etc.
-        return {
-            "source": "breach_database",
-            "query_matched": query,
-            "record_count": 1,
-            "sample_data": {"status": "mock_data"},
-            "confidence": 0.7
-        }
+        """Search breach databases for query.
+
+        Deprecated: real breach/dump search now lives in the `leaked_db`,
+        `stealer_logs` and `breach_check` plugins. Returns None so this plugin
+        no longer fabricates findings from mock data.
+        """
+        return None
 
     async def _search_intelx_for_email(self, client, email: str) -> dict | None:
         """Search IntelX for email exposure (conceptual)."""

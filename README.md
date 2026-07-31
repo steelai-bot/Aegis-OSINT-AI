@@ -130,6 +130,13 @@ class MyPlugin(BasePlugin):
 | `ABUSEIPDB_API_KEY` | AbuseIPDB API key |
 | `URLSCAN_API_KEY` | URLScan API key |
 | `GITHUB_TOKEN` | GitHub API token |
+| `HIBP_API_KEY` | Have I Been Pwned v3 key (full breach + paste lookup) |
+| `DEHASHED_API_KEY` | Dehashed credentials (`email:key` or bearer token) |
+| `LEAKCHECK_API_KEY` | LeakCheck.io key (free public tier works keyless) |
+| `SNUSBASE_API_KEY` | Snusbase API key |
+| `TOR_PROXY_HOST` | Tor SOCKS5 proxy host (default: `127.0.0.1`) |
+| `TOR_PROXY_PORT` | Tor SOCKS5 proxy port (default: `9050`) |
+| `TOR_ENABLED` | Enable/disable Tor sources (default: `true`) |
 | `DATABASE` | SQLite path (default: `data/aegis.db`) |
 
 Configure providers via the Settings UI or API endpoints.
@@ -155,6 +162,12 @@ Configure providers via the Settings UI or API endpoints.
 ### Plugin Endpoints
 
 - `GET /api/plugins` — List all plugins with status
+
+### Dark Web Endpoints
+
+- `GET /darkweb` — Dark Web search UI (stealer logs, breaches, dumps, Telegram, forums)
+- `GET /api/darkweb/status` — Tor availability + dark-web plugin status
+- `POST /api/darkweb/search` — On-demand dark-web search (form: `query`, `target_type`)
 
 ### Settings Endpoints
 

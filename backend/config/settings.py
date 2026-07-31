@@ -54,6 +54,17 @@ class AegisSettings(BaseSettings):
     google_search_cx: str | None = None
     google_api_key: str | None = None
 
+    # Dark web / breach intelligence (all optional - plugins degrade to free sources)
+    hibp_api_key: str | None = None
+    dehashed_api_key: str | None = None
+    leakcheck_api_key: str | None = None
+    snusbase_api_key: str | None = None
+
+    # Optional Tor SOCKS5 proxy for .onion sources
+    tor_proxy_host: str = "127.0.0.1"
+    tor_proxy_port: int = 9050
+    tor_enabled: bool = True
+
     # Server settings
     host: str = "0.0.0.0"
     port: int = 8000
@@ -101,6 +112,17 @@ GOOGLE_API_KEY=
 
 # GitHub
 GITHUB_TOKEN=
+
+# Dark web / breach intelligence (optional - plugins work without these)
+HIBP_API_KEY=
+DEHASHED_API_KEY=
+LEAKCHECK_API_KEY=
+SNUSBASE_API_KEY=
+
+# Optional Tor SOCKS5 proxy for .onion sources
+TOR_PROXY_HOST=127.0.0.1
+TOR_PROXY_PORT=9050
+TOR_ENABLED=true
 
 # Database (optional, defaults to data/aegis.db)
 DATABASE=data/aegis.db
@@ -159,6 +181,13 @@ PORT=8000
             "google_search_api_key": "GOOGLE_SEARCH_API_KEY",
             "google_search_cx": "GOOGLE_SEARCH_CX",
             "google_api_key": "GOOGLE_API_KEY",
+            "hibp_api_key": "HIBP_API_KEY",
+            "dehashed_api_key": "DEHASHED_API_KEY",
+            "leakcheck_api_key": "LEAKCHECK_API_KEY",
+            "snusbase_api_key": "SNUSBASE_API_KEY",
+            "tor_proxy_host": "TOR_PROXY_HOST",
+            "tor_proxy_port": "TOR_PROXY_PORT",
+            "tor_enabled": "TOR_ENABLED",
         }
         for attr, env_key in key_map.items():
             val = getattr(self, attr, None)
