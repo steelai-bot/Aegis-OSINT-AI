@@ -95,6 +95,9 @@ class EntityType(StrEnum):
     COMPANY = "company"
     IP = "ip"
     PERSON = "person"
+    USERNAME = "username"
+    URL = "url"
+    ADDRESS = "address"
     UNKNOWN = "unknown"
 
 

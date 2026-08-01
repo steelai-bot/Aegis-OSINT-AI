@@ -11,3 +11,4 @@ colorama>=0.4.6
 tenacity>=9.1.4
 httpx-socks>=0.11.0
 beautifulsoup4>=4.15.0
+phonenumbers>=8.13.0

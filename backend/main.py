@@ -229,8 +229,12 @@ def _detect_target_type(query: str):
         return TargetType.IP
     if re.match(r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", query_clean):
         return TargetType.DOMAIN
-    if re.match(r"^\+?[0-9\s\-()]{7,15}$", query_clean):
+    # Phone: full or partial (4+ digits, phone characters only)
+    if re.match(r"^\+?[0-9][0-9\s\-()]{3,14}$", query_clean):
         return TargetType.PHONE
+    # Person name: 2+ words of letters only (incl. Cyrillic/diacritics)
+    if re.match(r"^[^\W\d_]+(?:[ .'-][^\W\d_]+)+$", query_clean, re.UNICODE):
+        return TargetType.PERSON
     return TargetType.USERNAME
 
 
@@ -701,19 +705,7 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
 
     try:
         if target_type_str == "auto":
-            query_clean = query.strip()
-            if re.match(r"^\d{11}$", query_clean):
-                target_type_obj = TargetType.ABN
-            elif re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", query_clean):
-                target_type_obj = TargetType.EMAIL
-            elif re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", query_clean):
-                target_type_obj = TargetType.IP
-            elif re.match(r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", query_clean):
-                target_type_obj = TargetType.DOMAIN
-            elif re.match(r"^\+?[0-9\s\-()]{7,15}$", query_clean):
-                target_type_obj = TargetType.PHONE
-            else:
-                target_type_obj = TargetType.USERNAME
+            target_type_obj = _detect_target_type(query)
         else:
             target_type_obj = TargetType(target_type_str)
     except ValueError:
@@ -761,6 +753,92 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
         {
             "target_id": target_id,
             "query": query,
+            "findings_count": result.get("findings_count", 0),
+            "findings": [
+                f.model_dump() if hasattr(f, "model_dump") else f for f in result.get("results", [])
+            ],
+            "entities": entities,
+            "relationships": relationships,
+            "timeline": timeline,
+        }
+    )
+
+
+@app.post("/api/search/person")
+async def search_person(
+    request: Request,
+    full_name: str | None = Form(None),
+    email: str | None = Form(None),
+    phone: str | None = Form(None),
+    address: str | None = Form(None),
+    username: str | None = Form(None),
+    pivot_depth: int = Form(1),
+):
+    """Person-centric multi-field search with entity pivoting.
+
+    Accepts any combination of identifiers (name, email, phone, address,
+    username), investigates each with its type-appropriate plugins, then
+    pivots on newly discovered identifiers (emails, usernames, phones,
+    domains) for up to `pivot_depth` extra rounds.
+    """
+    seeds = {
+        "full_name": full_name,
+        "email": email,
+        "phone": phone,
+        "address": address,
+        "username": username,
+    }
+    seeds = {k: (v or "").strip() for k, v in seeds.items() if (v or "").strip()}
+    if not seeds:
+        raise HTTPException(status_code=422, detail="At least one identifier field is required.")
+
+    pivot_depth = max(0, min(pivot_depth, 2))
+
+    # Human-readable target label: prefer the name, otherwise first provided field
+    label = seeds.get("full_name") or next(iter(seeds.values()))
+    query_label = f"Person: {label}"
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO targets (query, target_type, status) VALUES (?, ?, ?)",
+            (query_label, "person", "pending"),
+        )
+        target_id = cursor.lastrowid
+        conn.commit()
+
+    from backend.engine import InvestigationEngine
+
+    engine = InvestigationEngine.get_instance(DATABASE_PATH)
+    if not engine._initialized:
+        await engine.initialize()
+
+    try:
+        result = await engine.run_person_investigation(target_id, seeds, pivot_depth=pivot_depth)
+    except Exception as exc:
+        logger.error(f"Person investigation failed for target {target_id}: {exc}", exc_info=True)
+        result = {"status": "failed", "error": str(exc), "results": []}
+
+    storage = app.state.storage
+    entities = [e.model_dump() for e in await storage.get_entities_for_target(target_id)]
+    relationships = [r.model_dump() for r in await storage.get_relationships_for_target(target_id)]
+    timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
+
+    is_html_req = request.headers.get("HX-Request") or "text/html" in request.headers.get(
+        "accept", ""
+    )
+    if is_html_req:
+        return templates.TemplateResponse(
+            request=request,
+            name="components/investigation_result.html",
+            context={"target_id": target_id, "status": result.get("status", "completed")},
+        )
+
+    return format_response(
+        {
+            "target_id": target_id,
+            "seeds": seeds,
+            "identifiers_investigated": result.get("identifiers_investigated", 0),
             "findings_count": result.get("findings_count", 0),
             "findings": [
                 f.model_dump() if hasattr(f, "model_dump") else f for f in result.get("results", [])

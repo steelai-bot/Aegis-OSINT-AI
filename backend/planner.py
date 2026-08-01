@@ -60,6 +60,8 @@ class AIPlanner:
                 target_type=TargetType.EMAIL,
                 steps=[
                     "email_discovery",
+                    "gravatar_lookup",
+                    "emailrep_lookup",
                     "breach_check",
                     "exposed_credentials",
                     "stealer_logs",
@@ -79,12 +81,20 @@ class AIPlanner:
             ),
             TargetType.PHONE: InvestigationTemplate(
                 target_type=TargetType.PHONE,
-                steps=["exposed_credentials", "breach_check", "stealer_logs", "telegram_osint"],
+                steps=[
+                    "phone_lookup",
+                    "exposed_credentials",
+                    "breach_check",
+                    "stealer_logs",
+                    "telegram_osint",
+                ],
             ),
             TargetType.PERSON: InvestigationTemplate(
                 target_type=TargetType.PERSON,
                 steps=[
+                    "name_permutator",
                     "username_enumeration",
+                    "google_dorking",
                     "exposed_credentials",
                     "stealer_logs",
                     "darkweb_monitor",
@@ -154,7 +164,8 @@ class AIPlanner:
             f"which of the following plugins should be executed in order to gather the most intelligence? "
             f"Available plugins: dns_lookup, whois_lookup, cert_transparency, ip_geolocation, "
             f"wayback_machine, web_recon, "
-            f"email_discovery, github_discovery, username_enumeration, google_dorking, metadata_extraction, "
+            f"email_discovery, gravatar_lookup, emailrep_lookup, phone_lookup, name_permutator, "
+            f"github_discovery, username_enumeration, google_dorking, metadata_extraction, "
             f"breach_check, exposed_credentials, stealer_logs, darkweb_monitor, leaked_db, telegram_osint. "
             f"Return ONLY a comma-separated list of plugin names. Example: dns_lookup,whois_lookup"
         )
@@ -175,6 +186,10 @@ class AIPlanner:
                 "wayback_machine",
                 "web_recon",
                 "email_discovery",
+                "gravatar_lookup",
+                "emailrep_lookup",
+                "phone_lookup",
+                "name_permutator",
                 "github_discovery",
                 "username_enumeration",
                 "google_dorking",

@@ -7,6 +7,58 @@
     targetType: 'auto',
     query: '',
     isSubmitting: false,
+    person: { full_name: '', email: '', phone: '', address: '', username: '', pivot_depth: 1 },
+    isPersonSubmitting: false,
+    async submitPersonSearch() {
+        const hasInput = ['full_name', 'email', 'phone', 'address', 'username']
+            .some(f => this.person[f].trim() !== '');
+        if (!hasInput) return;
+
+        this.isPersonSubmitting = true;
+        const spinner = document.getElementById('person-spinner');
+        const resultDiv = document.getElementById('investigation-result');
+        if (spinner) spinner.classList.remove('hidden');
+
+        try {
+            const formData = new FormData();
+            for (const f of ['full_name', 'email', 'phone', 'address', 'username']) {
+                if (this.person[f].trim()) formData.append(f, this.person[f].trim());
+            }
+            formData.append('pivot_depth', this.person.pivot_depth);
+
+            const response = await fetch('/api/search/person', {
+                method: 'POST',
+                body: formData,
+                headers: { 'HX-Request': 'true' }
+            });
+
+            if (response.ok) {
+                const html = await response.text();
+                if (resultDiv) {
+                    resultDiv.innerHTML = html;
+                    lucide.createIcons();
+                }
+                this.person = { full_name: '', email: '', phone: '', address: '', username: '', pivot_depth: 1 };
+                loadDashboardStats();
+            } else {
+                let errText = 'Error starting person investigation.';
+                try {
+                    const errJson = await response.json();
+                    if (errJson.errors && errJson.errors.length) errText = errJson.errors.join(', ');
+                } catch (_) {}
+                if (resultDiv) {
+                    resultDiv.innerHTML = `<div class='bg-red-500/10 border border-red-500/30 rounded-lg p-4'><p class='text-red-400 text-sm font-mono'>${errText}</p></div>`;
+                }
+            }
+        } catch (e) {
+            if (resultDiv) {
+                resultDiv.innerHTML = `<div class='bg-red-500/10 border border-red-500/30 rounded-lg p-4'><p class='text-red-400 text-sm'>Network error: ${e.message}</p></div>`;
+            }
+        } finally {
+            this.isPersonSubmitting = false;
+            if (spinner) spinner.classList.add('hidden');
+        }
+    },
     async submitInvestigation() {
         if (!this.query.trim()) return;
         
@@ -210,6 +262,83 @@ if (spinner) spinner.classList.add('hidden');
                     </path>
                 </svg>
                 Dispatching AI agent workers...
+            </span>
+        </div>
+    </form>
+</div>
+
+<!-- Person Search Panel -->
+<div class="bg-card rounded-xl border border-border p-6 shadow-xl relative overflow-hidden">
+    <div class="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="flex items-center gap-3 mb-6">
+        <div
+            class="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+            <i data-lucide="user-search" class="w-4 h-4"></i>
+        </div>
+        <div>
+            <h3 class="text-lg font-semibold text-foreground">Person Investigation</h3>
+            <p class="text-xs text-muted">Combine any known identifiers - the engine pivots on every
+                discovered email, username, phone and domain to map the full digital footprint.</p>
+        </div>
+    </div>
+
+    <form class="space-y-5" @submit.prevent="submitPersonSearch">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-xs font-mono text-muted mb-2 uppercase tracking-wider">Full Name</label>
+                <input type="text" x-model="person.full_name" placeholder="Ivan Petrov"
+                    class="w-full px-4 py-2.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-foreground text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-mono text-muted mb-2 uppercase tracking-wider">Email</label>
+                <input type="text" x-model="person.email" placeholder="target@example.com"
+                    class="w-full px-4 py-2.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-foreground font-mono text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-mono text-muted mb-2 uppercase tracking-wider">Phone (full or
+                    partial)</label>
+                <input type="text" x-model="person.phone" placeholder="+359 888 123 456 or 888123"
+                    class="w-full px-4 py-2.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-foreground font-mono text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-mono text-muted mb-2 uppercase tracking-wider">Address</label>
+                <input type="text" x-model="person.address" placeholder="Sofia, Bulgaria"
+                    class="w-full px-4 py-2.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-foreground text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-mono text-muted mb-2 uppercase tracking-wider">Username</label>
+                <input type="text" x-model="person.username" placeholder="ivanpetrov"
+                    class="w-full px-4 py-2.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-foreground font-mono text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-mono text-muted mb-2 uppercase tracking-wider">Pivot Depth</label>
+                <select x-model="person.pivot_depth"
+                    class="w-full px-4 py-2.5 bg-background border border-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-foreground text-sm">
+                    <option value="0">0 - Seeds only</option>
+                    <option value="1" selected>1 - One pivot round</option>
+                    <option value="2">2 - Deep pivot (slower)</option>
+                </select>
+                <p class="text-[11px] text-muted mt-1.5">Pivoting re-investigates discovered identifiers.</p>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-border">
+            <button type="submit"
+                class="px-6 py-3 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 transition-all flex items-center gap-2.5 shadow-lg shadow-purple-500/20 text-sm"
+                :disabled="isPersonSubmitting">
+                <i data-lucide="fingerprint" class="w-4 h-4"></i>
+                <span x-text="isPersonSubmitting ? 'Investigating Person...' : 'Investigate Person'"></span>
+            </button>
+
+            <span id="person-spinner" class="text-xs font-mono text-purple-400 flex items-center gap-2 hidden">
+                <svg class="animate-spin h-4 w-4 text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none"
+                    viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                    </path>
+                </svg>
+                Pivoting across identity sources...
             </span>
         </div>
     </form>
