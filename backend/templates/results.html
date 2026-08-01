@@ -20,6 +20,12 @@
             <p class="text-muted mt-1 font-mono text-xs">TARGET ID: <span class="text-foreground font-semibold">{{ target_id }}</span></p>
         </div>
         <div class="flex items-center gap-3">
+            <button @click="generateAiSummary()"
+                    :disabled="aiSummaryLoading"
+                    class="px-3.5 py-2 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 transition-colors text-xs flex items-center gap-1.5 shadow-sm disabled:opacity-40">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                <span x-text="aiSummaryLoading ? 'Analyzing...' : 'AI Analysis'"></span>
+            </button>
             <button @click="generateReport('html')"
                     class="px-3.5 py-2 bg-primary text-background font-semibold rounded-lg hover:bg-primary-dark transition-colors text-xs flex items-center gap-1.5 shadow-sm">
                 <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
@@ -63,6 +69,12 @@
                     class="px-6 py-4 font-medium text-sm transition-all flex items-center gap-2 flex-shrink-0">
                 <i data-lucide="clock" class="w-4 h-4"></i>
                 Investigation Timeline
+            </button>
+            <button @click="activeTab = 'ai'"
+                    :class="activeTab === 'ai' ? 'border-b-2 border-purple-500 text-purple-400 bg-purple-500/10' : 'text-muted hover:text-foreground'"
+                    class="px-6 py-4 font-medium text-sm transition-all flex items-center gap-2 flex-shrink-0">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                AI Analysis
             </button>
         </div>
 
@@ -199,6 +211,34 @@
                 </div>
             </div>
 
+            <!-- AI Analysis Tab -->
+            <div x-show="activeTab === 'ai'" x-cloak>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-foreground">AI Executive Summary</h3>
+                    <span class="text-xs font-mono text-muted" x-text="aiSummaryMeta"></span>
+                </div>
+                <div x-show="!aiSummary && !aiSummaryLoading" class="text-center py-12">
+                    <i data-lucide="sparkles" class="w-10 h-10 text-purple-400 mx-auto mb-3"></i>
+                    <p class="text-muted text-sm mb-4">Generate a professional analyst-style summary of this
+                        investigation using the configured AI provider.</p>
+                    <button @click="generateAiSummary()"
+                        class="px-5 py-2.5 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 transition-colors text-sm">
+                        Generate AI Analysis
+                    </button>
+                </div>
+                <div x-show="aiSummaryLoading" class="text-center py-12 text-purple-400 font-mono text-xs">
+                    <svg class="animate-spin h-6 w-6 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Analyzing findings with AI...
+                </div>
+                <div x-show="aiSummaryError" class="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-4" x-text="aiSummaryError"></div>
+                <div x-show="aiSummary" class="prose-sm max-w-none text-foreground bg-background border border-border rounded-lg p-6">
+                    <pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed" x-text="aiSummary"></pre>
+                </div>
+            </div>
+
             <!-- Timeline Tab -->
             <div x-show="activeTab === 'timeline'" x-cloak>
                 <div class="flex items-center justify-between mb-4">
@@ -240,6 +280,30 @@
             layout: 'force',
             filterTypes: [],
             stats: { total_nodes: 0, total_edges: 0, entity_types: {}, relationship_types: {} },
+            aiSummary: '',
+            aiSummaryMeta: '',
+            aiSummaryError: '',
+            aiSummaryLoading: false,
+
+            async generateAiSummary() {
+                this.aiSummaryError = '';
+                this.aiSummaryLoading = true;
+                this.activeTab = 'ai';
+                try {
+                    const resp = await fetch('/api/targets/{{ target_id }}/summary', { method: 'POST' });
+                    const body = await resp.json();
+                    if (resp.ok && body.success) {
+                        this.aiSummary = body.data.summary;
+                        this.aiSummaryMeta = `${body.data.provider} / ${body.data.model} - saved as report #${body.data.report_id}`;
+                    } else {
+                        this.aiSummaryError = (body.errors || ['AI summary failed']).join(', ');
+                    }
+                } catch (e) {
+                    this.aiSummaryError = 'Network error: ' + e.message;
+                } finally {
+                    this.aiSummaryLoading = false;
+                }
+            },
 
             initGraph() {
                 const checkVis = setInterval(() => {

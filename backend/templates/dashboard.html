@@ -9,6 +9,49 @@
     isSubmitting: false,
     person: { full_name: '', email: '', phone: '', address: '', username: '', pivot_depth: 1 },
     isPersonSubmitting: false,
+    trackInvestigation(targetId) {
+        // Live progress via SSE: streams timeline events into a log panel,
+        // then swaps in the result card when the investigation finishes.
+        const resultDiv = document.getElementById('investigation-result');
+        if (!resultDiv) return;
+        resultDiv.innerHTML = `<div class='bg-card border border-border rounded-lg p-4'>
+            <div class='flex items-center gap-2 mb-3'>
+                <svg class='animate-spin h-4 w-4 text-primary' xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'>
+                    <circle class='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' stroke-width='4'></circle>
+                    <path class='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z'></path>
+                </svg>
+                <span class='text-sm font-mono text-primary'>Investigation #${targetId} running - live progress</span>
+            </div>
+            <div id='progress-log-${targetId}' class='space-y-1 max-h-64 overflow-y-auto font-mono text-xs text-muted'></div>
+        </div>`;
+
+        const logEl = document.getElementById('progress-log-' + targetId);
+        const source = new EventSource('/api/targets/' + targetId + '/events');
+        source.onmessage = (e) => {
+            try {
+                const ev = JSON.parse(e.data);
+                const line = document.createElement('div');
+                const color = ev.severity === 'error' || ev.severity === 'critical' ? 'text-red-400'
+                    : ev.severity === 'warning' ? 'text-yellow-400' : 'text-muted';
+                line.className = color;
+                line.textContent = (ev.plugin ? '[' + ev.plugin + '] ' : '') + ev.description;
+                logEl.appendChild(line);
+                logEl.scrollTop = logEl.scrollHeight;
+            } catch (_) {}
+        };
+        source.addEventListener('done', async (e) => {
+            source.close();
+            try {
+                const resp = await fetch('/api/targets/' + targetId + '/result-card');
+                if (resp.ok) {
+                    resultDiv.innerHTML = await resp.text();
+                    lucide.createIcons();
+                }
+            } catch (_) {}
+            loadDashboardStats();
+        });
+        source.onerror = () => { source.close(); };
+    },
     async submitPersonSearch() {
         const hasInput = ['full_name', 'email', 'phone', 'address', 'username']
             .some(f => this.person[f].trim() !== '');
@@ -25,21 +68,14 @@
                 if (this.person[f].trim()) formData.append(f, this.person[f].trim());
             }
             formData.append('pivot_depth', this.person.pivot_depth);
+            formData.append('background', 'true');
 
-            const response = await fetch('/api/search/person', {
-                method: 'POST',
-                body: formData,
-                headers: { 'HX-Request': 'true' }
-            });
+            const response = await fetch('/api/search/person', { method: 'POST', body: formData });
 
             if (response.ok) {
-                const html = await response.text();
-                if (resultDiv) {
-                    resultDiv.innerHTML = html;
-                    lucide.createIcons();
-                }
+                const body = await response.json();
+                this.trackInvestigation(body.data.target_id);
                 this.person = { full_name: '', email: '', phone: '', address: '', username: '', pivot_depth: 1 };
-                loadDashboardStats();
             } else {
                 let errText = 'Error starting person investigation.';
                 try {
@@ -61,65 +97,44 @@
     },
     async submitInvestigation() {
         if (!this.query.trim()) return;
-        
+
         this.isSubmitting = true;
         const spinner = document.getElementById('spinner');
         const resultDiv = document.getElementById('investigation-result');
-        
         if (spinner) spinner.classList.remove('hidden');
-        
+
         try {
             const formData = new FormData();
             formData.append('query', this.query);
             formData.append('target_type', this.targetType === 'auto' ? '' : this.targetType);
-            
-            const response = await fetch('/api/search?format=html', {
-                method: 'POST',
-                body: formData,
-                headers: { 'HX-Request': 'true' }
-            });
-            
+            formData.append('background', 'true');
+
+            const response = await fetch('/api/search', { method: 'POST', body: formData });
+
             if (response.ok) {
-                const html = await response.text();
-                if (resultDiv) {
-                    resultDiv.innerHTML = html;
-                    lucide.createIcons();
-                }
-                
-                // Reset form
+                const body = await response.json();
+                this.trackInvestigation(body.data.target_id);
                 this.query = '';
                 this.targetType = 'auto';
-                
-                // Reload stats
-                loadDashboardStats();
             } else {
                 let errText = 'Error starting investigation. Please try again.';
                 try {
                     const errJson = await response.json();
-                    if (errJson.errors && errJson.errors.length) {
-                        errText = errJson.errors.join(', ');
-                    }
+                    if (errJson.errors && errJson.errors.length) errText = errJson.errors.join(', ');
                 } catch (_) {}
                 if (resultDiv) {
-                    resultDiv.innerHTML = `<div class='bg-red-500/10 border border-red-500/30 rounded-lg p-4'>
-    <p class='text-red-400 text-sm font-mono flex items-center gap-2'><i data-lucide='alert-triangle'
-            class='w-4 h-4'></i> ${errText}</p>
-</div>`;
-lucide.createIcons();
-}
-}
-} catch (e) {
-if (resultDiv) {
-resultDiv.innerHTML = `<div class='bg-red-500/10 border border-red-500/30 rounded-lg p-4'>
-    <p class='text-red-400 text-sm'>Network error: ${e.message}</p>
-</div>`;
-lucide.createIcons();
-}
-} finally {
-this.isSubmitting = false;
-if (spinner) spinner.classList.add('hidden');
-}
-}
+                    resultDiv.innerHTML = `<div class='bg-red-500/10 border border-red-500/30 rounded-lg p-4'><p class='text-red-400 text-sm font-mono'>${errText}</p></div>`;
+                }
+            }
+        } catch (e) {
+            if (resultDiv) {
+                resultDiv.innerHTML = `<div class='bg-red-500/10 border border-red-500/30 rounded-lg p-4'><p class='text-red-400 text-sm'>Network error: ${e.message}</p></div>`;
+            }
+        } finally {
+            this.isSubmitting = false;
+            if (spinner) spinner.classList.add('hidden');
+        }
+    }
 }">
 <!-- Header with Stats Overview -->
 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">

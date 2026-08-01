@@ -3,11 +3,13 @@ Aegis OSINT AI - Simplified Backend
 Lightweight Windows-first OSINT investigation framework
 """
 
+import asyncio
 import json
 import logging
 import os
 import re
 import sqlite3
+import time
 from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -769,9 +771,52 @@ async def get_stats(request: Request):
     )
 
 
+async def _run_investigation_background(target_id: int, target_type_obj: Any, query: str) -> None:
+    """Fire-and-forget investigation runner for background mode."""
+    from backend.engine import InvestigationEngine
+
+    try:
+        engine = InvestigationEngine.get_instance(DATABASE_PATH)
+        if not engine._initialized:
+            await engine.initialize()
+        await engine.run_investigation(target_id, target_type_obj, query)
+    except Exception as exc:
+        logger.error(
+            f"Background investigation failed for target {target_id}: {exc}", exc_info=True
+        )
+
+
+async def _run_person_investigation_background(
+    target_id: int, seeds: dict[str, str], pivot_depth: int
+) -> None:
+    """Fire-and-forget person investigation runner for background mode."""
+    from backend.engine import InvestigationEngine
+
+    try:
+        engine = InvestigationEngine.get_instance(DATABASE_PATH)
+        if not engine._initialized:
+            await engine.initialize()
+        await engine.run_person_investigation(target_id, seeds, pivot_depth=pivot_depth)
+    except Exception as exc:
+        logger.error(
+            f"Background person investigation failed for target {target_id}: {exc}",
+            exc_info=True,
+        )
+
+
 @app.post("/api/search")
-async def search(request: Request, query: str = Form(...), target_type: str | None = Form("auto")):
-    """Start investigation and return JSON or HTML partial."""
+async def search(
+    request: Request,
+    query: str = Form(...),
+    target_type: str | None = Form("auto"),
+    background: bool = Form(False),
+):
+    """Start investigation and return JSON or HTML partial.
+
+    With background=true the investigation runs as an asyncio task and the
+    endpoint returns immediately; progress is streamed via
+    /api/targets/{id}/events (SSE).
+    """
     # 1. Determine target type
     target_type_str = target_type or "auto"
     from backend.models import TargetType
@@ -794,7 +839,12 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
         target_id = cursor.lastrowid
         conn.commit()
 
-    # 3. Run investigation safely
+    # 3a. Background mode: dispatch and return immediately
+    if background:
+        asyncio.create_task(_run_investigation_background(target_id, target_type_obj, query))
+        return format_response({"target_id": target_id, "status": "running"})
+
+    # 3b. Run investigation safely (synchronous mode)
     from backend.engine import InvestigationEngine
 
     engine = InvestigationEngine.get_instance(DATABASE_PATH)
@@ -846,22 +896,26 @@ async def search_person(
     address: str | None = Form(None),
     username: str | None = Form(None),
     pivot_depth: int = Form(1),
+    background: bool = Form(False),
 ):
     """Person-centric multi-field search with entity pivoting.
 
     Accepts any combination of identifiers (name, email, phone, address,
     username), investigates each with its type-appropriate plugins, then
     pivots on newly discovered identifiers (emails, usernames, phones,
-    domains) for up to `pivot_depth` extra rounds.
+    domains) for up to `pivot_depth` extra rounds. With background=true the
+    investigation runs as an asyncio task; progress streams via SSE.
     """
-    seeds = {
+    raw_seeds = {
         "full_name": full_name,
         "email": email,
         "phone": phone,
         "address": address,
         "username": username,
     }
-    seeds = {k: (v or "").strip() for k, v in seeds.items() if (v or "").strip()}
+    seeds: dict[str, str] = {
+        k: (v or "").strip() for k, v in raw_seeds.items() if (v or "").strip()
+    }
     if not seeds:
         raise HTTPException(status_code=422, detail="At least one identifier field is required.")
 
@@ -879,6 +933,10 @@ async def search_person(
         )
         target_id = cursor.lastrowid
         conn.commit()
+
+    if background:
+        asyncio.create_task(_run_person_investigation_background(target_id, seeds, pivot_depth))
+        return format_response({"target_id": target_id, "status": "running"})
 
     from backend.engine import InvestigationEngine
 
@@ -920,6 +978,77 @@ async def search_person(
             "relationships": relationships,
             "timeline": timeline,
         }
+    )
+
+
+def _get_timeline_since(target_id: int, last_id: int) -> tuple[list[tuple], str | None]:
+    """Sync DB read for the SSE stream: new timeline events + target status."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, event_type, plugin, severity, description, timestamp "
+            "FROM timeline_events WHERE target_id = ? AND id > ? ORDER BY id",
+            (target_id, last_id),
+        )
+        events = cursor.fetchall()
+        cursor.execute("SELECT status FROM targets WHERE id = ?", (target_id,))
+        row = cursor.fetchone()
+    return events, (row[0] if row else None)
+
+
+@app.get("/api/targets/{target_id}/events")
+async def target_events(target_id: int):
+    """Server-Sent Events stream of investigation progress.
+
+    Polls the timeline table once per second (SQLite-friendly), streams new
+    events as JSON `data:` frames and terminates with an `event: done` frame
+    when the target reaches a terminal status (completed/failed) or after a
+    10-minute safety cap.
+    """
+    from fastapi.responses import StreamingResponse
+
+    async def event_stream():
+        last_id = 0
+        deadline = time.time() + 600
+        while time.time() < deadline:
+            events, status = await asyncio.to_thread(_get_timeline_since, target_id, last_id)
+            for ev in events:
+                last_id = max(last_id, ev[0])
+                payload = {
+                    "id": ev[0],
+                    "type": ev[1],
+                    "plugin": ev[2],
+                    "severity": ev[3],
+                    "description": ev[4],
+                    "timestamp": str(ev[5]),
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+            if status in ("completed", "failed"):
+                yield f"event: done\ndata: {json.dumps({'status': status})}\n\n"
+                return
+            await asyncio.sleep(1.0)
+        yield f"event: done\ndata: {json.dumps({'status': 'timeout'})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/targets/{target_id}/result-card", response_class=HTMLResponse)
+async def target_result_card(request: Request, target_id: int):
+    """Render the investigation result card partial (used after SSE completion)."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT status FROM targets WHERE id = ?", (target_id,))
+        row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Target not found")
+    return templates.TemplateResponse(
+        request=request,
+        name="components/investigation_result.html",
+        context={"target_id": target_id, "status": row[0]},
     )
 
 
@@ -1085,6 +1214,74 @@ async def create_report(payload: ReportRequest):
             "content": report_content,
         }
     )
+
+
+@app.post("/api/targets/{target_id}/summary")
+async def generate_ai_summary(target_id: int):
+    """Generate an AI executive summary for a completed investigation.
+
+    Uses the first configured AI provider; the result is persisted in the
+    reports table with format='ai_summary'.
+    """
+    from backend.summarizer import SummaryError, generate_summary
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, query, target_type, status, created_at FROM targets WHERE id = ?",
+            (target_id,),
+        )
+        target_row = cursor.fetchone()
+        cursor.execute(
+            "SELECT source, severity, confidence, data FROM findings WHERE target_id = ?",
+            (target_id,),
+        )
+        finding_rows = cursor.fetchall()
+
+    if not target_row:
+        raise HTTPException(status_code=404, detail="Target not found")
+
+    target = {
+        "id": target_row[0],
+        "query": target_row[1],
+        "target_type": target_row[2],
+        "status": target_row[3],
+        "created_at": target_row[4],
+    }
+    findings = [
+        {
+            "source": r[0],
+            "severity": r[1],
+            "confidence": r[2],
+            "data": json.loads(r[3]) if r[3] else {},
+        }
+        for r in finding_rows
+    ]
+
+    if not findings:
+        raise HTTPException(
+            status_code=422, detail="No findings to summarize - run the investigation first."
+        )
+
+    storage = app.state.storage
+    entities = [e.model_dump() for e in await storage.get_entities_for_target(target_id)]
+    timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
+
+    try:
+        result = await generate_summary(target, findings, entities, timeline)
+    except SummaryError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO reports (target_id, format, content) VALUES (?, ?, ?)",
+            (target_id, "ai_summary", result["summary"]),
+        )
+        report_id = cursor.lastrowid
+        conn.commit()
+
+    return format_response({**result, "report_id": report_id})
 
 
 @app.get("/api/reports/{report_id}")
