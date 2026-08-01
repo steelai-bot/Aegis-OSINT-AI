@@ -87,7 +87,10 @@ class StealerLogsPlugin(BasePlugin):
 
     async def _run_telegram(self, client, query: str) -> PluginResponse | None:
         channel_results = await asyncio.gather(
-            *(search_telegram_channel(client, ch, query, source="stealer_channel") for ch in STEALER_CHANNELS),
+            *(
+                search_telegram_channel(client, ch, query, source="stealer_channel")
+                for ch in STEALER_CHANNELS
+            ),
             return_exceptions=True,
         )
         hits: list[dict] = []
@@ -133,7 +136,9 @@ class StealerLogsPlugin(BasePlugin):
                 resp = await client.get(AHMIA_ONION_URL.format(query=query))
                 if resp.status_code != 200:
                     return None
-                hits = parse_ahmia_results(resp.text, source="ahmia_onion", tor=True, category="stealer_log")
+                hits = parse_ahmia_results(
+                    resp.text, source="ahmia_onion", tor=True, category="stealer_log"
+                )
                 if not hits:
                     return None
                 return PluginResponse(

@@ -45,10 +45,12 @@ class BreachCheckPlugin(BasePlugin):
         tasks = []
         if target_type == TargetType.EMAIL:
             if os.getenv("HIBP_API_KEY"):
-                tasks.extend([
-                    self._run_hibp_breaches(client, query),
-                    self._run_hibp_pastes(client, query),
-                ])
+                tasks.extend(
+                    [
+                        self._run_hibp_breaches(client, query),
+                        self._run_hibp_pastes(client, query),
+                    ]
+                )
             else:
                 tasks.append(self._run_kanonymity(client, query))
         tasks.append(self._run_paid(client, query))
@@ -61,23 +63,27 @@ class BreachCheckPlugin(BasePlugin):
                 responses.append(res)
 
         if not responses and target_type in (TargetType.PHONE, TargetType.USERNAME):
-            responses.append(PluginResponse(
-                provider=self.metadata.name,
-                entity_type=target_type,
-                confidence=0.3,
-                evidence=[make_hit(
-                    source="breach_check",
-                    category="breach",
-                    title="No free breach source available for this target type",
-                    snippet=(
-                        "Phone/username breach lookups need HIBP_API_KEY (email only), "
-                        "DEHASHED_API_KEY, LEAKCHECK_API_KEY or SNUSBASE_API_KEY. "
-                        "Configure one in Settings to enable deep breach search."
-                    ),
-                    severity="info",
-                )],
-                raw={"query": query, "target_type": target_type.value, "limited": True},
-            ))
+            responses.append(
+                PluginResponse(
+                    provider=self.metadata.name,
+                    entity_type=target_type,
+                    confidence=0.3,
+                    evidence=[
+                        make_hit(
+                            source="breach_check",
+                            category="breach",
+                            title="No free breach source available for this target type",
+                            snippet=(
+                                "Phone/username breach lookups need HIBP_API_KEY (email only), "
+                                "DEHASHED_API_KEY, LEAKCHECK_API_KEY or SNUSBASE_API_KEY. "
+                                "Configure one in Settings to enable deep breach search."
+                            ),
+                            severity="info",
+                        )
+                    ],
+                    raw={"query": query, "target_type": target_type.value, "limited": True},
+                )
+            )
 
         return responses
 
@@ -95,13 +101,15 @@ class BreachCheckPlugin(BasePlugin):
                     provider=self.metadata.name,
                     entity_type=TargetType.EMAIL,
                     confidence=0.3,
-                    evidence=[make_hit(
-                        source="hibp",
-                        category="breach",
-                        title="HIBP API key rejected (401)",
-                        snippet="The configured HIBP_API_KEY was rejected. Check the key in Settings.",
-                        severity="warning",
-                    )],
+                    evidence=[
+                        make_hit(
+                            source="hibp",
+                            category="breach",
+                            title="HIBP API key rejected (401)",
+                            snippet="The configured HIBP_API_KEY was rejected. Check the key in Settings.",
+                            severity="warning",
+                        )
+                    ],
                     raw={"error": "unauthorized"},
                 )
             if resp.status_code != 200:
@@ -118,22 +126,24 @@ class BreachCheckPlugin(BasePlugin):
                     continue
                 name = breach.get("Name") or breach.get("Title") or "Unknown breach"
                 data_classes = breach.get("DataClasses") or []
-                hits.append(make_hit(
-                    source="hibp",
-                    category="breach",
-                    title=f"HIBP breach: {name}",
-                    snippet=(
-                        f"Exposed data: {', '.join(data_classes[:8])}. "
-                        f"Accounts affected: {breach.get('PwnCount', '?'):,}"
-                        if isinstance(breach.get("PwnCount"), int)
-                        else f"Exposed data: {', '.join(data_classes[:8])}"
-                    ),
-                    url=f"https://haveibeenpwned.com/PwnedWebsites#{name}",
-                    date=breach.get("BreachDate"),
-                    severity="critical",
-                    domain=breach.get("Domain"),
-                    verified=breach.get("IsVerified"),
-                ))
+                hits.append(
+                    make_hit(
+                        source="hibp",
+                        category="breach",
+                        title=f"HIBP breach: {name}",
+                        snippet=(
+                            f"Exposed data: {', '.join(data_classes[:8])}. "
+                            f"Accounts affected: {breach.get('PwnCount', '?'):,}"
+                            if isinstance(breach.get("PwnCount"), int)
+                            else f"Exposed data: {', '.join(data_classes[:8])}"
+                        ),
+                        url=f"https://haveibeenpwned.com/PwnedWebsites#{name}",
+                        date=breach.get("BreachDate"),
+                        severity="critical",
+                        domain=breach.get("Domain"),
+                        verified=breach.get("IsVerified"),
+                    )
+                )
             return PluginResponse(
                 provider=self.metadata.name,
                 entity_type=TargetType.EMAIL,
@@ -168,18 +178,28 @@ class BreachCheckPlugin(BasePlugin):
                     continue
                 source = paste.get("Source") or "unknown"
                 paste_id = paste.get("Id") or ""
-                url = paste.get("Source") and f"https://pastebin.com/{paste_id}" if source == "Pastebin" else None
-                download_url = f"https://pastebin.com/raw/{paste_id}" if source == "Pastebin" and paste_id else None
-                hits.append(make_hit(
-                    source="hibp_pastes",
-                    category="paste",
-                    title=f"Paste on {source}: {paste.get('Title') or paste_id}",
-                    snippet=f"Email found in {source} paste ({paste.get('EmailCount', '?')} emails in paste).",
-                    url=url,
-                    download_url=download_url,
-                    date=paste.get("Date"),
-                    severity="warning",
-                ))
+                url = (
+                    paste.get("Source") and f"https://pastebin.com/{paste_id}"
+                    if source == "Pastebin"
+                    else None
+                )
+                download_url = (
+                    f"https://pastebin.com/raw/{paste_id}"
+                    if source == "Pastebin" and paste_id
+                    else None
+                )
+                hits.append(
+                    make_hit(
+                        source="hibp_pastes",
+                        category="paste",
+                        title=f"Paste on {source}: {paste.get('Title') or paste_id}",
+                        snippet=f"Email found in {source} paste ({paste.get('EmailCount', '?')} emails in paste).",
+                        url=url,
+                        download_url=download_url,
+                        date=paste.get("Date"),
+                        severity="warning",
+                    )
+                )
             return PluginResponse(
                 provider=self.metadata.name,
                 entity_type=TargetType.EMAIL,
@@ -207,17 +227,19 @@ class BreachCheckPlugin(BasePlugin):
                         provider=self.metadata.name,
                         entity_type=TargetType.EMAIL,
                         confidence=0.8,
-                        evidence=[make_hit(
-                            source="pwnedpasswords",
-                            category="breach",
-                            title=f"Email hash appears {count:,} times in pwned-passwords corpus",
-                            snippet=(
-                                "Free k-anonymity check (no HIBP_API_KEY configured). "
-                                "Add HIBP_API_KEY in Settings for full breach names, dates and paste links."
-                            ),
-                            url="https://haveibeenpwned.com/",
-                            severity="critical" if count > 100 else "warning",
-                        )],
+                        evidence=[
+                            make_hit(
+                                source="pwnedpasswords",
+                                category="breach",
+                                title=f"Email hash appears {count:,} times in pwned-passwords corpus",
+                                snippet=(
+                                    "Free k-anonymity check (no HIBP_API_KEY configured). "
+                                    "Add HIBP_API_KEY in Settings for full breach names, dates and paste links."
+                                ),
+                                url="https://haveibeenpwned.com/",
+                                severity="critical" if count > 100 else "warning",
+                            )
+                        ],
                         raw={"source": "pwnedpasswords_range", "count": count},
                     )
             return None

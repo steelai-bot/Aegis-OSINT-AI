@@ -106,17 +106,20 @@ class LeakedDBPlugin(BasePlugin):
                             continue
                         if url and url.startswith("/"):
                             from urllib.parse import urlparse
+
                             base = urlparse(url_template)
                             url = f"{base.scheme}://{base.netloc}{url}"
                         snippet_el = item.select_one("p")
-                        hits.append(make_hit(
-                            source="leak_index",
-                            category="database_dump",
-                            title=title,
-                            snippet=snippet_el.get_text(" ", strip=True) if snippet_el else "",
-                            url=url,
-                            severity="warning",
-                        ))
+                        hits.append(
+                            make_hit(
+                                source="leak_index",
+                                category="database_dump",
+                                title=title,
+                                snippet=snippet_el.get_text(" ", strip=True) if snippet_el else "",
+                                url=url,
+                                severity="warning",
+                            )
+                        )
                 except Exception as e:
                     logger.debug(f"Leak index {url_template} failed: {e}")
             if not hits:
@@ -141,9 +144,14 @@ class LeakedDBPlugin(BasePlugin):
                     try:
                         resp = await client.get(AHMIA_ONION_URL.format(query=term))
                         if resp.status_code == 200:
-                            hits.extend(parse_ahmia_results(
-                                resp.text, source="ahmia_onion", tor=True, category="database_dump"
-                            ))
+                            hits.extend(
+                                parse_ahmia_results(
+                                    resp.text,
+                                    source="ahmia_onion",
+                                    tor=True,
+                                    category="database_dump",
+                                )
+                            )
                     except Exception as e:
                         logger.debug(f"Ahmia dump search '{term}' failed: {e}")
                 if not hits:

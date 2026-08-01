@@ -57,19 +57,23 @@ class WebReconPlugin(BasePlugin):
 
         if robots:
             parsed = self._parse_robots(robots)
-            evidence.append({
-                "type": "robots_txt",
-                "disallowed_paths": parsed["disallowed"][:MAX_PATHS],
-                "sitemaps": parsed["sitemaps"],
-            })
+            evidence.append(
+                {
+                    "type": "robots_txt",
+                    "disallowed_paths": parsed["disallowed"][:MAX_PATHS],
+                    "sitemaps": parsed["sitemaps"],
+                }
+            )
             raw["robots_txt"] = robots[:5000]
 
         if security:
             contacts = EMAIL_RE.findall(security)
-            evidence.append({
-                "type": "security_txt",
-                "contacts": sorted(set(contacts)),
-            })
+            evidence.append(
+                {
+                    "type": "security_txt",
+                    "contacts": sorted(set(contacts)),
+                }
+            )
             raw["security_txt"] = security[:5000]
             if contacts:
                 raw.setdefault("emails", [])
@@ -77,26 +81,29 @@ class WebReconPlugin(BasePlugin):
 
         if sitemap:
             urls = re.findall(r"<loc>(.*?)</loc>", sitemap)
-            evidence.append({
-                "type": "sitemap_xml",
-                "url_count": len(urls),
-                "urls": urls[:MAX_PATHS],
-            })
+            evidence.append(
+                {
+                    "type": "sitemap_xml",
+                    "url_count": len(urls),
+                    "urls": urls[:MAX_PATHS],
+                }
+            )
             raw["sitemap_url_count"] = len(urls)
 
         if not evidence:
             return []
 
-        return [PluginResponse(
-            provider=self.metadata.name,
-            entity_type=target_type,
-            confidence=0.8,
-            evidence=evidence,
-            raw=raw,
-        )]
+        return [
+            PluginResponse(
+                provider=self.metadata.name,
+                entity_type=target_type,
+                confidence=0.8,
+                evidence=evidence,
+                raw=raw,
+            )
+        ]
 
     async def _fetch(self, client: httpx.AsyncClient, url: str) -> str | None:
-
         """Fetch a URL and return its text body on success, else None."""
         try:
             resp = await client.get(url)

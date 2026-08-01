@@ -10,6 +10,7 @@ def test_get_providers():
         assert "name" in p
         assert "status" in p
 
+
 def test_configure_and_disconnect():
     pm = ProviderManager()
     # Mocking configure
@@ -19,4 +20,4 @@ def test_configure_and_disconnect():
     try:
         pm.configure_provider(test_id, {"api_key": "test"})
     except ValueError:
-        pass # If test_provider isn't registered, it raises ValueError, which is correct
+        pass  # If test_provider isn't registered, it raises ValueError, which is correct

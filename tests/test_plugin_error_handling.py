@@ -21,12 +21,14 @@ class FakeSuccessPlugin(BasePlugin):
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         self.call_count += 1
-        return [PluginResponse(
-            provider="fake_success",
-            entity_type=target_type,
-            confidence=0.9,
-            evidence=[{"ok": True}],
-        )]
+        return [
+            PluginResponse(
+                provider="fake_success",
+                entity_type=target_type,
+                confidence=0.9,
+                evidence=[{"ok": True}],
+            )
+        ]
 
 
 class FakeFailingPlugin(BasePlugin):

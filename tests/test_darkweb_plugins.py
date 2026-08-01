@@ -39,6 +39,7 @@ def reset_singletons(monkeypatch):
 # TorClient
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_tor_client_get_client_raises_when_unavailable():
     tor = TorClient.get_instance()
@@ -60,7 +61,12 @@ async def test_tor_client_status_reports_unavailable():
 
 PSBDMP_RESPONSE = {
     "data": [
-        {"id": "abc123", "title": "stealer log dump 2026", "text": "user@example.com:password123", "time": "2026-01-15"},
+        {
+            "id": "abc123",
+            "title": "stealer log dump 2026",
+            "text": "user@example.com:password123",
+            "time": "2026-01-15",
+        },
     ]
 }
 
@@ -87,7 +93,9 @@ async def test_stealer_logs_psbdmp_hit():
         return_value=httpx.Response(200, json=PSBDMP_RESPONSE)
     )
     respx.get(url__startswith="https://t.me/s/").mock(return_value=httpx.Response(404))
-    respx.get(url__startswith="https://ahmia.fi/search").mock(return_value=httpx.Response(200, text="<html></html>"))
+    respx.get(url__startswith="https://ahmia.fi/search").mock(
+        return_value=httpx.Response(200, text="<html></html>")
+    )
 
     plugin = StealerLogsPlugin()
     results = await plugin.execute("user@example.com", TargetType.EMAIL)
@@ -105,8 +113,12 @@ async def test_stealer_logs_telegram_channel_hit():
     respx.get(url__startswith="https://psbdmp.ws/api/search/").mock(
         return_value=httpx.Response(200, json={"data": []})
     )
-    respx.get(url__startswith="https://t.me/s/").mock(return_value=httpx.Response(200, text=TG_HTML))
-    respx.get(url__startswith="https://ahmia.fi/search").mock(return_value=httpx.Response(200, text="<html></html>"))
+    respx.get(url__startswith="https://t.me/s/").mock(
+        return_value=httpx.Response(200, text=TG_HTML)
+    )
+    respx.get(url__startswith="https://ahmia.fi/search").mock(
+        return_value=httpx.Response(200, text="<html></html>")
+    )
 
     plugin = StealerLogsPlugin()
     results = await plugin.execute("user@example.com", TargetType.EMAIL)
@@ -125,7 +137,9 @@ async def test_stealer_logs_no_hits_returns_empty():
         return_value=httpx.Response(200, json={"data": []})
     )
     respx.get(url__startswith="https://t.me/s/").mock(return_value=httpx.Response(404))
-    respx.get(url__startswith="https://ahmia.fi/search").mock(return_value=httpx.Response(200, text="<html></html>"))
+    respx.get(url__startswith="https://ahmia.fi/search").mock(
+        return_value=httpx.Response(200, text="<html></html>")
+    )
 
     plugin = StealerLogsPlugin()
     results = await plugin.execute("nobody@nowhere.invalid", TargetType.EMAIL)
@@ -186,7 +200,10 @@ async def test_breach_check_hibp_full(monkeypatch):
     breach_resp = next(r for r in results if r.raw.get("source") == "hibp_breachedaccount")
     assert len(breach_resp.evidence) == 2
     assert breach_resp.evidence[0]["severity"] == "critical"
-    assert "canva" in breach_resp.evidence[0]["url"].lower() or "PwnedWebsites" in breach_resp.evidence[0]["url"]
+    assert (
+        "canva" in breach_resp.evidence[0]["url"].lower()
+        or "PwnedWebsites" in breach_resp.evidence[0]["url"]
+    )
 
     paste_resp = next(r for r in results if r.raw.get("source") == "hibp_pasteaccount")
     assert paste_resp.evidence[0]["download_url"] == "https://pastebin.com/raw/xYz123Ab"
@@ -242,15 +259,28 @@ async def test_breach_check_phone_info_hit():
 # LeakedDBPlugin
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_leaked_db_psbdmp_dump_with_download():
     respx.get(url__startswith="https://psbdmp.ws/api/search/").mock(
-        return_value=httpx.Response(200, json={
-            "data": [{"id": "dump42", "title": "example.com full database dump", "text": "...", "time": "2026-02-01"}]
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "dump42",
+                        "title": "example.com full database dump",
+                        "text": "...",
+                        "time": "2026-02-01",
+                    }
+                ]
+            },
+        )
     )
-    respx.get(url__startswith="https://onion.live/").mock(return_value=httpx.Response(200, text="<html></html>"))
+    respx.get(url__startswith="https://onion.live/").mock(
+        return_value=httpx.Response(200, text="<html></html>")
+    )
 
     plugin = LeakedDBPlugin()
     results = await plugin.execute("example.com", TargetType.DOMAIN)
@@ -279,13 +309,16 @@ async def test_leaked_db_no_hits():
 # DarkWebMonitorPlugin
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_darkweb_monitor_ahmia_clearnet():
     respx.get(url__startswith="https://ahmia.fi/search").mock(
         return_value=httpx.Response(200, text=AHMIA_HTML)
     )
-    respx.get(url__startswith="https://onion.live/").mock(return_value=httpx.Response(200, text="<html></html>"))
+    respx.get(url__startswith="https://onion.live/").mock(
+        return_value=httpx.Response(200, text="<html></html>")
+    )
 
     plugin = DarkWebMonitorPlugin()
     results = await plugin.execute("example.com", TargetType.DOMAIN)
@@ -300,7 +333,9 @@ async def test_darkweb_monitor_ahmia_clearnet():
 @pytest.mark.asyncio
 @respx.mock
 async def test_darkweb_monitor_all_sources_fail_returns_empty():
-    respx.get(url__startswith="https://ahmia.fi/search").mock(side_effect=httpx.ConnectError("boom"))
+    respx.get(url__startswith="https://ahmia.fi/search").mock(
+        side_effect=httpx.ConnectError("boom")
+    )
     respx.get(url__startswith="https://onion.live/").mock(side_effect=httpx.ConnectError("boom"))
 
     plugin = DarkWebMonitorPlugin()
@@ -328,7 +363,9 @@ DDG_HTML = """
 @pytest.mark.asyncio
 @respx.mock
 async def test_telegram_osint_channel_and_ddg_hits():
-    respx.get(url__startswith="https://t.me/s/").mock(return_value=httpx.Response(200, text=TG_HTML))
+    respx.get(url__startswith="https://t.me/s/").mock(
+        return_value=httpx.Response(200, text=TG_HTML)
+    )
     respx.get(url__startswith="https://html.duckduckgo.com/html/").mock(
         return_value=httpx.Response(200, text=DDG_HTML)
     )
@@ -350,7 +387,9 @@ async def test_telegram_osint_channel_and_ddg_hits():
 @pytest.mark.asyncio
 @respx.mock
 async def test_telegram_osint_no_mentions():
-    respx.get(url__startswith="https://t.me/s/").mock(return_value=httpx.Response(200, text="<html><body></body></html>"))
+    respx.get(url__startswith="https://t.me/s/").mock(
+        return_value=httpx.Response(200, text="<html><body></body></html>")
+    )
     respx.get(url__startswith="https://html.duckduckgo.com/html/").mock(
         return_value=httpx.Response(200, text="<html><body></body></html>")
     )
@@ -363,6 +402,7 @@ async def test_telegram_osint_no_mentions():
 # ---------------------------------------------------------------------------
 # ExposedCredentialsPlugin (rewritten)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 @respx.mock
@@ -404,6 +444,7 @@ async def test_exposed_credentials_phone_info_only():
 # Planner templates
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_planner_email_template_includes_darkweb_plugins():
     from backend.planner import AIPlanner
@@ -429,6 +470,7 @@ async def test_planner_domain_template_includes_leaked_db():
 # Plugin discovery: all new plugins enabled without keys
 # ---------------------------------------------------------------------------
 
+
 def test_new_plugins_discovered_and_enabled():
     from backend.plugin_manager import PluginManager
 
@@ -436,8 +478,17 @@ def test_new_plugins_discovered_and_enabled():
     pm = PluginManager()
     pm.discover_plugins()
     try:
-        for name in ("stealer_logs", "darkweb_monitor", "breach_check", "leaked_db", "telegram_osint", "exposed_credentials"):
+        for name in (
+            "stealer_logs",
+            "darkweb_monitor",
+            "breach_check",
+            "leaked_db",
+            "telegram_osint",
+            "exposed_credentials",
+        ):
             assert name in pm.get_all_plugin_names(), f"{name} not discovered"
-            assert pm._plugin_statuses.get(name) == "enabled", f"{name} not enabled: {pm.get_plugin_error(name)}"
+            assert pm._plugin_statuses.get(name) == "enabled", (
+                f"{name} not enabled: {pm.get_plugin_error(name)}"
+            )
     finally:
         PluginManager._instance = None

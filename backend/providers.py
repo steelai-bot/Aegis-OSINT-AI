@@ -20,13 +20,13 @@ class AIResponse(BaseModel):
 
 class AIProvider:
     """Base class for AI providers."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
         self._default_model: str | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         return await SharedHTTPClient().get_client()
-
 
     async def chat(self, prompt: str, model: str) -> AIResponse:
         raise NotImplementedError
@@ -52,20 +52,15 @@ class OpenRouterProvider(AIProvider):
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "HTTP-Referer": "http://localhost:8000",
-            "X-Title": "Aegis OSINT AI"
+            "X-Title": "Aegis OSINT AI",
         }
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}]
-        }
+        payload = {"model": model, "messages": [{"role": "user", "content": prompt}]}
         client = await self._get_client()
         resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
         resp.raise_for_status()
         data = resp.json()
         return AIResponse(
-            content=data["choices"][0]["message"]["content"],
-            provider="openrouter",
-            model=model
+            content=data["choices"][0]["message"]["content"], provider="openrouter", model=model
         )
 
 
@@ -73,18 +68,13 @@ class OpenAIProvider(AIProvider):
     async def chat(self, prompt: str, model: str) -> AIResponse:
         url = "https://api.openai.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {self.api_key}"}
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}]
-        }
+        payload = {"model": model, "messages": [{"role": "user", "content": prompt}]}
         client = await self._get_client()
         resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
         resp.raise_for_status()
         data = resp.json()
         return AIResponse(
-            content=data["choices"][0]["message"]["content"],
-            provider="openai",
-            model=model
+            content=data["choices"][0]["message"]["content"], provider="openai", model=model
         )
 
 
@@ -94,30 +84,24 @@ class AnthropicProvider(AIProvider):
         headers = {
             "x-api-key": self.api_key,
             "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
+            "content-type": "application/json",
         }
         payload = {
             "model": model,
             "max_tokens": 1024,
-            "messages": [{"role": "user", "content": prompt}]
+            "messages": [{"role": "user", "content": prompt}],
         }
         client = await self._get_client()
         resp = await client.post(url, headers=headers, json=payload, timeout=30.0)
         resp.raise_for_status()
         data = resp.json()
-        return AIResponse(
-            content=data["content"][0]["text"],
-            provider="anthropic",
-            model=model
-        )
+        return AIResponse(content=data["content"][0]["text"], provider="anthropic", model=model)
 
 
 class GeminiProvider(AIProvider):
     async def chat(self, prompt: str, model: str) -> AIResponse:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}]
-        }
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
         client = await self._get_client()
         resp = await client.post(url, json=payload, timeout=30.0)
         resp.raise_for_status()
@@ -125,7 +109,7 @@ class GeminiProvider(AIProvider):
         return AIResponse(
             content=data["candidates"][0]["content"]["parts"][0]["text"],
             provider="gemini",
-            model=model
+            model=model,
         )
 
 
@@ -159,30 +143,17 @@ class NvidiaProvider(AIProvider):
 
         if image_urls:
             for url in image_urls:
-                content_parts.append({
-                    "type": "image_url",
-                    "image_url": {"url": url}
-                })
+                content_parts.append({"type": "image_url", "image_url": {"url": url}})
 
         if video_urls:
             for url in video_urls:
-                content_parts.append({
-                    "type": "video_url",
-                    "video_url": {"url": url}
-                })
+                content_parts.append({"type": "video_url", "video_url": {"url": url}})
 
         return await self._make_request(model, content_parts)
 
-    async def _make_request(
-        self,
-        model: str,
-        content: str | list[dict[str, Any]]
-    ) -> AIResponse:
+    async def _make_request(self, model: str, content: str | list[dict[str, Any]]) -> AIResponse:
         url = "https://integrate.api.nvidia.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Accept": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": content}],
@@ -198,12 +169,10 @@ class NvidiaProvider(AIProvider):
             return AIResponse(
                 content=f"NVIDIA API returned empty response. The model '{model}' may not be provisioned for this account.",
                 provider="nvidia",
-                model=model
+                model=model,
             )
         return AIResponse(
-            content=data["choices"][0]["message"]["content"],
-            provider="nvidia",
-            model=model
+            content=data["choices"][0]["message"]["content"], provider="nvidia", model=model
         )
 
 
@@ -214,14 +183,11 @@ class GroqProvider(AIProvider):
 
     async def chat(self, prompt: str, model: str) -> AIResponse:
         url = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.7
+            "temperature": 0.7,
         }
 
         client = await self._get_client()
@@ -229,9 +195,7 @@ class GroqProvider(AIProvider):
         resp.raise_for_status()
         data = resp.json()
         return AIResponse(
-            content=data["choices"][0]["message"]["content"],
-            provider="groq",
-            model=model
+            content=data["choices"][0]["message"]["content"], provider="groq", model=model
         )
 
 
@@ -242,14 +206,11 @@ class MistralProvider(AIProvider):
 
     async def chat(self, prompt: str, model: str) -> AIResponse:
         url = "https://api.mistral.ai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.7
+            "temperature": 0.7,
         }
 
         client = await self._get_client()
@@ -257,9 +218,7 @@ class MistralProvider(AIProvider):
         resp.raise_for_status()
         data = resp.json()
         return AIResponse(
-            content=data["choices"][0]["message"]["content"],
-            provider="mistral",
-            model=model
+            content=data["choices"][0]["message"]["content"], provider="mistral", model=model
         )
 
 

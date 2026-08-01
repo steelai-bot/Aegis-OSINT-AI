@@ -134,14 +134,16 @@ class DarkWebMonitorPlugin(BasePlugin):
                 if not title:
                     continue
                 snippet_el = item.select_one("p")
-                hits.append(make_hit(
-                    source="onion_live",
-                    category="forum_mention",
-                    title=title,
-                    snippet=snippet_el.get_text(" ", strip=True) if snippet_el else "",
-                    url=url,
-                    severity="info",
-                ))
+                hits.append(
+                    make_hit(
+                        source="onion_live",
+                        category="forum_mention",
+                        title=title,
+                        snippet=snippet_el.get_text(" ", strip=True) if snippet_el else "",
+                        url=url,
+                        severity="info",
+                    )
+                )
             if not hits:
                 return None
             return PluginResponse(
@@ -174,14 +176,16 @@ class DarkWebMonitorPlugin(BasePlugin):
                     for item in data.get("items", [])[:5]:
                         if not isinstance(item, dict):
                             continue
-                        hits.append(make_hit(
-                            source="google_dork",
-                            category="forum_mention",
-                            title=item.get("title") or "",
-                            snippet=item.get("snippet") or "",
-                            url=item.get("link"),
-                            severity="info",
-                        ))
+                        hits.append(
+                            make_hit(
+                                source="google_dork",
+                                category="forum_mention",
+                                title=item.get("title") or "",
+                                snippet=item.get("snippet") or "",
+                                url=item.get("link"),
+                                severity="info",
+                            )
+                        )
                 except Exception as e:
                     logger.debug(f"Google dork '{dork}' failed: {e}")
             if not hits:

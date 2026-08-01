@@ -17,7 +17,6 @@ class PluginExecutionError(Exception):
 
 
 class BasePlugin(ABC):
-
     """
     Abstract Base Class for all OSINT plugins.
     Each plugin must implement the metadata property and the execute method.

@@ -192,7 +192,9 @@ async def search_telegram_channel(
     return hits
 
 
-def parse_ahmia_results(html: str, source: str, tor: bool, category: str = "forum_mention") -> list[dict[str, Any]]:
+def parse_ahmia_results(
+    html: str, source: str, tor: bool, category: str = "forum_mention"
+) -> list[dict[str, Any]]:
     """Parse Ahmia search result HTML into hit dicts."""
     hits: list[dict[str, Any]] = []
     try:
@@ -255,7 +257,17 @@ async def search_dehashed(client: httpx.AsyncClient, query: str) -> list[dict[st
             parts = [
                 f"{k}: {redact_secret(str(v)) if k in ('password', 'hashed_password') else v}"
                 for k, v in entry.items()
-                if v and k in ("email", "username", "password", "hashed_password", "name", "phone", "database_name")
+                if v
+                and k
+                in (
+                    "email",
+                    "username",
+                    "password",
+                    "hashed_password",
+                    "name",
+                    "phone",
+                    "database_name",
+                )
             ]
             db_name = entry.get("database_name") or "unknown breach"
             hits.append(
@@ -323,7 +335,10 @@ async def search_snusbase(client: httpx.AsyncClient, query: str) -> list[dict[st
         resp = await client.post(
             "https://api.snusbase.com/data/search",
             headers={"Auth": api_key, "Content-Type": "application/json"},
-            json={"terms": [query], "types": ["email", "username", "lastip", "hash", "password", "name"]},
+            json={
+                "terms": [query],
+                "types": ["email", "username", "lastip", "hash", "password", "name"],
+            },
         )
         if resp.status_code != 200:
             return hits

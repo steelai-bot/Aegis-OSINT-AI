@@ -26,11 +26,11 @@ class EnhancedHTTPClient:
     Production-grade HTTP client with advanced resilience patterns.
     Combines connection pooling with circuit breakers, rate limiters, and retries.
     """
+
     _instance = None
     _initialized: bool
     _client: httpx.AsyncClient | None = None
     _lock = asyncio.Lock()
-
 
     def __new__(cls):
         if cls._instance is None:
@@ -39,7 +39,7 @@ class EnhancedHTTPClient:
         return cls._instance
 
     @classmethod
-    async def get_instance(cls) -> 'EnhancedHTTPClient':
+    async def get_instance(cls) -> "EnhancedHTTPClient":
         """Get singleton instance"""
         if cls._instance is None:
             cls._instance = cls()
@@ -68,21 +68,14 @@ class EnhancedHTTPClient:
                 # Create enhanced HTTP client with larger connection pool
                 self._client = httpx.AsyncClient(
                     timeout=httpx.Timeout(30.0, connect=10.0),
-                    limits=httpx.Limits(
-                        max_connections=100,
-                        max_keepalive_connections=50
-                    ),
+                    limits=httpx.Limits(max_connections=100, max_keepalive_connections=50),
                     follow_redirects=True,
-                    headers={
-                        'User-Agent': 'Aegis-OSINT-AI/2.0 (Enhanced)'
-                    }
+                    headers={"User-Agent": "Aegis-OSINT-AI/2.0 (Enhanced)"},
                 )
 
                 # Default retry configuration
                 self._retry_config = self._infrastructure.get_retry_config(
-                    "http_default",
-                    max_retries=3,
-                    base_delay=1.0
+                    "http_default", max_retries=3, base_delay=1.0
                 )
 
                 logger.info("EnhancedHTTPClient initialized with advanced resilience")
@@ -92,10 +85,7 @@ class EnhancedHTTPClient:
         if domain not in self._circuit_breakers:
             assert self._infrastructure is not None, "HTTP client not initialized"
             config = CircuitBreakerConfig(
-                failure_threshold=5,
-                success_threshold=3,
-                timeout=60.0,
-                half_open_max_calls=3
+                failure_threshold=5, success_threshold=3, timeout=60.0, half_open_max_calls=3
             )
             self._circuit_breakers[domain] = self._infrastructure.get_circuit_breaker(
                 f"http_{domain}", config
@@ -108,10 +98,7 @@ class EnhancedHTTPClient:
             assert self._infrastructure is not None, "HTTP client not initialized"
             # Default rate limits per domain
             self._rate_limiters[domain] = self._infrastructure.get_rate_limiter(
-                f"http_{domain}",
-                rate=10.0,
-                capacity=100,
-                adaptive=True
+                f"http_{domain}", rate=10.0, capacity=100, adaptive=True
             )
         return self._rate_limiters[domain]
 
@@ -122,7 +109,6 @@ class EnhancedHTTPClient:
         assert self._client is not None, "HTTP client failed to initialize"
         return self._client
 
-
     async def request(
         self,
         method: str,
@@ -130,7 +116,7 @@ class EnhancedHTTPClient:
         use_circuit_breaker: bool = True,
         use_rate_limiter: bool = True,
         use_retry: bool = True,
-        **kwargs
+        **kwargs,
     ) -> httpx.Response:
         """
         Make HTTP request with full resilience stack.
@@ -178,6 +164,7 @@ class EnhancedHTTPClient:
 
         # Wrap with circuit breaker
         if cb:
+
             async def wrapped_call() -> httpx.Response:
                 return await cb.call(cast(Callable[..., httpx.Response], _make_request))
         else:
@@ -186,12 +173,9 @@ class EnhancedHTTPClient:
         # Execute with retry logic
         if use_retry and self._retry_config:
             return await self._retry_config.execute(
-                cast(Callable[..., httpx.Response], wrapped_call),
-                operation_name=f"{method} {url}"
+                cast(Callable[..., httpx.Response], wrapped_call), operation_name=f"{method} {url}"
             )
         return await wrapped_call()
-
-
 
     async def get(self, url: str, **kwargs) -> httpx.Response:
         """GET request with full resilience"""
@@ -213,9 +197,8 @@ class EnhancedHTTPClient:
         stats: dict[str, Any] = {
             "client_initialized": self._client is not None,
             "circuit_breakers": {},
-            "rate_limiters": {}
+            "rate_limiters": {},
         }
-
 
         for name, cb in self._circuit_breakers.items():
             stats["circuit_breakers"][name] = cb.get_stats()

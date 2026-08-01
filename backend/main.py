@@ -40,7 +40,9 @@ def get_db():
     Uses a 30s busy timeout so short lock contention with the async
     SQLiteStorage writer doesn't fail immediately with 'database is locked'.
     """
-    os.makedirs(os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True)
+    os.makedirs(
+        os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True
+    )
     conn = sqlite3.connect(DATABASE_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=30000")
@@ -52,11 +54,13 @@ def get_db():
 
 def init_db():
     """Initialize SQLite database with schema."""
-    os.makedirs(os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True)
+    os.makedirs(
+        os.path.dirname(DATABASE_PATH) if os.path.dirname(DATABASE_PATH) else ".", exist_ok=True
+    )
     conn = sqlite3.connect(DATABASE_PATH, timeout=30)
     cursor = conn.cursor()
 
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS targets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             query TEXT NOT NULL,
@@ -64,9 +68,9 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             status TEXT DEFAULT 'pending'
         )
-    ''')
+    """)
 
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS findings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             target_id INTEGER,
@@ -78,9 +82,9 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (target_id) REFERENCES targets (id)
         )
-    ''')
+    """)
 
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             target_id INTEGER,
@@ -89,7 +93,7 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (target_id) REFERENCES targets (id)
         )
-    ''')
+    """)
 
     conn.commit()
     conn.close()
@@ -113,9 +117,10 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cleanup on shutdown
-    if hasattr(app.state, 'storage'):
+    if hasattr(app.state, "storage"):
         await app.state.storage.close()
     from backend.http_client import close_shared_client
+
     await close_shared_client()
 
 
@@ -124,7 +129,7 @@ app = FastAPI(
     title="Aegis OSINT AI",
     version="1.0.0",
     description="Lightweight OSINT investigation framework",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -136,34 +141,36 @@ app.add_middleware(
 )
 
 
-def format_response(data: Any = None, success: bool = True, errors: list[str] | None = None, metadata: dict | None = None):
+def format_response(
+    data: Any = None,
+    success: bool = True,
+    errors: list[str] | None = None,
+    metadata: dict | None = None,
+):
 
     return {
         "success": success,
         "data": data if data is not None else {},
         "errors": errors or [],
-        "metadata": metadata or {}
+        "metadata": metadata or {},
     }
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.exception(f"Unhandled exception: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content=format_response(success=False, errors=[str(exc)])
-    )
+    return JSONResponse(status_code=500, content=format_response(success=False, errors=[str(exc)]))
 
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
-        status_code=exc.status_code,
-        content=format_response(success=False, errors=[exc.detail])
+        status_code=exc.status_code, content=format_response(success=False, errors=[exc.detail])
     )
 
 
 # --- Pydantic Models ---
+
 
 class TargetCreate(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000)
@@ -212,16 +219,17 @@ DARKWEB_PLUGINS = [
 def _detect_target_type(query: str):
     """Auto-detect target type from query string (shared by /api/search and /api/darkweb/search)."""
     from backend.models import TargetType
+
     query_clean = query.strip()
-    if re.match(r'^\d{11}$', query_clean):
+    if re.match(r"^\d{11}$", query_clean):
         return TargetType.ABN
-    if re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', query_clean):
+    if re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", query_clean):
         return TargetType.EMAIL
-    if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', query_clean):
+    if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", query_clean):
         return TargetType.IP
-    if re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', query_clean):
+    if re.match(r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", query_clean):
         return TargetType.DOMAIN
-    if re.match(r'^\+?[0-9\s\-()]{7,15}$', query_clean):
+    if re.match(r"^\+?[0-9\s\-()]{7,15}$", query_clean):
         return TargetType.PHONE
     return TargetType.USERNAME
 
@@ -229,6 +237,7 @@ def _detect_target_type(query: str):
 def _evidence_to_hits(responses: list) -> list:
     """Normalize dark-web plugin PluginResponse evidence into DarkWebHit models."""
     from backend.models import DarkWebHit
+
     hits: list = []
     for res in responses:
         for ev in res.evidence:
@@ -240,19 +249,25 @@ def _evidence_to_hits(responses: list) -> list:
             if not isinstance(extra_val, dict):
                 extra_val = {}
             try:
-                hits.append(DarkWebHit(
-                    source=ev.get("source") or res.provider,
-                    category=str(category),
-                    title=str(title),
-                    snippet=str(ev.get("snippet") or ev.get("description") or "")[:500],
-                    url=ev.get("url") if isinstance(ev.get("url"), str) else None,
-                    download_url=ev.get("download_url") if isinstance(ev.get("download_url"), str) else None,
-                    date=ev.get("date") if isinstance(ev.get("date"), str) else None,
-                    severity=str(ev.get("severity")) if ev.get("severity") in ("info", "warning", "critical") else "info",
-                    confidence=res.confidence,
-                    tor=bool(ev.get("tor", False)),
-                    extra=extra_val,
-                ))
+                hits.append(
+                    DarkWebHit(
+                        source=ev.get("source") or res.provider,
+                        category=str(category),
+                        title=str(title),
+                        snippet=str(ev.get("snippet") or ev.get("description") or "")[:500],
+                        url=ev.get("url") if isinstance(ev.get("url"), str) else None,
+                        download_url=ev.get("download_url")
+                        if isinstance(ev.get("download_url"), str)
+                        else None,
+                        date=ev.get("date") if isinstance(ev.get("date"), str) else None,
+                        severity=str(ev.get("severity"))
+                        if ev.get("severity") in ("info", "warning", "critical")
+                        else "info",
+                        confidence=res.confidence,
+                        tor=bool(ev.get("tor", False)),
+                        extra=extra_val,
+                    )
+                )
             except Exception:
                 continue
     severity_order = {"critical": 0, "warning": 1, "info": 2}
@@ -270,13 +285,12 @@ if os.path.exists("backend/static"):
 
 # --- Template Routes (replacing React SPA) ---
 
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
     """Dashboard page with new investigation form"""
     return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html",
-        context={"active_page": "dashboard"}
+        request=request, name="dashboard.html", context={"active_page": "dashboard"}
     )
 
 
@@ -284,9 +298,7 @@ async def dashboard_page(request: Request):
 async def investigations_page(request: Request):
     """Investigations list page"""
     return templates.TemplateResponse(
-        request=request,
-        name="investigations.html",
-        context={"active_page": "investigations"}
+        request=request, name="investigations.html", context={"active_page": "investigations"}
     )
 
 
@@ -296,7 +308,7 @@ async def results_page(request: Request, target_id: int):
     return templates.TemplateResponse(
         request=request,
         name="results.html",
-        context={"target_id": target_id, "active_page": "results"}
+        context={"target_id": target_id, "active_page": "results"},
     )
 
 
@@ -304,9 +316,7 @@ async def results_page(request: Request, target_id: int):
 async def plugins_page(request: Request):
     """Plugins management page"""
     return templates.TemplateResponse(
-        request=request,
-        name="plugins.html",
-        context={"active_page": "plugins"}
+        request=request, name="plugins.html", context={"active_page": "plugins"}
     )
 
 
@@ -314,9 +324,7 @@ async def plugins_page(request: Request):
 async def settings_page(request: Request):
     """Settings page"""
     return templates.TemplateResponse(
-        request=request,
-        name="settings.html",
-        context={"active_page": "settings"}
+        request=request, name="settings.html", context={"active_page": "settings"}
     )
 
 
@@ -324,9 +332,7 @@ async def settings_page(request: Request):
 async def darkweb_page(request: Request):
     """Dark Web search page - stealer logs, breaches, forums, dumps, Telegram."""
     return templates.TemplateResponse(
-        request=request,
-        name="darkweb.html",
-        context={"active_page": "darkweb"}
+        request=request, name="darkweb.html", context={"active_page": "darkweb"}
     )
 
 
@@ -342,16 +348,20 @@ async def darkweb_status():
         pm.discover_plugins()
     plugins = []
     for name in DARKWEB_PLUGINS:
-        plugins.append({
-            "name": name,
-            "status": pm._plugin_statuses.get(name, "not_found"),
-            "error": pm.get_plugin_error(name),
-        })
+        plugins.append(
+            {
+                "name": name,
+                "status": pm._plugin_statuses.get(name, "not_found"),
+                "error": pm.get_plugin_error(name),
+            }
+        )
     return format_response({**tor_status, "plugins": plugins})
 
 
 @app.post("/api/darkweb/search")
-async def darkweb_search(request: Request, query: str = Form(...), target_type: str | None = Form("auto")):
+async def darkweb_search(
+    request: Request, query: str = Form(...), target_type: str | None = Form("auto")
+):
     """On-demand dark-web search across stealer logs, breaches, forums, dumps and Telegram.
 
     Runs only the dark-web plugin subset (not a full investigation) and returns
@@ -364,7 +374,11 @@ async def darkweb_search(request: Request, query: str = Form(...), target_type: 
 
     # 1. Resolve target type
     try:
-        target_type_obj = _detect_target_type(query) if (target_type or "auto") == "auto" else TargetType(str(target_type))
+        target_type_obj = (
+            _detect_target_type(query)
+            if (target_type or "auto") == "auto"
+            else TargetType(str(target_type))
+        )
     except ValueError:
         target_type_obj = TargetType.USERNAME
 
@@ -407,9 +421,12 @@ async def darkweb_search(request: Request, query: str = Form(...), target_type: 
         hits_by_category[hit.category] = hits_by_category.get(hit.category, 0) + 1
 
     from backend.tor_client import TorClient
+
     tor_available = await TorClient.get_instance().is_available()
 
-    is_html_req = request.headers.get("HX-Request") or "text/html" in request.headers.get("accept", "")
+    is_html_req = request.headers.get("HX-Request") or "text/html" in request.headers.get(
+        "accept", ""
+    )
     if is_html_req:
         return templates.TemplateResponse(
             request=request,
@@ -421,17 +438,19 @@ async def darkweb_search(request: Request, query: str = Form(...), target_type: 
                 "hits_by_category": hits_by_category,
                 "sources_used": sources_used,
                 "tor_available": tor_available,
-            }
+            },
         )
 
-    return format_response({
-        "query": query,
-        "target_type": target_type_obj.value,
-        "tor_available": tor_available,
-        "hits": [h.model_dump() for h in hits],
-        "hits_by_category": hits_by_category,
-        "sources_used": sources_used,
-    })
+    return format_response(
+        {
+            "query": query,
+            "target_type": target_type_obj.value,
+            "tor_available": tor_available,
+            "hits": [h.model_dump() for h in hits],
+            "hits_by_category": hits_by_category,
+            "sources_used": sources_used,
+        }
+    )
 
 
 @app.get("/health")
@@ -440,6 +459,7 @@ async def health():
 
 
 # --- PROVIDER MANAGEMENT ENDPOINTS ---
+
 
 @app.get("/api/providers")
 async def list_providers():
@@ -464,7 +484,12 @@ async def get_provider_status(provider: str):
 
 
 @app.post("/api/providers/{provider}/configure")
-async def configure_provider(provider: str, api_key: str | None = Form(None), username: str | None = Form(None), password: str | None = Form(None)):
+async def configure_provider(
+    provider: str,
+    api_key: str | None = Form(None),
+    username: str | None = Form(None),
+    password: str | None = Form(None),
+):
     # Validate provider exists
     try:
         provider_manager.get_provider(provider)
@@ -510,7 +535,21 @@ async def disconnect_provider(provider: str):
 @app.get("/api/settings")
 async def get_app_settings():
     """Get current settings from the config module."""
-    return format_response(get_settings().model_dump(exclude={"openai_api_key": True, "anthropic_api_key": True, "gemini_api_key": True, "openrouter_api_key": True, "groq_api_key": True, "mistral_api_key": True, "github_token": True, "shodan_api_key": True, "securitytrails_api_key": True}))
+    return format_response(
+        get_settings().model_dump(
+            exclude={
+                "openai_api_key": True,
+                "anthropic_api_key": True,
+                "gemini_api_key": True,
+                "openrouter_api_key": True,
+                "groq_api_key": True,
+                "mistral_api_key": True,
+                "github_token": True,
+                "shodan_api_key": True,
+                "securitytrails_api_key": True,
+            }
+        )
+    )
 
 
 @app.post("/api/settings/save")
@@ -539,24 +578,27 @@ async def save_app_settings(payload: dict[str, str]):
 
 # --- INVESTIGATION ENDPOINTS ---
 
+
 @app.post("/api/targets")
 async def create_target(payload: TargetCreate):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO targets (query, target_type) VALUES (?, ?)",
-            (payload.query, payload.target_type)
+            (payload.query, payload.target_type),
         )
         target_id = cursor.lastrowid
         conn.commit()
 
-    return format_response({
-        "id": target_id,
-        "query": payload.query,
-        "target_type": payload.target_type,
-        "status": "pending",
-        "created_at": datetime.now(UTC).isoformat()
-    })
+    return format_response(
+        {
+            "id": target_id,
+            "query": payload.query,
+            "target_type": payload.target_type,
+            "status": "pending",
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+    )
 
 
 @app.get("/api/targets")
@@ -565,18 +607,24 @@ async def list_targets(request: Request, format: str = "json", limit: int | None
     with get_db() as conn:
         cursor = conn.cursor()
         if limit:
-            cursor.execute("SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC LIMIT ?", (limit,))
+            cursor.execute(
+                "SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            )
         else:
-            cursor.execute("SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC")
+            cursor.execute(
+                "SELECT id, query, target_type, status, created_at FROM targets ORDER BY created_at DESC"
+            )
         rows = cursor.fetchall()
 
-    targets = [{"id": r[0], "query": r[1], "target_type": r[2], "status": r[3], "created_at": r[4]} for r in rows]
+    targets = [
+        {"id": r[0], "query": r[1], "target_type": r[2], "status": r[3], "created_at": r[4]}
+        for r in rows
+    ]
 
     if format == "html":
         return templates.TemplateResponse(
-            request=request,
-            name="components/targets_list.html",
-            context={"targets": targets}
+            request=request, name="components/targets_list.html", context={"targets": targets}
         )
     return format_response(targets)
 
@@ -606,8 +654,6 @@ async def delete_target(target_id: int, request: Request):
 
 @app.get("/api/stats")
 async def get_stats(request: Request):
-
-
     """Get system stats overview."""
     with get_db() as conn:
         cursor = conn.cursor()
@@ -616,7 +662,11 @@ async def get_stats(request: Request):
         cursor.execute("SELECT COUNT(*) FROM findings")
         findings_count = cursor.fetchone()[0]
 
-    storage = getattr(request.app.state, "storage", None) if hasattr(request, "app") else getattr(app.state, "storage", None)
+    storage = (
+        getattr(request.app.state, "storage", None)
+        if hasattr(request, "app")
+        else getattr(app.state, "storage", None)
+    )
     entities_count = 0
     if storage:
         try:
@@ -628,15 +678,18 @@ async def get_stats(request: Request):
             entities_count = 0
 
     from backend.plugin_manager import PluginManager
+
     pm = PluginManager()
     plugins_count = len(pm.list_plugins())
 
-    return format_response({
-        "targets": targets_count,
-        "findings": findings_count,
-        "entities": entities_count,
-        "plugins": plugins_count
-    })
+    return format_response(
+        {
+            "targets": targets_count,
+            "findings": findings_count,
+            "entities": entities_count,
+            "plugins": plugins_count,
+        }
+    )
 
 
 @app.post("/api/search")
@@ -645,18 +698,19 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
     # 1. Determine target type
     target_type_str = target_type or "auto"
     from backend.models import TargetType
+
     try:
         if target_type_str == "auto":
             query_clean = query.strip()
-            if re.match(r'^\d{11}$', query_clean):
+            if re.match(r"^\d{11}$", query_clean):
                 target_type_obj = TargetType.ABN
-            elif re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', query_clean):
+            elif re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", query_clean):
                 target_type_obj = TargetType.EMAIL
-            elif re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', query_clean):
+            elif re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", query_clean):
                 target_type_obj = TargetType.IP
-            elif re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', query_clean):
+            elif re.match(r"^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", query_clean):
                 target_type_obj = TargetType.DOMAIN
-            elif re.match(r'^\+?[0-9\s\-()]{7,15}$', query_clean):
+            elif re.match(r"^\+?[0-9\s\-()]{7,15}$", query_clean):
                 target_type_obj = TargetType.PHONE
             else:
                 target_type_obj = TargetType.USERNAME
@@ -670,13 +724,14 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO targets (query, target_type, status) VALUES (?, ?, ?)",
-            (query, target_type_obj.value, "pending")
+            (query, target_type_obj.value, "pending"),
         )
         target_id = cursor.lastrowid
         conn.commit()
 
     # 3. Run investigation safely
     from backend.engine import InvestigationEngine
+
     engine = InvestigationEngine.get_instance(DATABASE_PATH)
     if not engine._initialized:
         await engine.initialize()
@@ -692,26 +747,29 @@ async def search(request: Request, query: str = Form(...), target_type: str | No
     relationships = [r.model_dump() for r in await storage.get_relationships_for_target(target_id)]
     timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
 
-    is_html_req = request.headers.get("HX-Request") or "text/html" in request.headers.get("accept", "")
+    is_html_req = request.headers.get("HX-Request") or "text/html" in request.headers.get(
+        "accept", ""
+    )
     if is_html_req:
         return templates.TemplateResponse(
             request=request,
             name="components/investigation_result.html",
-            context={
-                "target_id": target_id,
-                "status": result.get("status", "completed")
-            }
+            context={"target_id": target_id, "status": result.get("status", "completed")},
         )
 
-    return format_response({
-        "target_id": target_id,
-        "query": query,
-        "findings_count": result.get("findings_count", 0),
-        "findings": [f.model_dump() if hasattr(f, 'model_dump') else f for f in result.get("results", [])],
-        "entities": entities,
-        "relationships": relationships,
-        "timeline": timeline
-    })
+    return format_response(
+        {
+            "target_id": target_id,
+            "query": query,
+            "findings_count": result.get("findings_count", 0),
+            "findings": [
+                f.model_dump() if hasattr(f, "model_dump") else f for f in result.get("results", [])
+            ],
+            "entities": entities,
+            "relationships": relationships,
+            "timeline": timeline,
+        }
+    )
 
 
 @app.get("/api/targets/{target_id}/entities")
@@ -722,9 +780,7 @@ async def get_target_entities(request: Request, target_id: int, format: str = "j
 
     if format == "html":
         return templates.TemplateResponse(
-            request=request,
-            name="components/entities.html",
-            context={"entities": entities}
+            request=request, name="components/entities.html", context={"entities": entities}
         )
     return format_response([e.model_dump() for e in entities])
 
@@ -739,7 +795,7 @@ async def get_target_relationships(request: Request, target_id: int, format: str
         return templates.TemplateResponse(
             request=request,
             name="components/relationships.html",
-            context={"relationships": relationships}
+            context={"relationships": relationships},
         )
     return format_response([r.model_dump() for r in relationships])
 
@@ -752,9 +808,7 @@ async def get_target_timeline(request: Request, target_id: int, format: str = "j
 
     if format == "html":
         return templates.TemplateResponse(
-            request=request,
-            name="components/timeline.html",
-            context={"timeline": timeline}
+            request=request, name="components/timeline.html", context={"timeline": timeline}
         )
     return format_response([t.model_dump() for t in timeline])
 
@@ -762,12 +816,14 @@ async def get_target_timeline(request: Request, target_id: int, format: str = "j
 @app.get("/api/plugins")
 async def list_plugins(request: Request):
     from backend.plugin_manager import PluginManager
+
     pm = PluginManager()
     plugins = pm.list_plugins()
     if request.headers.get("HX-Request"):
         template = templates.env.get_template("components/plugins_grid.html")
         html = template.render({"request": request, "plugins": plugins})
         from starlette.responses import HTMLResponse
+
         return HTMLResponse(content=html)
     return format_response(plugins)
 
@@ -778,16 +834,27 @@ async def list_findings(target_id: int | None = None):
         cursor = conn.cursor()
 
         if target_id:
-            cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (target_id,))
+            cursor.execute(
+                "SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?",
+                (target_id,),
+            )
         else:
-            cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings ORDER BY created_at DESC")
+            cursor.execute(
+                "SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings ORDER BY created_at DESC"
+            )
 
         rows = cursor.fetchall()
 
     findings = [
         {
-            "id": r[0], "target_id": r[1], "source": r[2], "category": r[3],
-            "severity": r[4], "confidence": r[5], "data": json.loads(r[6]) if r[6] else {}, "created_at": r[7]
+            "id": r[0],
+            "target_id": r[1],
+            "source": r[2],
+            "category": r[3],
+            "severity": r[4],
+            "confidence": r[5],
+            "data": json.loads(r[6]) if r[6] else {},
+            "created_at": r[7],
         }
         for r in rows
     ]
@@ -798,10 +865,16 @@ async def list_findings(target_id: int | None = None):
 async def create_report(payload: ReportRequest):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, query, target_type, status, created_at FROM targets WHERE id = ?", (payload.target_id,))
+        cursor.execute(
+            "SELECT id, query, target_type, status, created_at FROM targets WHERE id = ?",
+            (payload.target_id,),
+        )
         target_row = cursor.fetchone()
 
-        cursor.execute("SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?", (payload.target_id,))
+        cursor.execute(
+            "SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?",
+            (payload.target_id,),
+        )
         finding_rows = cursor.fetchall()
 
     if not target_row:
@@ -812,61 +885,79 @@ async def create_report(payload: ReportRequest):
         "query": target_row[1],
         "target_type": target_row[2],
         "status": target_row[3],
-        "created_at": target_row[4]
+        "created_at": target_row[4],
     }
 
     findings = [
         {
-            "id": r[0], "target_id": r[1], "source": r[2], "category": r[3],
-            "severity": r[4], "confidence": r[5], "data": json.loads(r[6]) if r[6] else {}, "created_at": r[7]
+            "id": r[0],
+            "target_id": r[1],
+            "source": r[2],
+            "category": r[3],
+            "severity": r[4],
+            "confidence": r[5],
+            "data": json.loads(r[6]) if r[6] else {},
+            "created_at": r[7],
         }
         for r in finding_rows
     ]
 
     from backend.report import ReportGenerator
+
     storage = app.state.storage
 
     entities = [e.model_dump() for e in await storage.get_entities_for_target(payload.target_id)]
-    relationships = [r.model_dump() for r in await storage.get_relationships_for_target(payload.target_id)]
+    relationships = [
+        r.model_dump() for r in await storage.get_relationships_for_target(payload.target_id)
+    ]
     timeline = [t.model_dump() for t in await storage.get_timeline(payload.target_id)]
 
     generator = ReportGenerator()
-    report_content = generator.generate(payload.format, target, findings, entities, relationships, timeline)
+    report_content = generator.generate(
+        payload.format, target, findings, entities, relationships, timeline
+    )
 
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO reports (target_id, format, content) VALUES (?, ?, ?)",
-            (payload.target_id, payload.format, report_content)
+            (payload.target_id, payload.format, report_content),
         )
         report_id = cursor.lastrowid
         conn.commit()
 
-    return format_response({
-        "report_id": report_id,
-        "target_id": payload.target_id,
-        "format": payload.format,
-        "content": report_content
-    })
+    return format_response(
+        {
+            "report_id": report_id,
+            "target_id": payload.target_id,
+            "format": payload.format,
+            "content": report_content,
+        }
+    )
 
 
 @app.get("/api/reports/{report_id}")
 async def get_report(report_id: int):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, target_id, format, content, created_at FROM reports WHERE id = ?", (report_id,))
+        cursor.execute(
+            "SELECT id, target_id, format, content, created_at FROM reports WHERE id = ?",
+            (report_id,),
+        )
         row = cursor.fetchone()
 
     if not row:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    return format_response({
-        "report_id": row[0],
-        "target_id": row[1],
-        "format": row[2],
-        "content": row[3],
-        "created_at": row[4]
-    })
+    return format_response(
+        {
+            "report_id": row[0],
+            "target_id": row[1],
+            "format": row[2],
+            "content": row[3],
+            "created_at": row[4],
+        }
+    )
 
 
 @app.post("/api/chat")
@@ -886,7 +977,7 @@ async def chat(payload: ChatRequest):
                 "provider": provider,
             },
             success=False,
-            errors=["no_api_key"]
+            errors=["no_api_key"],
         )
 
     # Use default model if none specified
@@ -899,36 +990,34 @@ async def chat(payload: ChatRequest):
         }
         model = provider_inst._default_model or default_models.get(provider, "gpt-3.5-turbo")
 
-
     # Support multimodal chat (image/video URLs)
     image_urls = payload.image_urls
     video_urls = payload.video_urls
 
     try:
-        if (image_urls or video_urls) and hasattr(provider_inst, 'chat_multimodal'):
-            ai_response = await provider_inst.chat_multimodal(message, model, image_urls=image_urls, video_urls=video_urls)
+        if (image_urls or video_urls) and hasattr(provider_inst, "chat_multimodal"):
+            ai_response = await provider_inst.chat_multimodal(
+                message, model, image_urls=image_urls, video_urls=video_urls
+            )
         else:
             ai_response = await provider_inst.chat(message, model)
-        return format_response({
-            "response": ai_response.content,
-            "provider": provider,
-            "model": model
-        })
+        return format_response(
+            {"response": ai_response.content, "provider": provider, "model": model}
+        )
     except Exception as e:
         return format_response(
-            data={
-                "response": f"Error calling {provider}: {str(e)}",
-                "provider": provider
-            },
+            data={"response": f"Error calling {provider}: {str(e)}", "provider": provider},
             success=False,
-            errors=[str(e)]
+            errors=[str(e)],
         )
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
 # --- HTMX Partial Endpoints (return HTML instead of JSON) ---
+
 
 @app.get("/api/targets/{target_id}/graph-data")
 async def graph_data(target_id: int):
@@ -942,27 +1031,35 @@ async def graph_data(target_id: int):
             "id": e.id,
             "value": e.value,
             "type": e.type.value,
-            "display_name": e.display_name if hasattr(e, 'display_name') else e.value,
-            "confidence": int(e.confidence * 100) if hasattr(e, 'confidence') and e.confidence is not None and e.confidence <= 1.0 else (int(e.confidence) if e.confidence is not None else 100),
-            "first_seen": e.first_seen.strftime('%Y-%m-%d %H:%M') if hasattr(e, 'first_seen') and e.first_seen and hasattr(e.first_seen, 'strftime') else (str(e.first_seen) if hasattr(e, 'first_seen') and e.first_seen else None),
-            "metadata": e.metadata_json if hasattr(e, 'metadata_json') else None
-        } for e in entities
+            "display_name": e.display_name if hasattr(e, "display_name") else e.value,
+            "confidence": int(e.confidence * 100)
+            if hasattr(e, "confidence") and e.confidence is not None and e.confidence <= 1.0
+            else (int(e.confidence) if e.confidence is not None else 100),
+            "first_seen": e.first_seen.strftime("%Y-%m-%d %H:%M")
+            if hasattr(e, "first_seen") and e.first_seen and hasattr(e.first_seen, "strftime")
+            else (str(e.first_seen) if hasattr(e, "first_seen") and e.first_seen else None),
+            "metadata": e.metadata_json if hasattr(e, "metadata_json") else None,
+        }
+        for e in entities
     ]
     edges = [
         {
             "from": r.source_entity_id,
             "to": r.target_entity_id,
             "type": r.relationship_type.value,
-            "confidence": int(r.confidence * 100) if hasattr(r, 'confidence') and r.confidence is not None and r.confidence <= 1.0 else (int(r.confidence) if r.confidence is not None else 100),
-            "source_plugin": r.source_plugin if hasattr(r, 'source_plugin') else None
-        } for r in relationships
+            "confidence": int(r.confidence * 100)
+            if hasattr(r, "confidence") and r.confidence is not None and r.confidence <= 1.0
+            else (int(r.confidence) if r.confidence is not None else 100),
+            "source_plugin": r.source_plugin if hasattr(r, "source_plugin") else None,
+        }
+        for r in relationships
     ]
 
     stats: dict[str, Any] = {
         "total_nodes": len(nodes),
         "total_edges": len(edges),
         "entity_types": {},
-        "relationship_types": {}
+        "relationship_types": {},
     }
 
     for n in nodes:
@@ -974,6 +1071,7 @@ async def graph_data(target_id: int):
 
     return {"nodes": nodes, "edges": edges, "stats": stats}
 
+
 @app.get("/htmx/providers", response_class=HTMLResponse)
 async def htmx_providers_list(request: Request):
     """HTMX endpoint - returns HTML partial with providers list"""
@@ -981,5 +1079,5 @@ async def htmx_providers_list(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="components/providers_list.html",
-        context={"providers": providers_data}
+        context={"providers": providers_data},
     )

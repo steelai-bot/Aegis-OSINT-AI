@@ -8,6 +8,7 @@ from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
+
 class MetadataPlugin(BasePlugin):
     """
     Plugin for metadata extraction from files or URLs.
@@ -22,12 +23,11 @@ class MetadataPlugin(BasePlugin):
             supported_entity_types=[TargetType.DOMAIN, TargetType.UNKNOWN],
             tags=["metadata", "passive"],
             execution_cost=1.0,
-            estimated_time=4
+            estimated_time=4,
         )
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
         findings: list[PluginResponse] = []
-
 
         if query.startswith("http://") or query.startswith("https://"):
             url = query
@@ -43,30 +43,36 @@ class MetadataPlugin(BasePlugin):
                 content = resp.text
                 metadata: dict[str, Any] = {}
 
-                title_match = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE | re.DOTALL)
+                title_match = re.search(r"<title>(.*?)</title>", content, re.IGNORECASE | re.DOTALL)
                 if title_match:
                     metadata["title"] = title_match.group(1).strip()
 
-                gen_match = re.search(r'name=["\']generator["\'] content=["\'](.*?)["\']', content, re.IGNORECASE)
+                gen_match = re.search(
+                    r'name=["\']generator["\'] content=["\'](.*?)["\']', content, re.IGNORECASE
+                )
                 if gen_match:
                     metadata["generator"] = gen_match.group(1).strip()
 
-                desc_match = re.search(r'name=["\']description["\'] content=["\'](.*?)["\']', content, re.IGNORECASE)
+                desc_match = re.search(
+                    r'name=["\']description["\'] content=["\'](.*?)["\']', content, re.IGNORECASE
+                )
                 if desc_match:
                     metadata["description"] = desc_match.group(1).strip()
 
-                emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', content)
+                emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", content)
                 if emails:
                     metadata["emails_found"] = list(set(emails))
 
                 if metadata:
-                    findings.append(PluginResponse(
-                        provider=self.metadata.name,
-                        entity_type=TargetType.DOMAIN,
-                        confidence=0.6,
-                        evidence=[metadata],
-                        raw={"url": url, "metadata": metadata}
-                    ))
+                    findings.append(
+                        PluginResponse(
+                            provider=self.metadata.name,
+                            entity_type=TargetType.DOMAIN,
+                            confidence=0.6,
+                            evidence=[metadata],
+                            raw={"url": url, "metadata": metadata},
+                        )
+                    )
         except Exception as e:
             logger.error(f"MetadataPlugin error for {url}: {e}")
 

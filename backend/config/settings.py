@@ -17,11 +17,7 @@ class AegisSettings(BaseSettings):
     Syncs API keys to os.environ so os.getenv() works in plugins/providers.
     """
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # Application settings
     app_name: str = "Aegis OSINT AI"

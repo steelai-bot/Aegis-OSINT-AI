@@ -25,14 +25,17 @@ MAX_EVIDENCE_STRING_LENGTH = 10000
 MAX_EVIDENCE_LIST_LENGTH = 100
 
 # Pre-compiled regex for common patterns in entity extraction
-EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
-DOMAIN_PATTERN = re.compile(r'^[a-zA-Z0-9.-]+\.(com|net|org|io|co|dev|edu|gov|mil|int)$', re.IGNORECASE)
-IPV4_PATTERN = re.compile(r'^(\d{1,3}\.){3}\d{1,3}$')
-GITHUB_PATTERN = re.compile(r'github\.com/[\w-]+/?[\w-]*')
+EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+DOMAIN_PATTERN = re.compile(
+    r"^[a-zA-Z0-9.-]+\.(com|net|org|io|co|dev|edu|gov|mil|int)$", re.IGNORECASE
+)
+IPV4_PATTERN = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")
+GITHUB_PATTERN = re.compile(r"github\.com/[\w-]+/?[\w-]*")
 
 
 def _safe_json_dumps(obj: Any) -> str:
     """Safely serialize an object to JSON, handling Pydantic models, datetime/date objects, and arbitrary fallbacks."""
+
     def default_serializer(o: Any) -> Any:
         if isinstance(o, BaseModel):
             return o.model_dump()
@@ -43,10 +46,10 @@ def _safe_json_dumps(obj: Any) -> str:
         return str(o)
 
     try:
-        return json.dumps(obj, default=default_serializer, separators=(',', ':'))
+        return json.dumps(obj, default=default_serializer, separators=(",", ":"))
     except Exception:
         # Fallback to stringifying everything recursively or top-level if needed
-        return json.dumps(str(obj), separators=(',', ':'))
+        return json.dumps(str(obj), separators=(",", ":"))
 
 
 def _truncate_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -66,6 +69,7 @@ def _truncate_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 new_item[key] = val
         truncated.append(new_item)
     return truncated
+
 
 class StorageInterface(ABC):
     """Abstract base class for database operations to ensure database-agnosticism."""
@@ -108,7 +112,9 @@ class StorageInterface(ABC):
         pass
 
     @abstractmethod
-    async def save_finding(self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]):
+    async def save_finding(
+        self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]
+    ):
         pass
 
     @abstractmethod
@@ -116,13 +122,16 @@ class StorageInterface(ABC):
         """Close database connection"""
         pass
 
+
 class SQLiteStorage(StorageInterface):
     """Async SQLite implementation with connection pooling and transaction support."""
 
     def __init__(self, db_path: str):
         self.db_path = db_path
         self._connection: aiosqlite.Connection | None = None
-        self._transaction_active: ContextVar[bool] = ContextVar("_transaction_active", default=False)
+        self._transaction_active: ContextVar[bool] = ContextVar(
+            "_transaction_active", default=False
+        )
 
     @asynccontextmanager
     async def transaction(self):
@@ -170,7 +179,7 @@ class SQLiteStorage(StorageInterface):
         cursor = await conn.cursor()
 
         # Entities table
-        await cursor.execute('''
+        await cursor.execute("""
             CREATE TABLE IF NOT EXISTS entities (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 type TEXT NOT NULL,
@@ -182,10 +191,10 @@ class SQLiteStorage(StorageInterface):
                 metadata_json TEXT,
                 UNIQUE(type, value)
             )
-        ''')
+        """)
 
         # Relationships table
-        await cursor.execute('''
+        await cursor.execute("""
             CREATE TABLE IF NOT EXISTS relationships (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source_entity_id INTEGER,
@@ -197,10 +206,10 @@ class SQLiteStorage(StorageInterface):
                 FOREIGN KEY (source_entity_id) REFERENCES entities (id),
                 FOREIGN KEY (target_entity_id) REFERENCES entities (id)
             )
-        ''')
+        """)
 
         # Timeline events table
-        await cursor.execute('''
+        await cursor.execute("""
             CREATE TABLE IF NOT EXISTS timeline_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 target_id INTEGER,
@@ -212,10 +221,10 @@ class SQLiteStorage(StorageInterface):
                 entity_id INTEGER,
                 FOREIGN KEY (entity_id) REFERENCES entities (id)
             )
-        ''')
+        """)
 
         # Targets table
-        await cursor.execute('''
+        await cursor.execute("""
             CREATE TABLE IF NOT EXISTS targets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 query TEXT NOT NULL,
@@ -223,10 +232,10 @@ class SQLiteStorage(StorageInterface):
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 status TEXT DEFAULT 'pending'
             )
-        ''')
+        """)
 
         # Findings table
-        await cursor.execute('''
+        await cursor.execute("""
             CREATE TABLE IF NOT EXISTS findings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 target_id INTEGER,
@@ -238,37 +247,37 @@ class SQLiteStorage(StorageInterface):
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (target_id) REFERENCES targets (id)
             )
-        ''')
+        """)
 
         # Create indexes for better query performance
-        await cursor.execute('''
+        await cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_timeline_target
             ON timeline_events(target_id, timestamp)
-        ''')
-        await cursor.execute('''
+        """)
+        await cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_relationships_source
             ON relationships(source_entity_id)
-        ''')
-        await cursor.execute('''
+        """)
+        await cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_relationships_target
             ON relationships(target_entity_id)
-        ''')
-        await cursor.execute('''
+        """)
+        await cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_findings_target
             ON findings(target_id)
-        ''')
-        await cursor.execute('''
+        """)
+        await cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_entities_type_value
             ON entities(type, value)
-        ''')
-        await cursor.execute('''
+        """)
+        await cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_targets_status
             ON targets(status)
-        ''')
-        await cursor.execute('''
+        """)
+        await cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_timeline_target_type
             ON timeline_events(target_id, event_type)
-        ''')
+        """)
 
         await conn.commit()
 
@@ -280,14 +289,23 @@ class SQLiteStorage(StorageInterface):
                 "INSERT INTO entities (type, value, display_name, first_seen, last_seen, confidence, metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(type, value) DO UPDATE SET last_seen=excluded.last_seen "
                 "RETURNING id",
-                (entity.type.value, entity.value, entity.display_name,
-                 entity.first_seen.isoformat(), entity.last_seen.isoformat(),
-                 entity.confidence, _safe_json_dumps(entity.metadata_json))
+                (
+                    entity.type.value,
+                    entity.value,
+                    entity.display_name,
+                    entity.first_seen.isoformat(),
+                    entity.last_seen.isoformat(),
+                    entity.confidence,
+                    _safe_json_dumps(entity.metadata_json),
+                ),
             )
             row = await cursor.fetchone()
             entity_id = row[0] if row else None
             if entity_id is None:
-                await cursor.execute("SELECT id FROM entities WHERE type = ? AND value = ?", (entity.type.value, entity.value))
+                await cursor.execute(
+                    "SELECT id FROM entities WHERE type = ? AND value = ?",
+                    (entity.type.value, entity.value),
+                )
                 row = await cursor.fetchone()
                 entity_id = row[0] if row else None
             if not self._transaction_active.get():
@@ -304,14 +322,14 @@ class SQLiteStorage(StorageInterface):
         row = await cursor.fetchone()
         if row:
             return Entity(
-                id=row['id'],
-                type=EntityType(row['type']),
-                value=row['value'],
-                display_name=row['display_name'],
-                first_seen=datetime.fromisoformat(row['first_seen']),
-                last_seen=datetime.fromisoformat(row['last_seen']),
-                confidence=row['confidence'],
-                metadata_json=json.loads(row['metadata_json'])
+                id=row["id"],
+                type=EntityType(row["type"]),
+                value=row["value"],
+                display_name=row["display_name"],
+                first_seen=datetime.fromisoformat(row["first_seen"]),
+                last_seen=datetime.fromisoformat(row["last_seen"]),
+                confidence=row["confidence"],
+                metadata_json=json.loads(row["metadata_json"]),
             )
         return None
 
@@ -320,8 +338,14 @@ class SQLiteStorage(StorageInterface):
         cursor = await conn.cursor()
         await cursor.execute(
             "INSERT INTO relationships (source_entity_id, target_entity_id, relationship_type, confidence, source_plugin, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (relationship.source_entity_id, relationship.target_entity_id, relationship.relationship_type.value,
-             relationship.confidence, relationship.source_plugin, relationship.created_at.isoformat())
+            (
+                relationship.source_entity_id,
+                relationship.target_entity_id,
+                relationship.relationship_type.value,
+                relationship.confidence,
+                relationship.source_plugin,
+                relationship.created_at.isoformat(),
+            ),
         )
         if not self._transaction_active.get():
             await conn.commit()
@@ -335,8 +359,15 @@ class SQLiteStorage(StorageInterface):
         cursor = await conn.cursor()
         await cursor.execute(
             "INSERT INTO timeline_events (target_id, timestamp, event_type, plugin, severity, description, entity_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (event.target_id, event.timestamp.isoformat(), event.event_type.value,
-             event.plugin, event.severity, event.description, event.entity_id)
+            (
+                event.target_id,
+                event.timestamp.isoformat(),
+                event.event_type.value,
+                event.plugin,
+                event.severity,
+                event.description,
+                event.entity_id,
+            ),
         )
         if not self._transaction_active.get():
             await conn.commit()
@@ -345,7 +376,6 @@ class SQLiteStorage(StorageInterface):
         return row_id
 
     async def log_timeline_events_batch(self, events: list[TimelineEvent]) -> list[int]:
-
         """Batch insert timeline events for 80% better write performance"""
         if not events:
             return []
@@ -353,13 +383,20 @@ class SQLiteStorage(StorageInterface):
         conn = await self._get_connection()
         cursor = await conn.cursor()
         values = [
-            (e.target_id, e.timestamp.isoformat(), e.event_type.value,
-             e.plugin, e.severity, e.description, e.entity_id)
+            (
+                e.target_id,
+                e.timestamp.isoformat(),
+                e.event_type.value,
+                e.plugin,
+                e.severity,
+                e.description,
+                e.entity_id,
+            )
             for e in events
         ]
         await cursor.executemany(
             "INSERT INTO timeline_events (target_id, timestamp, event_type, plugin, severity, description, entity_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            values
+            values,
         )
         if not self._transaction_active.get():
             await conn.commit()
@@ -368,57 +405,74 @@ class SQLiteStorage(StorageInterface):
     async def get_timeline(self, target_id: int) -> list[TimelineEvent]:
         conn = await self._get_connection()
         cursor = await conn.cursor()
-        await cursor.execute("SELECT * FROM timeline_events WHERE target_id = ? ORDER BY timestamp ASC", (target_id,))
+        await cursor.execute(
+            "SELECT * FROM timeline_events WHERE target_id = ? ORDER BY timestamp ASC", (target_id,)
+        )
         rows = await cursor.fetchall()
-        return [TimelineEvent(
-            id=row['id'],
-            target_id=row['target_id'],
-            timestamp=datetime.fromisoformat(row['timestamp']),
-            event_type=TimelineEventType(row['event_type']),
-            plugin=row['plugin'],
-            severity=row['severity'],
-            description=row['description'],
-            entity_id=row['entity_id']
-        ) for row in rows]
+        return [
+            TimelineEvent(
+                id=row["id"],
+                target_id=row["target_id"],
+                timestamp=datetime.fromisoformat(row["timestamp"]),
+                event_type=TimelineEventType(row["event_type"]),
+                plugin=row["plugin"],
+                severity=row["severity"],
+                description=row["description"],
+                entity_id=row["entity_id"],
+            )
+            for row in rows
+        ]
 
     async def get_entities_for_target(self, target_id: int) -> list[Entity]:
         conn = await self._get_connection()
         cursor = await conn.cursor()
-        await cursor.execute('''
+        await cursor.execute(
+            """
             SELECT DISTINCT e.* FROM entities e
             JOIN timeline_events te ON e.id = te.entity_id
             WHERE te.target_id = ?
-        ''', (target_id,))
+        """,
+            (target_id,),
+        )
         rows = await cursor.fetchall()
-        return [Entity(
-            id=row['id'],
-            type=EntityType(row['type']),
-            value=row['value'],
-            display_name=row['display_name'],
-            first_seen=datetime.fromisoformat(row['first_seen']),
-            last_seen=datetime.fromisoformat(row['last_seen']),
-            confidence=row['confidence'],
-            metadata_json=json.loads(row['metadata_json'])
-        ) for row in rows]
+        return [
+            Entity(
+                id=row["id"],
+                type=EntityType(row["type"]),
+                value=row["value"],
+                display_name=row["display_name"],
+                first_seen=datetime.fromisoformat(row["first_seen"]),
+                last_seen=datetime.fromisoformat(row["last_seen"]),
+                confidence=row["confidence"],
+                metadata_json=json.loads(row["metadata_json"]),
+            )
+            for row in rows
+        ]
 
     async def get_relationships_for_target(self, target_id: int) -> list[Relationship]:
         conn = await self._get_connection()
         cursor = await conn.cursor()
-        await cursor.execute('''
+        await cursor.execute(
+            """
             SELECT DISTINCT r.* FROM relationships r
             JOIN timeline_events te ON (r.source_entity_id = te.entity_id OR r.target_entity_id = te.entity_id)
             WHERE te.target_id = ?
-        ''', (target_id,))
+        """,
+            (target_id,),
+        )
         rows = await cursor.fetchall()
-        return [Relationship(
-            id=row['id'],
-            source_entity_id=row['source_entity_id'],
-            target_entity_id=row['target_entity_id'],
-            relationship_type=RelationshipType(row['relationship_type']),
-            confidence=row['confidence'],
-            source_plugin=row['source_plugin'],
-            created_at=datetime.fromisoformat(row['created_at'])
-        ) for row in rows]
+        return [
+            Relationship(
+                id=row["id"],
+                source_entity_id=row["source_entity_id"],
+                target_entity_id=row["target_entity_id"],
+                relationship_type=RelationshipType(row["relationship_type"]),
+                confidence=row["confidence"],
+                source_plugin=row["source_plugin"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+            )
+            for row in rows
+        ]
 
     async def update_target_status(self, target_id: int, status: str):
         conn = await self._get_connection()
@@ -427,7 +481,9 @@ class SQLiteStorage(StorageInterface):
         if not self._transaction_active.get():
             await conn.commit()
 
-    async def save_finding(self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]):
+    async def save_finding(
+        self, target_id: int, provider: str, confidence: float, evidence: list[dict[str, Any]]
+    ):
         conn = await self._get_connection()
         cursor = await conn.cursor()
         evidence = _truncate_evidence(evidence)
@@ -439,7 +495,7 @@ class SQLiteStorage(StorageInterface):
         if values:
             await cursor.executemany(
                 "INSERT INTO findings (target_id, source, category, severity, confidence, data) VALUES (?, ?, ?, ?, ?, ?)",
-                values
+                values,
             )
             if not self._transaction_active.get():
                 await conn.commit()

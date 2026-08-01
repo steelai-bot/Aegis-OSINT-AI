@@ -20,12 +20,19 @@ def storage():
         except Exception:
             pass
 
+
 @pytest.mark.asyncio
 async def test_save_and_get_entity(storage):
-    e = Entity(type=EntityType.EMAIL, value="test@example.com", confidence=0.9, metadata_json={"custom": datetime.now()})
+    e = Entity(
+        type=EntityType.EMAIL,
+        value="test@example.com",
+        confidence=0.9,
+        metadata_json={"custom": datetime.now()},
+    )
     eid = await storage.save_entity(e)
     assert eid is not None
     assert eid > 0
+
 
 @pytest.mark.asyncio
 async def test_safe_json_dumps_and_transactions(storage):
@@ -36,8 +43,11 @@ async def test_safe_json_dumps_and_transactions(storage):
             target_id=1,
             provider="test_provider",
             confidence=0.95,
-            evidence=[{"model": Entity(type=EntityType.IP, value="127.0.0.1"), "time": datetime.now()}]
+            evidence=[
+                {"model": Entity(type=EntityType.IP, value="127.0.0.1"), "time": datetime.now()}
+            ],
         )
+
 
 @pytest.mark.asyncio
 async def test_transaction_error_logging(storage):
@@ -46,10 +56,14 @@ async def test_transaction_error_logging(storage):
         async with storage.transaction():
             raise ValueError("Intentional error")
 
+
 @pytest.mark.asyncio
 async def test_timeline_logging(storage):
     from backend.models import TimelineEvent, TimelineEventType
-    t = TimelineEvent(target_id=1, event_type=TimelineEventType.INVESTIGATION_CREATED, description="Started")
+
+    t = TimelineEvent(
+        target_id=1, event_type=TimelineEventType.INVESTIGATION_CREATED, description="Started"
+    )
     await storage.log_timeline_event(t)
     events = await storage.get_timeline(1)
     assert len(events) == 1

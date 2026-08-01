@@ -7,6 +7,7 @@ from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
+
 class GithubPlugin(BasePlugin):
     """
     Plugin for GitHub user and repository discovery.
@@ -23,7 +24,7 @@ class GithubPlugin(BasePlugin):
             required_api_keys=["GITHUB_TOKEN"],
             tags=["github", "social"],
             execution_cost=1.2,
-            estimated_time=4
+            estimated_time=4,
         )
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
@@ -43,19 +44,23 @@ class GithubPlugin(BasePlugin):
                 if users:
                     user_list = []
                     for u in users:
-                        user_list.append({
-                            "login": u.get("login"),
-                            "html_url": u.get("html_url"),
-                            "type": u.get("type")
-                        })
+                        user_list.append(
+                            {
+                                "login": u.get("login"),
+                                "html_url": u.get("html_url"),
+                                "type": u.get("type"),
+                            }
+                        )
 
-                    findings.append(PluginResponse(
-                        provider=self.metadata.name,
-                        entity_type=TargetType.GITHUB,
-                        confidence=0.8,
-                        evidence=[{"users": user_list}],
-                        raw=data
-                    ))
+                    findings.append(
+                        PluginResponse(
+                            provider=self.metadata.name,
+                            entity_type=TargetType.GITHUB,
+                            confidence=0.8,
+                            evidence=[{"users": user_list}],
+                            raw=data,
+                        )
+                    )
             elif resp.status_code == 401:
                 logger.warning("GithubPlugin: Unauthorized. Check GITHUB_TOKEN.")
             else:

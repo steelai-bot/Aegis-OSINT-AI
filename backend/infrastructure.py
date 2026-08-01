@@ -14,23 +14,25 @@ from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class CircuitState(Enum):
     """Three-state circuit breaker pattern"""
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failing, reject requests
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, reject requests
     HALF_OPEN = "half_open"  # Testing recovery
 
 
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker behavior"""
-    failure_threshold: int = 5          # Failures before opening
-    success_threshold: int = 3          # Successes to close from half-open
-    timeout: float = 60.0               # Seconds before trying half-open
-    half_open_max_calls: int = 3        # Max test calls in half-open state
+
+    failure_threshold: int = 5  # Failures before opening
+    success_threshold: int = 3  # Successes to close from half-open
+    timeout: float = 60.0  # Seconds before trying half-open
+    half_open_max_calls: int = 3  # Max test calls in half-open state
     excluded_exceptions: tuple = field(default_factory=lambda: (asyncio.TimeoutError,))
 
 
@@ -93,22 +95,21 @@ class CircuitBreaker:
         async with self._lock:
             # Check if we should transition from OPEN to HALF_OPEN
             if self._state == CircuitState.OPEN:
-                if self._last_failure_time and \
-                   time.time() - self._last_failure_time >= self.config.timeout:
+                if (
+                    self._last_failure_time
+                    and time.time() - self._last_failure_time >= self.config.timeout
+                ):
                     await self._transition_to(CircuitState.HALF_OPEN)
                     self._half_open_calls = 0
                 else:
                     raise CircuitBreakerOpen(
-                        f"Circuit '{self.name}' is OPEN. "
-                        f"Retry after {self.config.timeout}s"
+                        f"Circuit '{self.name}' is OPEN. Retry after {self.config.timeout}s"
                     )
 
             # Check if we've exceeded half-open call limit
             if self._state == CircuitState.HALF_OPEN:
                 if self._half_open_calls >= self.config.half_open_max_calls:
-                    raise CircuitBreakerOpen(
-                        f"Circuit '{self.name}' HALF_OPEN call limit reached"
-                    )
+                    raise CircuitBreakerOpen(f"Circuit '{self.name}' HALF_OPEN call limit reached")
                 self._half_open_calls += 1
 
         # Execute the function
@@ -166,18 +167,20 @@ class CircuitBreaker:
             "failure_count": self._failure_count,
             "success_count": self._success_count,
             "half_open_calls": self._half_open_calls,
-            "last_failure_time": self._last_failure_time
+            "last_failure_time": self._last_failure_time,
         }
 
 
 class CircuitBreakerOpen(Exception):
     """Raised when circuit breaker is open"""
+
     pass
 
 
 @dataclass
 class CacheEntry[T]:
     """Cache entry with metadata"""
+
     value: T
 
     created_at: float
@@ -197,7 +200,7 @@ class LRUCacheWithTTL[T]:
         self,
         max_size: int = 1000,
         default_ttl: float | None = 3600.0,
-        cleanup_interval: float = 300.0
+        cleanup_interval: float = 300.0,
     ):
         self.max_size = max_size
         self.default_ttl = default_ttl
@@ -267,12 +270,7 @@ class LRUCacheWithTTL[T]:
 
             return entry.value
 
-    async def set(
-        self,
-        key: str,
-        value: T,
-        ttl: float | None = None
-    ):
+    async def set(self, key: str, value: T, ttl: float | None = None):
         """Set value in cache with optional TTL override"""
         async with self._lock:
             now = time.time()
@@ -298,7 +296,7 @@ class LRUCacheWithTTL[T]:
                     created_at=now,
                     last_accessed=now,
                     access_count=1,
-                    ttl=ttl if ttl is not None else self.default_ttl
+                    ttl=ttl if ttl is not None else self.default_ttl,
                 )
 
     async def delete(self, key: str) -> bool:
@@ -326,7 +324,7 @@ class LRUCacheWithTTL[T]:
             "misses": self._misses,
             "evictions": self._evictions,
             "expirations": self._expirations,
-            "hit_rate": round(hit_rate, 3)
+            "hit_rate": round(hit_rate, 3),
         }
 
     async def stop(self):
@@ -347,9 +345,9 @@ class TokenBucketRateLimiter:
 
     def __init__(
         self,
-        rate: float = 10.0,           # Tokens per second
-        capacity: int = 100,          # Max bucket size
-        adaptive: bool = True         # Auto-adjust based on rate limit headers
+        rate: float = 10.0,  # Tokens per second
+        capacity: int = 100,  # Max bucket size
+        adaptive: bool = True,  # Auto-adjust based on rate limit headers
     ):
         self.rate = rate
         self.capacity = capacity
@@ -416,9 +414,9 @@ class TokenBucketRateLimiter:
 
         # Common rate limit header patterns
         patterns = [
-            ('x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset'),
-            ('ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset'),
-            ('x-rate-limit-limit', 'x-rate-limit-remaining', 'x-rate-limit-reset'),
+            ("x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset"),
+            ("ratelimit-limit", "ratelimit-remaining", "ratelimit-reset"),
+            ("x-rate-limit-limit", "x-rate-limit-remaining", "x-rate-limit-reset"),
         ]
 
         for limit_key, remaining_key, reset_key in patterns:
@@ -451,7 +449,7 @@ class TokenBucketRateLimiter:
             "total_requests": self._total_requests,
             "rate_limited_requests": self._rate_limited_requests,
             "adaptive_adjustments": self._adaptive_adjustments,
-            "utilization": round(1.0 - (self._tokens / self.capacity), 3)
+            "utilization": round(1.0 - (self._tokens / self.capacity), 3),
         }
 
 
@@ -467,11 +465,9 @@ class AsyncRetryWithBackoff:
         max_delay: float = 60.0,
         exponential_base: float = 2.0,
         jitter: bool = True,
-        retryable_exceptions: tuple = field(default_factory=lambda: (
-            asyncio.TimeoutError,
-            ConnectionError,
-            OSError
-        ))
+        retryable_exceptions: tuple = field(
+            default_factory=lambda: (asyncio.TimeoutError, ConnectionError, OSError)
+        ),
     ):
         self.max_retries = max_retries
         self.base_delay = base_delay
@@ -482,11 +478,7 @@ class AsyncRetryWithBackoff:
         self._retry_counts: dict[str, int] = {}
 
     async def execute(
-        self,
-        func: Callable[..., T],
-        *args,
-        operation_name: str = "operation",
-        **kwargs
+        self, func: Callable[..., T], *args, operation_name: str = "operation", **kwargs
     ) -> T:
         """Execute function with retry logic"""
         import random
@@ -512,14 +504,11 @@ class AsyncRetryWithBackoff:
                     break
 
                 # Calculate delay with exponential backoff
-                delay = min(
-                    self.base_delay * (self.exponential_base ** attempt),
-                    self.max_delay
-                )
+                delay = min(self.base_delay * (self.exponential_base**attempt), self.max_delay)
 
                 # Add jitter to prevent thundering herd
                 if self.jitter:
-                    delay *= (0.5 + random.random())
+                    delay *= 0.5 + random.random()
 
                 logger.warning(
                     f"{operation_name} failed (attempt {attempt + 1}/{self.max_retries + 1}), "
@@ -567,7 +556,7 @@ class InfrastructureManager:
         logger.info("InfrastructureManager initialized")
 
     @classmethod
-    async def get_instance(cls) -> 'InfrastructureManager':
+    async def get_instance(cls) -> "InfrastructureManager":
         """Get singleton instance"""
         if cls._instance is None:
             async with cls._lock:
@@ -576,9 +565,7 @@ class InfrastructureManager:
         return cls._instance
 
     def get_circuit_breaker(
-        self,
-        name: str,
-        config: CircuitBreakerConfig | None = None
+        self, name: str, config: CircuitBreakerConfig | None = None
     ) -> CircuitBreaker:
         """Get or create circuit breaker by name"""
         if name not in self._circuit_breakers:
@@ -587,10 +574,7 @@ class InfrastructureManager:
         return self._circuit_breakers[name]
 
     def get_cache(
-        self,
-        name: str,
-        max_size: int = 1000,
-        default_ttl: float | None = 3600.0
+        self, name: str, max_size: int = 1000, default_ttl: float | None = 3600.0
     ) -> LRUCacheWithTTL:
         """Get or create cache by name"""
         if name not in self._caches:
@@ -599,11 +583,7 @@ class InfrastructureManager:
         return self._caches[name]
 
     def get_rate_limiter(
-        self,
-        name: str,
-        rate: float = 10.0,
-        capacity: int = 100,
-        adaptive: bool = True
+        self, name: str, rate: float = 10.0, capacity: int = 100, adaptive: bool = True
     ) -> TokenBucketRateLimiter:
         """Get or create rate limiter by name"""
         if name not in self._rate_limiters:
@@ -612,10 +592,7 @@ class InfrastructureManager:
         return self._rate_limiters[name]
 
     def get_retry_config(
-        self,
-        name: str,
-        max_retries: int = 3,
-        base_delay: float = 1.0
+        self, name: str, max_retries: int = 3, base_delay: float = 1.0
     ) -> AsyncRetryWithBackoff:
         """Get or create retry config by name"""
         if name not in self._retriers:
@@ -641,10 +618,6 @@ class InfrastructureManager:
             "circuit_breakers": {
                 name: cb.get_stats() for name, cb in self._circuit_breakers.items()
             },
-            "caches": {
-                name: cache.get_stats() for name, cache in self._caches.items()
-            },
-            "rate_limiters": {
-                name: rl.get_stats() for name, rl in self._rate_limiters.items()
-            }
+            "caches": {name: cache.get_stats() for name, cache in self._caches.items()},
+            "rate_limiters": {name: rl.get_stats() for name, rl in self._rate_limiters.items()},
         }

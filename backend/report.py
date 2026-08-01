@@ -32,10 +32,15 @@ class ReportGenerator:
             ("appendix", self._generate_section_appendix),
         ]
 
-    def generate(self, format: str, target: dict[str, Any], findings: list[dict[str, Any]],
-                 entities: list[dict[str, Any]] | None = None, relationships: list[dict[str, Any]] | None = None,
-                 timeline: list[dict[str, Any]] | None = None) -> str:
-
+    def generate(
+        self,
+        format: str,
+        target: dict[str, Any],
+        findings: list[dict[str, Any]],
+        entities: list[dict[str, Any]] | None = None,
+        relationships: list[dict[str, Any]] | None = None,
+        timeline: list[dict[str, Any]] | None = None,
+    ) -> str:
         """
         Assemble the report by calling each section generator.
         """
@@ -45,7 +50,9 @@ class ReportGenerator:
         # Collect section content
         report_data = {}
         for section_id, generator in self.sections:
-            report_data[section_id] = generator(target, findings, risk, entities, relationships, timeline)
+            report_data[section_id] = generator(
+                target, findings, risk, entities, relationships, timeline
+            )
 
         if format == "json":
             return self._assemble_json(target, report_data, risk)
@@ -58,18 +65,22 @@ class ReportGenerator:
 
     # --- Section Generators ---
 
-    def _generate_section_summary(self, target, findings, risk, entities, relationships, timeline) -> dict[str, Any]:
+    def _generate_section_summary(
+        self, target, findings, risk, entities, relationships, timeline
+    ) -> dict[str, Any]:
         return {
             "title": "Investigation Summary",
             "content": f"Investigation conducted on {target.get('query')} resulting in {len(findings)} findings.",
             "metrics": {
                 "total_findings": len(findings),
                 "entities_discovered": len(entities) if entities else 0,
-                "relationships_mapped": len(relationships) if relationships else 0
-            }
+                "relationships_mapped": len(relationships) if relationships else 0,
+            },
         }
 
-    def _generate_section_executive(self, target, findings, risk, entities, relationships, timeline) -> dict[str, Any]:
+    def _generate_section_executive(
+        self, target, findings, risk, entities, relationships, timeline
+    ) -> dict[str, Any]:
         now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         critical = sum(1 for f in findings if f.get("severity") == "critical")
         high = sum(1 for f in findings if f.get("severity") == "high")
@@ -88,40 +99,52 @@ class ReportGenerator:
             "status": status,
             "critical_count": critical,
             "high_count": high,
-            "summary_text": f"The overall risk posture for {target.get('query')} is {status}."
+            "summary_text": f"The overall risk posture for {target.get('query')} is {status}.",
         }
 
-    def _generate_section_target_info(self, target, findings, risk, entities, relationships, timeline) -> dict[str, Any]:
-        return {
-            "title": "Target Information",
-            "target": target
-        }
+    def _generate_section_target_info(
+        self, target, findings, risk, entities, relationships, timeline
+    ) -> dict[str, Any]:
+        return {"title": "Target Information", "target": target}
 
-    def _generate_section_key_findings(self, target, findings, risk, entities, relationships, timeline) -> list[dict[str, Any]]:
+    def _generate_section_key_findings(
+        self, target, findings, risk, entities, relationships, timeline
+    ) -> list[dict[str, Any]]:
         # Return top 5 most severe findings
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
-        sorted_findings = sorted(findings, key=lambda x: severity_order.get(x.get("severity", "info").lower(), 4))
+        sorted_findings = sorted(
+            findings, key=lambda x: severity_order.get(x.get("severity", "info").lower(), 4)
+        )
         return sorted_findings[:5]
 
-    def _generate_section_evidence(self, target, findings: list[dict[str, Any]], risk, entities, relationships, timeline) -> list[dict[str, Any]]:
+    def _generate_section_evidence(
+        self, target, findings: list[dict[str, Any]], risk, entities, relationships, timeline
+    ) -> list[dict[str, Any]]:
         return findings
 
-
-    def _generate_section_relationships(self, target, findings, risk, entities, relationships, timeline) -> list[dict[str, Any]]:
+    def _generate_section_relationships(
+        self, target, findings, risk, entities, relationships, timeline
+    ) -> list[dict[str, Any]]:
         return relationships or []
 
-    def _generate_section_timeline(self, target, findings, risk, entities, relationships, timeline) -> list[dict[str, Any]]:
+    def _generate_section_timeline(
+        self, target, findings, risk, entities, relationships, timeline
+    ) -> list[dict[str, Any]]:
         return timeline or []
 
-    def _generate_section_risk(self, target, findings, risk, entities, relationships, timeline) -> dict[str, Any]:
+    def _generate_section_risk(
+        self, target, findings, risk, entities, relationships, timeline
+    ) -> dict[str, Any]:
         return {
             "title": "Risk Assessment",
             "score": risk.get("score", 0),
             "grade": risk.get("grade", "A"),
-            "breakdown": risk.get("breakdown", {})
+            "breakdown": risk.get("breakdown", {}),
         }
 
-    def _generate_section_recommendations(self, target, findings, risk, entities, relationships, timeline) -> list[str]:
+    def _generate_section_recommendations(
+        self, target, findings, risk, entities, relationships, timeline
+    ) -> list[str]:
         recs = ["Perform regular credential rotations."]
         if any(f.get("severity") == "critical" for f in findings):
             recs.append("Immediate remediation of critical exposures required.")
@@ -129,36 +152,47 @@ class ReportGenerator:
             recs.append("Initiate password reset for all exposed accounts.")
         return recs
 
-    def _generate_section_appendix(self, target, findings, risk, entities, relationships, timeline) -> dict[str, Any]:
+    def _generate_section_appendix(
+        self, target, findings, risk, entities, relationships, timeline
+    ) -> dict[str, Any]:
         return {
             "title": "Appendix",
             "tool_version": "Aegis OSINT AI v1.0.0",
-            "methodology": "Automated plugin-based discovery and entity relationship mapping."
+            "methodology": "Automated plugin-based discovery and entity relationship mapping.",
         }
 
     # --- Assemblers ---
 
     def _assemble_json(self, target, report_data, risk) -> str:
-        return json.dumps({
-            "meta": {"target": target.get("query"), "generated_at": datetime.now(UTC).isoformat()},
-            "risk": risk,
-            "sections": report_data
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "meta": {
+                    "target": target.get("query"),
+                    "generated_at": datetime.now(UTC).isoformat(),
+                },
+                "risk": risk,
+                "sections": report_data,
+            },
+            indent=2,
+            default=str,
+        )
 
     def _assemble_markdown(self, target, report_data, risk) -> str:
         lines = [f"# Aegis OSINT Report: {target.get('query')}", ""]
 
         # Executive Summary
         exec_s = report_data["executive"]
-        lines.extend([
-            "## Executive Summary",
-            f"**Status:** {exec_s['status']}",
-            f"**Risk Grade:** {exec_s['risk_grade']} ({exec_s['risk_score']}/100)",
-            f"**Critical Findings:** {exec_s['critical_count']}",
-            "",
-            exec_s['summary_text'],
-            ""
-        ])
+        lines.extend(
+            [
+                "## Executive Summary",
+                f"**Status:** {exec_s['status']}",
+                f"**Risk Grade:** {exec_s['risk_grade']} ({exec_s['risk_score']}/100)",
+                f"**Critical Findings:** {exec_s['critical_count']}",
+                "",
+                exec_s["summary_text"],
+                "",
+            ]
+        )
 
         # Key Findings
         lines.append("## Key Findings")
@@ -175,7 +209,9 @@ class ReportGenerator:
         # Relationships
         lines.append("## Entity Relationships")
         for r in report_data["relationships"]:
-            lines.append(f"- {r.get('source_entity_id')} -> {r.get('relationship_type')} -> {r.get('target_entity_id')}")
+            lines.append(
+                f"- {r.get('source_entity_id')} -> {r.get('relationship_type')} -> {r.get('target_entity_id')}"
+            )
         lines.append("")
 
         return "\n".join(lines)
@@ -189,7 +225,7 @@ class ReportGenerator:
             "</head>",
             "<body>",
             f"<h1>Report for {target.get('query')}</h1>",
-            f"<p class='risk'>Risk Grade: {risk.get('grade')} | Score: {risk.get('score')}/100</p>"
+            f"<p class='risk'>Risk Grade: {risk.get('grade')} | Score: {risk.get('score')}/100</p>",
         ]
 
         exec_s = report_data["executive"]
@@ -198,7 +234,9 @@ class ReportGenerator:
 
         html.append("<h2>Key Findings</h2><ul>")
         for f in report_data["key_findings"]:
-            html.append(f"<li><b>{f.get('source')}</b>: {f.get('category')} ({f.get('severity')})</li>")
+            html.append(
+                f"<li><b>{f.get('source')}</b>: {f.get('category')} ({f.get('severity')})</li>"
+            )
         html.append("</ul>")
 
         html.append("<h2>Timeline</h2><ul>")
@@ -208,7 +246,9 @@ class ReportGenerator:
 
         html.append("<h2>Entity Relationships</h2><ul>")
         for r in report_data["relationships"]:
-            html.append(f"<li>Entity {r.get('source_entity_id')} -> {r.get('relationship_type')} -> Entity {r.get('target_entity_id')}</li>")
+            html.append(
+                f"<li>Entity {r.get('source_entity_id')} -> {r.get('relationship_type')} -> Entity {r.get('target_entity_id')}</li>"
+            )
         html.append("</ul>")
 
         html.append("</body></html>")

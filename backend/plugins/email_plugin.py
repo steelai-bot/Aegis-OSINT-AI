@@ -7,6 +7,7 @@ from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
 
+
 class EmailPlugin(BasePlugin):
     """
     Plugin for email discovery and validation.
@@ -22,7 +23,7 @@ class EmailPlugin(BasePlugin):
             required_api_keys=["HUNTER_API_KEY"],
             tags=["email", "identity"],
             execution_cost=1.5,
-            estimated_time=5
+            estimated_time=5,
         )
 
     async def execute(self, query: str, target_type: TargetType) -> list[PluginResponse]:
@@ -39,13 +40,15 @@ class EmailPlugin(BasePlugin):
                         data = resp.json()
                         emails = data.get("data", {}).get("emails", [])
                         if emails:
-                            findings.append(PluginResponse(
-                                provider=self.metadata.name,
-                                entity_type=TargetType.EMAIL,
-                                confidence=0.9,
-                                evidence=[{"emails": [e.get("value") for e in emails]}],
-                                raw=data
-                            ))
+                            findings.append(
+                                PluginResponse(
+                                    provider=self.metadata.name,
+                                    entity_type=TargetType.EMAIL,
+                                    confidence=0.9,
+                                    evidence=[{"emails": [e.get("value") for e in emails]}],
+                                    raw=data,
+                                )
+                            )
                 elif target_type == TargetType.EMAIL:
                     url = f"https://api.hunter.io/v2/email-verifier?email={query}&api_key={api_key}"
                     resp = await client.get(url)
@@ -53,13 +56,15 @@ class EmailPlugin(BasePlugin):
                         data = resp.json()
                         result = data.get("data", {})
                         if result.get("status") == "valid":
-                            findings.append(PluginResponse(
-                                provider=self.metadata.name,
-                                entity_type=TargetType.EMAIL,
-                                confidence=1.0,
-                                evidence=[{"status": "valid", "email": query}],
-                                raw=data
-                            ))
+                            findings.append(
+                                PluginResponse(
+                                    provider=self.metadata.name,
+                                    entity_type=TargetType.EMAIL,
+                                    confidence=1.0,
+                                    evidence=[{"status": "valid", "email": query}],
+                                    raw=data,
+                                )
+                            )
             except Exception as e:
                 logger.error(f"EmailPlugin Hunter.io error: {e}")
 
@@ -68,12 +73,19 @@ class EmailPlugin(BasePlugin):
             # In a real scenario, we might scrape the domain for emails.
             # For MVP, we simulate finding a common pattern if no API key was used.
             if not api_key:
-                findings.append(PluginResponse(
-                    provider=self.metadata.name,
-                    entity_type=TargetType.EMAIL,
-                    confidence=0.3,
-                    evidence=[{"note": "No API key provided, performing basic pattern simulation", "suggested_pattern": f"admin@{query}"}],
-                    raw={}
-                ))
+                findings.append(
+                    PluginResponse(
+                        provider=self.metadata.name,
+                        entity_type=TargetType.EMAIL,
+                        confidence=0.3,
+                        evidence=[
+                            {
+                                "note": "No API key provided, performing basic pattern simulation",
+                                "suggested_pattern": f"admin@{query}",
+                            }
+                        ],
+                        raw={},
+                    )
+                )
 
         return findings

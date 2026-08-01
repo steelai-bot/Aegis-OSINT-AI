@@ -1,4 +1,3 @@
-
 from backend.plugin_manager import PluginManager, validate_semver
 
 

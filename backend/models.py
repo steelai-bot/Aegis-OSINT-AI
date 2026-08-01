@@ -39,13 +39,24 @@ class PluginMetadata(BaseModel):
     name: str = Field(..., description="Unique identifier for the plugin")
     description: str = Field(..., description="Brief description of what the plugin does")
     version: str = Field(default="1.0.0", description="Plugin version (semver)")
-    supported_entity_types: list[TargetType] = Field(..., description="Types of targets this plugin can process")
-    required_api_keys: list[str] = Field(default_factory=list, description="List of environment variable names for required API keys")
-    supported_authentication: list[str] = Field(default_factory=lambda: ["none"], description="Supported auth methods (e.g., api_key, oauth, username_password, session_cookie, none)")
-    tags: list[str] = Field(default_factory=list, description="Tags for categorization (e.g., 'dns', 'passive')")
+    supported_entity_types: list[TargetType] = Field(
+        ..., description="Types of targets this plugin can process"
+    )
+    required_api_keys: list[str] = Field(
+        default_factory=list, description="List of environment variable names for required API keys"
+    )
+    supported_authentication: list[str] = Field(
+        default_factory=lambda: ["none"],
+        description="Supported auth methods (e.g., api_key, oauth, username_password, session_cookie, none)",
+    )
+    tags: list[str] = Field(
+        default_factory=list, description="Tags for categorization (e.g., 'dns', 'passive')"
+    )
     execution_cost: float = Field(default=1.0, description="Relative weight/cost of execution")
     estimated_time: int = Field(default=5, description="Estimated execution time in seconds")
-    dependencies: list[str] = Field(default_factory=list, description="List of other plugin names this plugin depends on")
+    dependencies: list[str] = Field(
+        default_factory=list, description="List of other plugin names this plugin depends on"
+    )
     min_app_version: str = Field(default="1.0.0", description="Minimum Aegis version required")
 
 
@@ -53,8 +64,12 @@ class PluginResponse(BaseModel):
     provider: str = Field(..., description="Name of the plugin that provided the result")
     entity_type: TargetType
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score from 0.0 to 1.0")
-    evidence: list[dict[str, Any]] = Field(default_factory=list, description="Structured evidence found")
-    raw: dict[str, Any] = Field(default_factory=dict, description="Original raw output from the provider")
+    evidence: list[dict[str, Any]] = Field(
+        default_factory=list, description="Structured evidence found"
+    )
+    raw: dict[str, Any] = Field(
+        default_factory=dict, description="Original raw output from the provider"
+    )
 
 
 class InvestigationWorkflow(BaseModel):
@@ -142,8 +157,13 @@ class DarkWebHit(BaseModel):
     Transport/UI-only model - not persisted directly; plugin findings carry the
     same fields inside their evidence dicts.
     """
-    source: str = Field(..., description="Plugin/source name, e.g. 'ahmia', 'psbdmp', 'hibp_pastes', 'telegram'")
-    category: str = Field(..., description="stealer_log | breach | forum_mention | database_dump | telegram | paste")
+
+    source: str = Field(
+        ..., description="Plugin/source name, e.g. 'ahmia', 'psbdmp', 'hibp_pastes', 'telegram'"
+    )
+    category: str = Field(
+        ..., description="stealer_log | breach | forum_mention | database_dump | telegram | paste"
+    )
     title: str
     snippet: str = ""
     url: str | None = None

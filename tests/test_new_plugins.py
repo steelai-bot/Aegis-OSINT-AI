@@ -25,27 +25,34 @@ def reset_http_singleton():
 # Wayback Machine plugin
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_wayback_returns_snapshot_and_captures():
     respx.get(url__startswith="https://archive.org/wayback/available").mock(
-        return_value=httpx.Response(200, json={
-            "archived_snapshots": {
-                "closest": {
-                    "available": True,
-                    "url": "http://web.archive.org/web/20240101/https://example.com",
-                    "timestamp": "20240101120000",
-                    "status": "200",
+        return_value=httpx.Response(
+            200,
+            json={
+                "archived_snapshots": {
+                    "closest": {
+                        "available": True,
+                        "url": "http://web.archive.org/web/20240101/https://example.com",
+                        "timestamp": "20240101120000",
+                        "status": "200",
+                    }
                 }
-            }
-        })
+            },
+        )
     )
     respx.get(url__startswith="https://web.archive.org/cdx/search/cdx").mock(
-        return_value=httpx.Response(200, json=[
-            ["timestamp", "original", "statuscode", "mimetype"],
-            ["20240101120000", "https://example.com/", "200", "text/html"],
-            ["20240201120000", "https://example.com/about", "200", "text/html"],
-        ])
+        return_value=httpx.Response(
+            200,
+            json=[
+                ["timestamp", "original", "statuscode", "mimetype"],
+                ["20240101120000", "https://example.com/", "200", "text/html"],
+                ["20240201120000", "https://example.com/about", "200", "text/html"],
+            ],
+        )
     )
 
     plugin = WaybackPlugin()
@@ -104,9 +111,7 @@ async def test_web_recon_parses_files():
     respx.get("https://example.com/.well-known/security.txt").mock(
         return_value=httpx.Response(200, text=SECURITY_TXT)
     )
-    respx.get("https://example.com/security.txt").mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get("https://example.com/security.txt").mock(return_value=httpx.Response(404))
     respx.get("https://example.com/sitemap.xml").mock(
         return_value=httpx.Response(200, text=SITEMAP_XML)
     )
@@ -146,6 +151,7 @@ async def test_web_recon_all_missing_returns_empty():
 # ---------------------------------------------------------------------------
 # Engine failure propagation
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_engine_execute_plugin_reraises(monkeypatch):

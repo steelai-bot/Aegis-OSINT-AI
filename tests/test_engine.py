@@ -5,11 +5,12 @@ from backend.models import PluginResponse
 def test_extract_entities():
     engine = InvestigationEngine("data/test_engine.db")
     from backend.models import TargetType
+
     resp = PluginResponse(
         provider="test",
         entity_type=TargetType.DOMAIN,
         raw={"emails": ["test@example.com"], "domains": ["example.com"]},
-        confidence=0.9
+        confidence=0.9,
     )
     entities = engine.extract_entities(resp, target_id=1)
 
@@ -17,6 +18,7 @@ def test_extract_entities():
     types = [e.type.value for e in entities]
     assert "email" in types
     assert "domain" in types
+
 
 def test_build_relationships():
     engine = InvestigationEngine("data/test_engine.db")

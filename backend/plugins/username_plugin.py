@@ -20,6 +20,7 @@ PLATFORMS = [
     {"name": "StackOverflow", "url": "https://stackoverflow.com/users/{username}"},
 ]
 
+
 class UsernamePlugin(BasePlugin):
     """
     Plugin for username enumeration across multiple platforms.
@@ -33,7 +34,7 @@ class UsernamePlugin(BasePlugin):
             supported_entity_types=[TargetType.USERNAME, TargetType.PERSON],
             tags=["username", "social"],
             execution_cost=2.0,
-            estimated_time=8
+            estimated_time=8,
         )
 
     async def _check_platform(self, client, platform: dict, username: str) -> dict | None:
@@ -42,11 +43,7 @@ class UsernamePlugin(BasePlugin):
         try:
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
             if resp.status_code == 200:
-                return {
-                    "platform": platform["name"],
-                    "url": url,
-                    "status": "found"
-                }
+                return {"platform": platform["name"], "url": url, "status": "found"}
         except Exception as e:
             logger.debug(f"UsernamePlugin error checking {platform['name']}: {e}")
         return None
@@ -62,12 +59,14 @@ class UsernamePlugin(BasePlugin):
                 found.append(result)
 
         if found:
-            return [PluginResponse(
-                provider=self.metadata.name,
-                entity_type=TargetType.USERNAME,
-                confidence=0.7,
-                evidence=[{"profiles": found}],
-                raw={"query": query, "results": found}
-            )]
+            return [
+                PluginResponse(
+                    provider=self.metadata.name,
+                    entity_type=TargetType.USERNAME,
+                    confidence=0.7,
+                    evidence=[{"profiles": found}],
+                    raw={"query": query, "results": found},
+                )
+            ]
 
         return []

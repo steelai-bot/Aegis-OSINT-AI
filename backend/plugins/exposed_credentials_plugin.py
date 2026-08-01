@@ -84,7 +84,10 @@ class ExposedCredentialsPlugin(BasePlugin):
 
     async def _run_telegram(self, client, query: str) -> PluginResponse | None:
         channel_results = await asyncio.gather(
-            *(search_telegram_channel(client, ch, query, source="stealer_channel") for ch in STEALER_CHANNELS),
+            *(
+                search_telegram_channel(client, ch, query, source="stealer_channel")
+                for ch in STEALER_CHANNELS
+            ),
             return_exceptions=True,
         )
         hits: list[dict] = []
@@ -120,16 +123,20 @@ class ExposedCredentialsPlugin(BasePlugin):
                     continue
                 source = paste.get("Source") or "unknown"
                 paste_id = paste.get("Id") or ""
-                hits.append(make_hit(
-                    source="hibp_pastes",
-                    category="paste",
-                    title=f"Paste on {source}: {paste.get('Title') or paste_id}",
-                    snippet=f"Email found in {source} paste ({paste.get('EmailCount', '?')} emails).",
-                    url=f"https://pastebin.com/{paste_id}" if source == "Pastebin" else None,
-                    download_url=f"https://pastebin.com/raw/{paste_id}" if source == "Pastebin" and paste_id else None,
-                    date=paste.get("Date"),
-                    severity="warning",
-                ))
+                hits.append(
+                    make_hit(
+                        source="hibp_pastes",
+                        category="paste",
+                        title=f"Paste on {source}: {paste.get('Title') or paste_id}",
+                        snippet=f"Email found in {source} paste ({paste.get('EmailCount', '?')} emails).",
+                        url=f"https://pastebin.com/{paste_id}" if source == "Pastebin" else None,
+                        download_url=f"https://pastebin.com/raw/{paste_id}"
+                        if source == "Pastebin" and paste_id
+                        else None,
+                        date=paste.get("Date"),
+                        severity="warning",
+                    )
+                )
             return PluginResponse(
                 provider=self.metadata.name,
                 entity_type=TargetType.EMAIL,
@@ -156,14 +163,16 @@ class ExposedCredentialsPlugin(BasePlugin):
                         provider=self.metadata.name,
                         entity_type=TargetType.EMAIL,
                         confidence=0.8,
-                        evidence=[make_hit(
-                            source="pwnedpasswords",
-                            category="breach",
-                            title=f"Email hash seen {count:,} times in breach corpus",
-                            snippet="Credential material associated with this email appears in known breach password lists.",
-                            url="https://haveibeenpwned.com/",
-                            severity="critical" if count > 100 else "warning",
-                        )],
+                        evidence=[
+                            make_hit(
+                                source="pwnedpasswords",
+                                category="breach",
+                                title=f"Email hash seen {count:,} times in breach corpus",
+                                snippet="Credential material associated with this email appears in known breach password lists.",
+                                url="https://haveibeenpwned.com/",
+                                severity="critical" if count > 100 else "warning",
+                            )
+                        ],
                         raw={"source": "pwnedpasswords_range", "count": count},
                     )
             return None
@@ -191,15 +200,17 @@ class ExposedCredentialsPlugin(BasePlugin):
             provider=self.metadata.name,
             entity_type=TargetType.PHONE,
             confidence=0.3,
-            evidence=[make_hit(
-                source="exposed_credentials",
-                category="breach",
-                title="Phone breach scan limited without paid keys",
-                snippet=(
-                    f"Normalized number: {normalized}. Free sources do not index phone breaches; "
-                    "configure DEHASHED_API_KEY, LEAKCHECK_API_KEY or SNUSBASE_API_KEY for deep phone lookup."
-                ),
-                severity="info",
-            )],
+            evidence=[
+                make_hit(
+                    source="exposed_credentials",
+                    category="breach",
+                    title="Phone breach scan limited without paid keys",
+                    snippet=(
+                        f"Normalized number: {normalized}. Free sources do not index phone breaches; "
+                        "configure DEHASHED_API_KEY, LEAKCHECK_API_KEY or SNUSBASE_API_KEY for deep phone lookup."
+                    ),
+                    severity="info",
+                )
+            ],
             raw={"phone": normalized, "limited": True},
         )

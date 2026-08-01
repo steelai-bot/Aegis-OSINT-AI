@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 # Semver regex pattern for version validation (simplified but robust)
 SEMVER_PATTERN = re.compile(
-    r'^([0-9]+)\.([0-9]+)\.([0-9]+)'
-    r'(?:-([0-9A-Za-z-.]+))?'
-    r'(?:\+([0-9A-Za-z-.]+))?$'
+    r"^([0-9]+)\.([0-9]+)\.([0-9]+)"
+    r"(?:-([0-9A-Za-z-.]+))?"
+    r"(?:\+([0-9A-Za-z-.]+))?$"
 )
 
 
@@ -26,7 +26,7 @@ def validate_semver(version: str) -> bool:
     """Validate that a version string follows semantic versioning (X.Y.Z format)."""
     if not version:
         return False
-    parts = version.split('.')
+    parts = version.split(".")
     if len(parts) < 3:
         return False
     try:
@@ -41,7 +41,8 @@ class PluginManager:
     Singleton manager for discovering and executing OSINT plugins.
     Supports hot reload detection, version validation, dependency checking, and result caching.
     """
-    _instance: Optional['PluginManager'] = None
+
+    _instance: Optional["PluginManager"] = None
     _initialized: bool
 
     def __new__(cls):
@@ -69,7 +70,9 @@ class PluginManager:
 
         logger.info("PluginManager initialized.")
 
-    def _validate_plugin_metadata(self, plugin_instance: BasePlugin, plugin_name: str) -> str | None:
+    def _validate_plugin_metadata(
+        self, plugin_instance: BasePlugin, plugin_name: str
+    ) -> str | None:
         """Validate plugin metadata including version and dependencies. Returns error message or None."""
         metadata = plugin_instance.metadata
 
@@ -90,7 +93,9 @@ class PluginManager:
             return f"Missing dependencies: {', '.join(missing_deps)}"
         return None
 
-    def discover_plugins(self, package_path: str = "backend.plugins", watch_for_changes: bool = True):
+    def discover_plugins(
+        self, package_path: str = "backend.plugins", watch_for_changes: bool = True
+    ):
         """
         Dynamically discovers and instantiates plugins from the specified package.
 
@@ -110,7 +115,9 @@ class PluginManager:
 
                 # If mtimes haven't changed and we have plugins, skip discovery
                 if self._plugins and current_mtimes == self._file_mtimes:
-                    logger.debug("Plugin hot reload: No file changes detected, skipping rediscovery")
+                    logger.debug(
+                        "Plugin hot reload: No file changes detected, skipping rediscovery"
+                    )
                     return
 
                 self._file_mtimes = current_mtimes
@@ -137,7 +144,10 @@ class PluginManager:
                             plugin_instance = obj()
 
                             # Validate Metadata exists
-                            if not hasattr(plugin_instance, 'metadata') or plugin_instance.metadata is None:
+                            if (
+                                not hasattr(plugin_instance, "metadata")
+                                or plugin_instance.metadata is None
+                            ):
                                 logger.error(f"Plugin {name} missing metadata. Skipping.")
                                 continue
 
@@ -145,13 +155,19 @@ class PluginManager:
 
                             # Duplicate check
                             if plugin_name in self._plugins:
-                                logger.error(f"Duplicate plugin name detected: {plugin_name}. Skipping {name}.")
+                                logger.error(
+                                    f"Duplicate plugin name detected: {plugin_name}. Skipping {name}."
+                                )
                                 continue
 
                             # Validate version format
-                            version_error = self._validate_plugin_metadata(plugin_instance, plugin_name)
+                            version_error = self._validate_plugin_metadata(
+                                plugin_instance, plugin_name
+                            )
                             if version_error:
-                                logger.error(f"Plugin {plugin_name} validation failed: {version_error}. Skipping.")
+                                logger.error(
+                                    f"Plugin {plugin_name} validation failed: {version_error}. Skipping."
+                                )
                                 self._plugin_errors[plugin_name] = version_error
                                 continue
 
@@ -169,8 +185,7 @@ class PluginManager:
                             # Check plugin dependencies (only if enabled)
                             if status == "enabled" and plugin_instance.metadata.dependencies:
                                 dep_error = self._check_plugin_dependencies(
-                                    plugin_name,
-                                    plugin_instance.metadata.dependencies
+                                    plugin_name, plugin_instance.metadata.dependencies
                                 )
                                 if dep_error:
                                     error_msg = dep_error
@@ -203,7 +218,13 @@ class PluginManager:
         """Record runtime statistics for a plugin execution."""
         stats = self._execution_stats.setdefault(
             plugin_name,
-            {"runs": 0, "failures": 0, "last_error": None, "last_duration_ms": 0.0, "last_run_at": None},
+            {
+                "runs": 0,
+                "failures": 0,
+                "last_error": None,
+                "last_duration_ms": 0.0,
+                "last_run_at": None,
+            },
         )
         stats["runs"] += 1
         if not success:
@@ -220,7 +241,9 @@ class PluginManager:
             return self._execution_stats.get(plugin_name, {})
         return dict(self._execution_stats)
 
-    async def execute_plugin(self, plugin_name: str, query: str, target_type: TargetType) -> list[PluginResponse]:
+    async def execute_plugin(
+        self, plugin_name: str, query: str, target_type: TargetType
+    ) -> list[PluginResponse]:
         """
         Execute a specific plugin with TTL-based result caching, a per-plugin
         execution timeout, and runtime statistics tracking.
@@ -269,14 +292,15 @@ class PluginManager:
             raise PluginExecutionError(plugin_name, msg, cause=e) from e
         except PluginExecutionError:
             duration_ms = (time.perf_counter() - started) * 1000
-            self._record_execution(plugin_name, duration_ms, success=False, error="Plugin raised PluginExecutionError")
+            self._record_execution(
+                plugin_name, duration_ms, success=False, error="Plugin raised PluginExecutionError"
+            )
             raise
         except Exception as e:
             duration_ms = (time.perf_counter() - started) * 1000
             self._record_execution(plugin_name, duration_ms, success=False, error=str(e))
             logger.error(f"Error executing plugin '{plugin_name}': {e}", exc_info=True)
             raise PluginExecutionError(plugin_name, str(e), cause=e) from e
-
 
     def list_plugins(self) -> list[dict[str, Any]]:
         """Return metadata, status, and runtime stats for all discovered plugins."""
@@ -290,7 +314,6 @@ class PluginManager:
                 data["stats"] = self._execution_stats[name]
             result.append(data)
         return result
-
 
     def get_all_plugin_names(self) -> list[str]:
         """Return names of all discovered plugins."""

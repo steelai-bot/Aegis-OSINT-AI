@@ -7,11 +7,15 @@ from backend.config.settings import AegisSettings, reload_settings
 
 def test_settings_defaults():
     """Test that settings have sensible defaults."""
-    with patch.dict(os.environ, {
-        "HOST": "0.0.0.0",
-        "PORT": "8000",
-        "DATABASE": "data/aegis.db",
-    }, clear=True):
+    with patch.dict(
+        os.environ,
+        {
+            "HOST": "0.0.0.0",
+            "PORT": "8000",
+            "DATABASE": "data/aegis.db",
+        },
+        clear=True,
+    ):
         settings = AegisSettings(_env_file=None)
 
         assert settings.app_name == "Aegis OSINT AI"

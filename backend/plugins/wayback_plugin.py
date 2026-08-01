@@ -46,32 +46,38 @@ class WaybackPlugin(BasePlugin):
         raw: dict = {"query": domain}
 
         if latest:
-            evidence.append({
-                "type": "latest_snapshot",
-                "url": latest.get("url"),
-                "timestamp": latest.get("timestamp"),
-                "status": latest.get("status"),
-            })
+            evidence.append(
+                {
+                    "type": "latest_snapshot",
+                    "url": latest.get("url"),
+                    "timestamp": latest.get("timestamp"),
+                    "status": latest.get("status"),
+                }
+            )
             raw["latest_snapshot"] = latest
 
         if captures:
-            evidence.append({
-                "type": "recent_captures",
-                "capture_count": len(captures),
-                "captures": captures,
-            })
+            evidence.append(
+                {
+                    "type": "recent_captures",
+                    "capture_count": len(captures),
+                    "captures": captures,
+                }
+            )
             raw["recent_captures"] = captures
 
         if not evidence:
             return []
 
-        return [PluginResponse(
-            provider=self.metadata.name,
-            entity_type=target_type,
-            confidence=0.85,
-            evidence=evidence,
-            raw=raw,
-        )]
+        return [
+            PluginResponse(
+                provider=self.metadata.name,
+                entity_type=target_type,
+                confidence=0.85,
+                evidence=evidence,
+                raw=raw,
+            )
+        ]
 
     async def _get_latest_snapshot(self, client, domain: str) -> dict | None:
         """Query the Availability API for the closest snapshot."""
@@ -104,7 +110,7 @@ class WaybackPlugin(BasePlugin):
                     return []
                 header, rows = data[0], data[1:]
                 captures = []
-                for row in rows[-self.MAX_CAPTURES:]:
+                for row in rows[-self.MAX_CAPTURES :]:
                     if isinstance(row, list) and len(row) == len(header):
                         captures.append(dict(zip(header, row, strict=False)))
                 return captures

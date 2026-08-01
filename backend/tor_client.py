@@ -59,11 +59,7 @@ class TorClient:
             return False
 
         now = time.monotonic()
-        if (
-            not force
-            and self._cached_available is not None
-            and now - self._cached_at < _CACHE_TTL
-        ):
+        if not force and self._cached_available is not None and now - self._cached_at < _CACHE_TTL:
             return self._cached_available
 
         available = await self._probe()
@@ -102,7 +98,9 @@ class TorClient:
             proxy=f"socks5://{self.address}",
             timeout=httpx.Timeout(60.0, connect=30.0),  # onion circuits are slow
             follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:109.0) Gecko/20100101 Firefox/115.0"
+            },
         )
 
     async def status(self) -> dict:

@@ -5,6 +5,7 @@ from backend.providers import AIProviderFactory
 
 logger = logging.getLogger(__name__)
 
+
 class AIPlanner:
     """
     AI Planner that determines the sequence of plugins to execute for a given target.
@@ -16,52 +17,109 @@ class AIPlanner:
         self.templates: dict[TargetType, InvestigationTemplate] = {
             TargetType.DOMAIN: InvestigationTemplate(
                 target_type=TargetType.DOMAIN,
-                steps=["dns_lookup", "whois_lookup", "cert_transparency", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction", "leaked_db", "darkweb_monitor"]
+                steps=[
+                    "dns_lookup",
+                    "whois_lookup",
+                    "cert_transparency",
+                    "wayback_machine",
+                    "web_recon",
+                    "email_discovery",
+                    "github_discovery",
+                    "username_enumeration",
+                    "google_dorking",
+                    "metadata_extraction",
+                    "leaked_db",
+                    "darkweb_monitor",
+                ],
             ),
             TargetType.NZ_DOMAIN: InvestigationTemplate(
                 target_type=TargetType.NZ_DOMAIN,
-                steps=["dns_lookup", "whois_lookup", "cert_transparency", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction", "leaked_db", "darkweb_monitor"]
+                steps=[
+                    "dns_lookup",
+                    "whois_lookup",
+                    "cert_transparency",
+                    "wayback_machine",
+                    "web_recon",
+                    "email_discovery",
+                    "github_discovery",
+                    "username_enumeration",
+                    "google_dorking",
+                    "metadata_extraction",
+                    "leaked_db",
+                    "darkweb_monitor",
+                ],
             ),
             TargetType.SUBDOMAIN: InvestigationTemplate(
                 target_type=TargetType.SUBDOMAIN,
-                steps=["dns_lookup", "wayback_machine", "web_recon"]
+                steps=["dns_lookup", "wayback_machine", "web_recon"],
             ),
-
             TargetType.IP: InvestigationTemplate(
-                target_type=TargetType.IP,
-                steps=["ip_geolocation"]
+                target_type=TargetType.IP, steps=["ip_geolocation"]
             ),
             TargetType.EMAIL: InvestigationTemplate(
                 target_type=TargetType.EMAIL,
-                steps=["email_discovery", "breach_check", "exposed_credentials", "stealer_logs", "darkweb_monitor", "telegram_osint"]
+                steps=[
+                    "email_discovery",
+                    "breach_check",
+                    "exposed_credentials",
+                    "stealer_logs",
+                    "darkweb_monitor",
+                    "telegram_osint",
+                ],
             ),
             TargetType.USERNAME: InvestigationTemplate(
                 target_type=TargetType.USERNAME,
-                steps=["username_enumeration", "exposed_credentials", "stealer_logs", "darkweb_monitor", "telegram_osint"]
+                steps=[
+                    "username_enumeration",
+                    "exposed_credentials",
+                    "stealer_logs",
+                    "darkweb_monitor",
+                    "telegram_osint",
+                ],
             ),
             TargetType.PHONE: InvestigationTemplate(
                 target_type=TargetType.PHONE,
-                steps=["exposed_credentials", "breach_check", "stealer_logs", "telegram_osint"]
+                steps=["exposed_credentials", "breach_check", "stealer_logs", "telegram_osint"],
             ),
             TargetType.PERSON: InvestigationTemplate(
                 target_type=TargetType.PERSON,
-                steps=["username_enumeration", "exposed_credentials", "stealer_logs", "darkweb_monitor", "telegram_osint"]
+                steps=[
+                    "username_enumeration",
+                    "exposed_credentials",
+                    "stealer_logs",
+                    "darkweb_monitor",
+                    "telegram_osint",
+                ],
             ),
             TargetType.LEAK: InvestigationTemplate(
                 target_type=TargetType.LEAK,
-                steps=["leaked_db", "stealer_logs", "darkweb_monitor", "breach_check"]
+                steps=["leaked_db", "stealer_logs", "darkweb_monitor", "breach_check"],
             ),
             TargetType.COMPANY: InvestigationTemplate(
                 target_type=TargetType.COMPANY,
-                steps=["email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"] # General company search
+                steps=[
+                    "email_discovery",
+                    "github_discovery",
+                    "username_enumeration",
+                    "google_dorking",
+                    "metadata_extraction",
+                ],  # General company search
             ),
             TargetType.ABN: InvestigationTemplate(
                 target_type=TargetType.ABN,
-                steps=["email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction"] # ABN search
+                steps=[
+                    "email_discovery",
+                    "github_discovery",
+                    "username_enumeration",
+                    "google_dorking",
+                    "metadata_extraction",
+                ],  # ABN search
             ),
         }
 
-    async def plan_investigation(self, target_type: TargetType, query: str, use_dynamic: bool = False) -> list[str]:
+    async def plan_investigation(
+        self, target_type: TargetType, query: str, use_dynamic: bool = False
+    ) -> list[str]:
         """
         Returns a list of plugin names to execute.
         """
@@ -70,7 +128,9 @@ class AIPlanner:
             if template:
                 logger.info(f"Using template for {target_type}: {template.steps}")
                 return template.steps
-            logger.warning(f"No template found for {target_type}, falling back to dynamic planning.")
+            logger.warning(
+                f"No template found for {target_type}, falling back to dynamic planning."
+            )
 
         return await self._plan_dynamically(target_type, query)
 
@@ -85,7 +145,9 @@ class AIPlanner:
         # Try to get a provider for the planner
         provider = AIProviderFactory.get_provider("openrouter")
         if not provider:
-            return self.templates.get(target_type, InvestigationTemplate(target_type=target_type, steps=[])).steps
+            return self.templates.get(
+                target_type, InvestigationTemplate(target_type=target_type, steps=[])
+            ).steps
 
         prompt = (
             f"You are an OSINT expert. Given a target of type '{target_type}' with the value '{query}', "
@@ -98,14 +160,38 @@ class AIPlanner:
         )
 
         try:
-            model = "gpt-3.5-turbo" if getattr(provider, 'provider', '') == "openrouter" else getattr(provider, '_default_model', 'gpt-3.5-turbo')
+            model = (
+                "gpt-3.5-turbo"
+                if getattr(provider, "provider", "") == "openrouter"
+                else getattr(provider, "_default_model", "gpt-3.5-turbo")
+            )
             response = await provider.chat(prompt, model)
             suggested = [p.strip() for p in response.content.split(",") if p.strip()]
-            valid_known = {"dns_lookup", "whois_lookup", "cert_transparency", "ip_geolocation", "wayback_machine", "web_recon", "email_discovery", "github_discovery", "username_enumeration", "google_dorking", "metadata_extraction", "breach_check", "exposed_credentials", "stealer_logs", "darkweb_monitor", "leaked_db", "telegram_osint"}
+            valid_known = {
+                "dns_lookup",
+                "whois_lookup",
+                "cert_transparency",
+                "ip_geolocation",
+                "wayback_machine",
+                "web_recon",
+                "email_discovery",
+                "github_discovery",
+                "username_enumeration",
+                "google_dorking",
+                "metadata_extraction",
+                "breach_check",
+                "exposed_credentials",
+                "stealer_logs",
+                "darkweb_monitor",
+                "leaked_db",
+                "telegram_osint",
+            }
 
             plugins = [p for p in suggested if p in valid_known]
             logger.info(f"AI Planner suggested: {plugins}")
             return plugins
         except Exception as e:
             logger.error(f"Dynamic planning failed: {e}")
-            return self.templates.get(target_type, InvestigationTemplate(target_type=target_type, steps=[])).steps
+            return self.templates.get(
+                target_type, InvestigationTemplate(target_type=target_type, steps=[])
+            ).steps
