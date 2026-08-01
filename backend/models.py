@@ -22,6 +22,7 @@ class TargetType(StrEnum):
     PERSON = "person"
     UNKNOWN = "unknown"
     USERNAME = "username"
+    ADDRESS = "address"
     ABN = "abn"
     NZ_DOMAIN = "nz_domain"
     NZ_COMPANY = "nz_company"

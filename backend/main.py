@@ -298,6 +298,27 @@ def _detect_target_type(query: str):
     # Phone: full or partial (4+ digits, phone characters only)
     if re.match(r"^\+?[0-9][0-9\s\-()]{3,14}$", query_clean):
         return TargetType.PHONE
+    # Masked/redacted phone from a leak (e.g. "XXXX XXX 019", "+61 *** *** 019"):
+    # phone-shaped mix of digits and mask chars, >=2 visible digits and >=2 mask chars
+    if (
+        re.match(r"^\+?[0-9Xx*#•.\s\-()]{4,19}$", query_clean)
+        and len(re.sub(r"\D", "", query_clean)) >= 2
+        and len(re.findall(r"[Xx*#•]", query_clean)) >= 2
+    ):
+        return TargetType.PHONE
+    # Street address: starts with a street number and carries an address hint
+    # (street suffix, postcode, or trailing state/country code) - global, not BG-specific
+    if re.match(r"^\d{1,6}[A-Za-z]?\s+[^\W\d_]", query_clean, re.UNICODE) and (
+        re.search(
+            r"(?i)\b(st|street|ave|avenue|rd|road|dr|drive|ln|lane|blvd|boulevard|ct|court"
+            r"|pl|place|way|pde|parade|tce|terrace|cres|crescent|hwy|highway|sq|square"
+            r"|cir|circle|grove|gr|close|cl|row|rise|view|vista|apt|unit|suite|ste)\b\.?,?",
+            query_clean,
+        )
+        or re.search(r"\b\d{3,10}\b", query_clean.split(None, 1)[1])
+        or re.search(r"(?i)\b[A-Z]{2}\b\s*,?\s*$", query_clean)
+    ):
+        return TargetType.ADDRESS
     # Person name: 2+ words of letters only (incl. Cyrillic/diacritics)
     if re.match(r"^[^\W\d_]+(?:[ .'-][^\W\d_]+)+$", query_clean, re.UNICODE):
         return TargetType.PERSON
@@ -1226,14 +1247,103 @@ async def list_plugins(request: Request):
     return format_response(plugins)
 
 
+# Finding display groups - keyword-based classification of evidence payloads
+_FINDING_GROUPS: dict[str, tuple[str, ...]] = {
+    "exposure": (
+        "leak",
+        "breach",
+        "stealer",
+        "credential",
+        "password",
+        "dump",
+        "paste",
+        "exposed",
+        "compromised",
+        "combo",
+    ),
+    "contact": ("email", "phone", "address", "location", "gravatar"),
+    "identity": (
+        "username",
+        "profile",
+        "account",
+        "name",
+        "person",
+        "social",
+        "github",
+        "avatar",
+        "permutation",
+    ),
+    "infrastructure": (
+        "domain",
+        "subdomain",
+        "ip",
+        "dns",
+        "ssl",
+        "cert",
+        "server",
+        "host",
+        "whois",
+        "port",
+        "service",
+        "tech",
+    ),
+}
+
+
+def _classify_finding(source: str, data: dict) -> str:
+    """Bucket a finding into a display group based on source + evidence type/keys."""
+    haystack = f"{source} {data.get('type', '')} {data.get('category', '')}".lower()
+    for group, keywords in _FINDING_GROUPS.items():
+        if any(kw in haystack for kw in keywords):
+            return group
+    return "other"
+
+
+def _enrich_finding(row: tuple) -> dict:
+    """Build a display-ready finding dict from a findings table row."""
+    data = json.loads(row[6]) if row[6] else {}
+    if not isinstance(data, dict):
+        data = {"value": data}
+    title = (
+        data.get("title")
+        or data.get("breach")
+        or data.get("source")
+        or data.get("name")
+        or data.get("platform")
+        or data.get("type")
+        or row[2]
+    )
+    snippet = data.get("snippet") or data.get("description") or data.get("note") or ""
+    if not snippet and len(data) <= 6:
+        snippet = ", ".join(f"{k}: {v}" for k, v in data.items() if not isinstance(v, dict | list))
+    url = data.get("url") or data.get("profile_url") or data.get("link") or ""
+    conf = row[5] or 0.0
+    return {
+        "id": row[0],
+        "target_id": row[1],
+        "source": row[2],
+        "category": row[3],
+        "severity": row[4],
+        "confidence": conf,
+        "conf_pct": int(conf * 100) if conf <= 1 else int(conf),
+        "data": data,
+        "created_at": row[7],
+        "group": _classify_finding(row[2] or "", data),
+        "title": str(title)[:120],
+        "snippet": str(snippet)[:400],
+        "url": url if isinstance(url, str) else "",
+    }
+
+
 @app.get("/api/findings")
-async def list_findings(target_id: int | None = None):
+async def list_findings(request: Request, target_id: int | None = None, format: str = "json"):
+    """Return findings as JSON, or a grouped HTML partial (format=html)."""
     with get_db() as conn:
         cursor = conn.cursor()
 
         if target_id:
             cursor.execute(
-                "SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?",
+                "SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ? ORDER BY id",
                 (target_id,),
             )
         else:
@@ -1243,19 +1353,17 @@ async def list_findings(target_id: int | None = None):
 
         rows = cursor.fetchall()
 
-    findings = [
-        {
-            "id": r[0],
-            "target_id": r[1],
-            "source": r[2],
-            "category": r[3],
-            "severity": r[4],
-            "confidence": r[5],
-            "data": json.loads(r[6]) if r[6] else {},
-            "created_at": r[7],
-        }
-        for r in rows
-    ]
+    findings = [_enrich_finding(r) for r in rows]
+
+    if format == "html":
+        group_counts: dict[str, int] = {}
+        for f in findings:
+            group_counts[f["group"]] = group_counts.get(f["group"], 0) + 1
+        return templates.TemplateResponse(
+            request=request,
+            name="components/findings.html",
+            context={"findings": findings, "group_counts": group_counts},
+        )
     return format_response(findings)
 
 

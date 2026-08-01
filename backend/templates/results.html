@@ -6,6 +6,9 @@
 <!-- vis-network for graph visualization -->
 <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
 <link href="https://unpkg.com/vis-network@9.1.9/dist/dist/vis-network.min.css" rel="stylesheet" />
+<!-- marked + DOMPurify for AI summary markdown rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -46,6 +49,12 @@
     <!-- Tabs Navigation Card -->
     <div class="bg-card rounded-xl border border-border shadow-xl overflow-hidden">
         <div class="border-b border-border flex overflow-x-auto bg-sidebar/50">
+            <button @click="activeTab = 'findings'"
+                    :class="activeTab === 'findings' ? 'border-b-2 border-primary text-primary bg-primary/10' : 'text-muted hover:text-foreground'"
+                    class="px-6 py-4 font-medium text-sm transition-all flex items-center gap-2 flex-shrink-0">
+                <i data-lucide="flag" class="w-4 h-4"></i>
+                Findings
+            </button>
             <button @click="activeTab = 'graph'"
                     :class="activeTab === 'graph' ? 'border-b-2 border-primary text-primary bg-primary/10' : 'text-muted hover:text-foreground'"
                     class="px-6 py-4 font-medium text-sm transition-all flex items-center gap-2 flex-shrink-0">
@@ -80,6 +89,20 @@
 
         <!-- Tab Content Area -->
         <div class="p-6">
+            <!-- Findings Tab -->
+            <div x-show="activeTab === 'findings'" x-cloak>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-foreground">Raw Intelligence Findings</h3>
+                    <span class="text-xs font-mono text-muted">GROUPED BY INTELLIGENCE TYPE</span>
+                </div>
+                <div hx-get="/api/findings?target_id={{ target_id }}&format=html"
+                     hx-trigger="load"
+                     hx-target="this"
+                     hx-swap="innerHTML">
+                    <p class="text-muted font-mono text-xs py-8 text-center">Loading findings...</p>
+                </div>
+            </div>
+
             <!-- Graph View Tab -->
             <div x-show="activeTab === 'graph'" x-cloak x-init="initGraph()" class="space-y-4">
                 <div class="flex justify-between items-center">
@@ -235,7 +258,7 @@
                 </div>
                 <div x-show="aiSummaryError" class="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-4" x-text="aiSummaryError"></div>
                 <div x-show="aiSummary" class="prose-sm max-w-none text-foreground bg-background border border-border rounded-lg p-6">
-                    <pre class="whitespace-pre-wrap font-sans text-sm leading-relaxed" x-text="aiSummary"></pre>
+                    <div class="ai-markdown text-sm leading-relaxed" x-html="renderMarkdown(aiSummary)"></div>
                 </div>
             </div>
 
@@ -274,7 +297,7 @@
 
     function resultsPage() {
         return {
-            activeTab: 'graph',
+            activeTab: 'findings',
             searchTerm: '',
             selectedNode: null,
             layout: 'force',
@@ -284,6 +307,16 @@
             aiSummaryMeta: '',
             aiSummaryError: '',
             aiSummaryLoading: false,
+
+            renderMarkdown(text) {
+                if (!text) return '';
+                if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+                    return DOMPurify.sanitize(marked.parse(text));
+                }
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML.replace(/\n/g, '<br>');
+            },
 
             async generateAiSummary() {
                 this.aiSummaryError = '';

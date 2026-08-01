@@ -51,7 +51,11 @@ class PhoneLookupPlugin(BasePlugin):
 
         query_clean = query.strip()
         digits = self._digits_only(query_clean)
-        if len(digits) < 4:
+        # Masked/redacted numbers from leaks (e.g. "XXXX XXX 019", "+61 *** *** 019")
+        # carry fewer visible digits - accept them with a lower threshold
+        mask_chars = re.findall(r"[Xx*#•]", query_clean)
+        is_masked = bool(mask_chars)
+        if len(digits) < (2 if is_masked else 4):
             return []
 
         evidence: list[dict] = []
@@ -106,13 +110,22 @@ class PhoneLookupPlugin(BasePlugin):
                 }
             )
         else:
-            # 2. Partial number - report what can be inferred for cross-referencing
+            # 2. Partial/masked number - report what can be inferred for cross-referencing
             partial: dict = {
                 "type": "phone_partial",
                 "fragment": digits,
                 "digit_count": len(digits),
                 "note": "Partial/unparseable number - normalized fragment for breach cross-referencing",
             }
+            if is_masked:
+                partial["masked"] = True
+                partial["mask_pattern"] = re.sub(r"\d", "0", query_clean)
+                partial["visible_digits"] = len(digits)
+                partial["masked_digits"] = len(mask_chars)
+                partial["note"] = (
+                    "Masked/redacted number from a leak - visible digits and mask shape "
+                    "can be matched against full numbers in breach/stealer-log sources"
+                )
             # A leading country calling code may still be identifiable
             for cc_len in (1, 2, 3):
                 cc = digits[:cc_len]

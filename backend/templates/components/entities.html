@@ -1,35 +1,79 @@
-<!-- Entities list partial -->
+<!-- Entities list partial: grouped by type, collapsible, searchable -->
+{% set type_styles = {
+    'domain': {'badge': 'bg-blue-500/15 text-blue-400 border-blue-500/30', 'dot': '#3b82f6'},
+    'subdomain': {'badge': 'bg-sky-500/15 text-sky-400 border-sky-500/30', 'dot': '#60a5fa'},
+    'email': {'badge': 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', 'dot': '#10b981'},
+    'ip': {'badge': 'bg-purple-500/15 text-purple-400 border-purple-500/30', 'dot': '#a855f7'},
+    'github': {'badge': 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30', 'dot': '#8b5cf6'},
+    'phone': {'badge': 'bg-amber-500/15 text-amber-400 border-amber-500/30', 'dot': '#f59e0b'},
+    'leak': {'badge': 'bg-red-500/15 text-red-400 border-red-500/30', 'dot': '#ef4444'},
+    'company': {'badge': 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30', 'dot': '#06b6d4'},
+    'person': {'badge': 'bg-pink-500/15 text-pink-400 border-pink-500/30', 'dot': '#ec4899'},
+    'username': {'badge': 'bg-teal-500/15 text-teal-400 border-teal-500/30', 'dot': '#14b8a6'},
+    'url': {'badge': 'bg-blue-500/15 text-blue-300 border-blue-500/30', 'dot': '#60a5fa'},
+    'address': {'badge': 'bg-orange-500/15 text-orange-400 border-orange-500/30', 'dot': '#f97316'},
+    'unknown': {'badge': 'bg-gray-500/15 text-gray-400 border-gray-500/30', 'dot': '#64748b'}
+} %}
+
 {% if entities %}
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    {% for entity in entities %}
-    {% set conf = (entity.confidence * 100)|int if entity.confidence <= 1 else entity.confidence|int %}
-    <div class="bg-background border border-border rounded-xl p-4 hover:border-primary/50 transition-all shadow-sm">
-        <div class="flex items-start justify-between mb-3">
-            <span class="px-2.5 py-1 text-xs font-mono rounded-md font-semibold uppercase tracking-wider
-                        {% if entity.type.value == 'domain' %}bg-blue-500/15 text-blue-400 border border-blue-500/30
-                        {% elif entity.type.value == 'email' %}bg-emerald-500/15 text-emerald-400 border border-emerald-500/30
-                        {% elif entity.type.value == 'ip' %}bg-purple-500/15 text-purple-400 border border-purple-500/30
-                        {% elif entity.type.value == 'github' %}bg-indigo-500/15 text-indigo-400 border border-indigo-500/30
-                        {% else %}bg-gray-500/15 text-gray-400 border border-gray-500/30{% endif %}">
-                {{ entity.type.value }}
-            </span>
-            <div class="flex items-center gap-1.5 font-mono text-xs">
-                <span class="text-muted">Conf:</span>
-                <span class="font-semibold {% if conf >= 80 %}text-emerald-400{% elif conf >= 50 %}text-amber-400{% else %}text-red-400{% endif %}">{{ conf }}%</span>
+<div x-data="{ search: '' }" class="space-y-5">
+    <div class="flex items-center gap-3">
+        <input type="text" x-model="search" placeholder="Filter entities..."
+               class="px-3 py-1.5 border border-border rounded-lg bg-background text-sm font-mono text-foreground w-64 focus:ring-2 focus:ring-primary focus:border-transparent">
+        <span class="text-xs font-mono text-muted">{{ entities | length }} ENTITIES / {{ entities | groupby('type.value') | length }} TYPES</span>
+    </div>
+
+    {% for type, group in entities | groupby('type.value') %}
+    {% set style = type_styles.get(type, type_styles['unknown']) %}
+    <div x-data="{ open: true }" class="border border-border rounded-xl overflow-hidden">
+        <button @click="open = !open"
+                class="w-full flex items-center gap-2.5 px-4 py-3 bg-card/60 hover:bg-card transition-colors text-left">
+            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: {{ style.dot }}"></span>
+            <span class="text-sm font-semibold text-foreground uppercase font-mono tracking-wider">{{ type }}</span>
+            <span class="text-xs font-mono text-muted">({{ group | length }})</span>
+            <span class="flex-1"></span>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-muted transition-transform" :class="{ 'rotate-180': open }"></i>
+        </button>
+        <div x-show="open" x-cloak class="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-background/40">
+            {% for entity in group %}
+            {% set conf = (entity.confidence * 100)|int if entity.confidence <= 1 else entity.confidence|int %}
+            <div x-show="search === '' || $el.textContent.toLowerCase().includes(search.toLowerCase())"
+                 class="bg-background border border-border rounded-xl p-4 hover:border-primary/50 transition-all shadow-sm">
+                <div class="flex items-start justify-between mb-3">
+                    <span class="px-2.5 py-1 text-xs font-mono rounded-md font-semibold uppercase tracking-wider border {{ style.badge }}">
+                        {{ entity.type.value }}
+                    </span>
+                    <div class="flex items-center gap-1.5 font-mono text-xs">
+                        <span class="text-muted">Conf:</span>
+                        <span class="font-semibold {% if conf >= 80 %}text-emerald-400{% elif conf >= 50 %}text-amber-400{% else %}text-red-400{% endif %}">{{ conf }}%</span>
+                    </div>
+                </div>
+
+                <div class="font-mono text-sm font-semibold text-foreground mb-2 break-all bg-card/50 p-2.5 rounded-lg border border-border">
+                    {{ entity.value }}
+                </div>
+
+                {% if entity.display_name and entity.display_name != entity.value %}
+                <div class="text-xs text-muted mb-2"><span class="text-foreground font-medium">Display:</span> {{ entity.display_name }}</div>
+                {% endif %}
+
+                {% if entity.metadata_json %}
+                <div class="text-[11px] font-mono text-muted space-y-0.5 mb-2">
+                    {% for key, val in entity.metadata_json.items() if val is not none and val != '' and not (val is iterable and val is not string and val | length == 0) %}
+                    <div class="flex gap-1.5">
+                        <span class="text-foreground/70 font-semibold flex-shrink-0">{{ key }}:</span>
+                        <span class="break-all">{% if val is iterable and val is not string %}{{ val | join(', ') }}{% else %}{{ val }}{% endif %}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="flex items-center justify-between text-[11px] text-muted font-mono pt-2 border-t border-border/60 mt-2">
+                    <span>First Seen</span>
+                    <span>{{ entity.first_seen.strftime('%Y-%m-%d %H:%M') if entity.first_seen and entity.first_seen.strftime is defined else entity.first_seen }}</span>
+                </div>
             </div>
-        </div>
-
-        <div class="font-mono text-sm font-semibold text-foreground mb-2 break-all bg-card/50 p-2.5 rounded-lg border border-border">
-            {{ entity.value }}
-        </div>
-
-        {% if entity.display_name and entity.display_name != entity.value %}
-        <div class="text-xs text-muted mb-2"><span class="text-foreground font-medium">Display:</span> {{ entity.display_name }}</div>
-        {% endif %}
-
-        <div class="flex items-center justify-between text-[11px] text-muted font-mono pt-2 border-t border-border/60 mt-2">
-            <span>First Seen</span>
-            <span>{{ entity.first_seen.strftime('%Y-%m-%d %H:%M') if entity.first_seen and entity.first_seen.strftime is defined else entity.first_seen }}</span>
+            {% endfor %}
         </div>
     </div>
     {% endfor %}

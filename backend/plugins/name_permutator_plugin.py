@@ -1,11 +1,17 @@
 import logging
 import re
-import unicodedata
 
 from backend.models import PluginMetadata, PluginResponse, TargetType
 from backend.plugins.base import BasePlugin
 
 logger = logging.getLogger(__name__)
+
+try:
+    from unidecode import unidecode
+
+    UNIDECODE_AVAILABLE = True
+except ImportError:  # pragma: no cover - dependency is declared, defensive guard
+    UNIDECODE_AVAILABLE = False
 
 MAX_PERMUTATIONS = 40
 
@@ -35,43 +41,16 @@ class NamePermutatorPlugin(BasePlugin):
 
     @staticmethod
     def _transliterate(text: str) -> str:
-        """Transliterate Cyrillic to Latin, strip accents/diacritics."""
-        bg_map = {
-            "а": "a",
-            "б": "b",
-            "в": "v",
-            "г": "g",
-            "д": "d",
-            "е": "e",
-            "ж": "zh",
-            "з": "z",
-            "и": "i",
-            "й": "y",
-            "к": "k",
-            "л": "l",
-            "м": "m",
-            "н": "n",
-            "о": "o",
-            "п": "p",
-            "р": "r",
-            "с": "s",
-            "т": "t",
-            "у": "u",
-            "ф": "f",
-            "х": "h",
-            "ц": "ts",
-            "ч": "ch",
-            "ш": "sh",
-            "щ": "sht",
-            "ъ": "a",
-            "ь": "y",
-            "ю": "yu",
-            "я": "ya",
-        }
-        out = "".join(bg_map.get(ch, ch) for ch in text.lower())
-        # Decompose remaining diacritics (é -> e) and drop non-ascii
-        out = unicodedata.normalize("NFKD", out).encode("ascii", "ignore").decode()
-        return out
+        """Transliterate any script to ASCII (Cyrillic, Greek, Arabic, CJK, accents).
+
+        Uses unidecode for global coverage (RU/UA/BG/SR Cyrillic, Greek,
+        diacritics, CJK pinyin, etc.) with an NFKD fallback if unavailable.
+        """
+        if UNIDECODE_AVAILABLE:
+            return unidecode(text.lower()).strip()
+        import unicodedata
+
+        return unicodedata.normalize("NFKD", text.lower()).encode("ascii", "ignore").decode()
 
     @classmethod
     def generate_permutations(cls, full_name: str) -> list[str]:

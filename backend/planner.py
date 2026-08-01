@@ -101,6 +101,10 @@ class AIPlanner:
                     "telegram_osint",
                 ],
             ),
+            TargetType.ADDRESS: InvestigationTemplate(
+                target_type=TargetType.ADDRESS,
+                steps=["google_dorking", "darkweb_monitor", "stealer_logs"],
+            ),
             TargetType.LEAK: InvestigationTemplate(
                 target_type=TargetType.LEAK,
                 steps=["leaked_db", "stealer_logs", "darkweb_monitor", "breach_check"],
