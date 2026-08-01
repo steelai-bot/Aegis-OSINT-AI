@@ -1,11 +1,23 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app
 
-client = TestClient(app)
+
+@pytest.fixture(scope="module")
+def client():
+    """Lifespan-managed TestClient.
+
+    Entering the context runs the app lifespan, which initializes the
+    database schema (init_db) against the isolated test DATABASE set in
+    conftest.py. A plain TestClient(app) never runs the lifespan, so the
+    tables would be missing on a fresh checkout (e.g. in CI).
+    """
+    with TestClient(app) as c:
+        yield c
 
 
-def test_api_status():
+def test_api_status(client):
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
@@ -13,7 +25,7 @@ def test_api_status():
     assert "status" in data["data"]
 
 
-def test_api_plugins():
+def test_api_plugins(client):
     response = client.get("/api/plugins")
     assert response.status_code == 200
     data = response.json()
@@ -21,7 +33,7 @@ def test_api_plugins():
     assert isinstance(data["data"], list)
 
 
-def test_api_providers():
+def test_api_providers(client):
     response = client.get("/api/providers")
     assert response.status_code == 200
     data = response.json()
@@ -29,7 +41,7 @@ def test_api_providers():
     assert isinstance(data["data"], list)
 
 
-def test_api_stats():
+def test_api_stats(client):
     response = client.get("/api/stats")
     assert response.status_code == 200
     data = response.json()
@@ -38,7 +50,7 @@ def test_api_stats():
     assert "plugins" in data["data"]
 
 
-def test_delete_target():
+def test_delete_target(client):
     # Create target first
     create_resp = client.post(
         "/api/targets", json={"query": "testdelete.com", "target_type": "domain"}
