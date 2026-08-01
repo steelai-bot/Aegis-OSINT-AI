@@ -53,7 +53,7 @@ jobs:
     steps:
       - name: Deploy to server via SSH
         if: ${{ env.DEPLOY_HOST != '' }}
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ env.DEPLOY_HOST }}
           username: ${{ env.DEPLOY_USER }}
