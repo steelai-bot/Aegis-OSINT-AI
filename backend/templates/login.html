@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - Aegis OSINT AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        background: '#090d16', card: '#111827', border: '#1f293d',
+                        primary: '#06b6d4', 'primary-dark': '#0891b2',
+                        muted: '#94a3b8', foreground: '#f1f5f9'
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>body { font-family: 'Inter', sans-serif; background-color: #090d16; }</style>
+</head>
+<body class="text-foreground min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-sm">
+        <div class="bg-card border border-border rounded-2xl p-8 shadow-2xl">
+            <div class="flex flex-col items-center mb-8">
+                <div class="w-14 h-14 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shadow-lg shadow-primary/10 mb-4">
+                    <i data-lucide="shield-alert" class="w-7 h-7"></i>
+                </div>
+                <h1 class="font-bold text-xl tracking-wide">AEGIS OSINT</h1>
+                <p class="text-xs font-mono text-primary mt-1">COMMAND CENTER ACCESS</p>
+            </div>
+
+            {% if error %}
+            <div class="mb-5 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="post" action="/api/login" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-mono text-muted mb-2 uppercase tracking-wider">Username</label>
+                    <input type="text" name="username" required autofocus autocomplete="username"
+                        class="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-foreground text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-muted mb-2 uppercase tracking-wider">Password</label>
+                    <input type="password" name="password" required autocomplete="current-password"
+                        class="w-full px-4 py-3 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-foreground text-sm">
+                </div>
+                <button type="submit"
+                    class="w-full py-3 bg-primary text-background font-semibold rounded-lg hover:bg-primary-dark transition-all text-sm shadow-lg shadow-primary/20 flex items-center justify-center gap-2">
+                    <i data-lucide="log-in" class="w-4 h-4"></i>
+                    Sign In
+                </button>
+            </form>
+        </div>
+        <p class="text-center text-[11px] font-mono text-muted mt-6">AUTHORIZED PERSONNEL ONLY</p>
+    </div>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

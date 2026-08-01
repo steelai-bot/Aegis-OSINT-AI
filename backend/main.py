@@ -4,6 +4,7 @@ Lightweight Windows-first OSINT investigation framework
 """
 
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -21,6 +22,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from starlette.middleware.sessions import SessionMiddleware
 
 from backend.config.settings import get_settings, settings
 from backend.oauth_manager import OAuthManager
@@ -144,6 +146,64 @@ app.add_middleware(
     allow_credentials=False,  # False is required per spec when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+
+# --- Application authentication (single user, opt-in via AUTH_ENABLED) ---
+
+AUTH_PUBLIC_PATHS = {"/login", "/api/login", "/health"}
+
+
+def _resolve_secret_key() -> str:
+    """Session signing key: from settings, or generated + persisted on first run."""
+    from backend.auth import generate_secret_key
+
+    if settings.secret_key:
+        return settings.secret_key
+    key = generate_secret_key()
+    if settings.auth_enabled:
+        # Persist so sessions survive restarts when auth is on
+        try:
+            from dotenv import set_key
+
+            set_key(".env", "SECRET_KEY", key)
+            os.environ["SECRET_KEY"] = key
+        except Exception as e:
+            logger.warning(f"Could not persist generated SECRET_KEY to .env: {e}")
+    return key
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Gate all pages/APIs behind a session login when AUTH_ENABLED=true."""
+    if not settings.auth_enabled:
+        return await call_next(request)
+
+    path = request.url.path
+    if request.method == "OPTIONS" or path in AUTH_PUBLIC_PATHS or path.startswith("/static"):
+        return await call_next(request)
+
+    if request.session.get("user"):
+        return await call_next(request)
+
+    if path.startswith("/api/"):
+        return JSONResponse(
+            status_code=401,
+            content=format_response(success=False, errors=["authentication_required"]),
+        )
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/login", status_code=303)
+
+
+# Added AFTER the auth middleware so it runs first (outermost) and
+# request.session is available inside the auth check.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=_resolve_secret_key(),
+    same_site="lax",
+    https_only=False,
+    max_age=7 * 24 * 3600,
 )
 
 
@@ -294,6 +354,64 @@ if os.path.exists("backend/static"):
 
 
 # --- Template Routes (replacing React SPA) ---
+
+templates.env.globals["auth_enabled"] = settings.auth_enabled
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """Standalone login page (only reachable when auth is enabled)."""
+    from fastapi.responses import RedirectResponse
+
+    if not settings.auth_enabled or request.session.get("user"):
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse(request=request, name="login.html", context={"error": None})
+
+
+@app.post("/api/login")
+async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    """Verify credentials and establish a signed session cookie."""
+    from backend.auth import verify_password
+
+    if not settings.auth_enabled:
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse(url="/", status_code=303)
+
+    stored_hash = settings.auth_password_hash
+    ok = (
+        hmac.compare_digest(username, settings.auth_username)
+        and stored_hash
+        and verify_password(password, stored_hash)
+    )
+    if not ok:
+        logger.warning(f"Failed login attempt for user '{username}'")
+        if "text/html" in request.headers.get("accept", ""):
+            return templates.TemplateResponse(
+                request=request,
+                name="login.html",
+                context={"error": "Invalid username or password."},
+                status_code=401,
+            )
+        return JSONResponse(
+            status_code=401,
+            content=format_response(success=False, errors=["invalid_credentials"]),
+        )
+
+    request.session["user"] = username
+    logger.info(f"User '{username}' logged in")
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.get("/logout")
+async def logout(request: Request):
+    """Clear the session and return to the login page."""
+    request.session.clear()
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/login" if settings.auth_enabled else "/", status_code=303)
 
 
 @app.get("/", response_class=HTMLResponse)

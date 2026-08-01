@@ -62,6 +62,12 @@ class AegisSettings(BaseSettings):
     tor_proxy_port: int = 9050
     tor_enabled: bool = True
 
+    # Application authentication (single user; disabled by default for local dev)
+    auth_enabled: bool = False
+    auth_username: str = "admin"
+    auth_password_hash: str | None = None
+    secret_key: str | None = None
+
     # Server settings
     host: str = "0.0.0.0"
     port: int = 8000
@@ -127,6 +133,14 @@ DATABASE=data/aegis.db
 # Server (optional)
 HOST=0.0.0.0
 PORT=8000
+
+# Application authentication (optional - disabled by default)
+# Generate a password hash with:
+#   python -c "from backend.auth import hash_password; print(hash_password('YOUR_PASSWORD'))"
+AUTH_ENABLED=false
+AUTH_USERNAME=admin
+AUTH_PASSWORD_HASH=
+SECRET_KEY=
 """
         env_path.write_text(default_content, encoding="utf-8")
         return True
@@ -186,6 +200,10 @@ PORT=8000
             "tor_proxy_host": "TOR_PROXY_HOST",
             "tor_proxy_port": "TOR_PROXY_PORT",
             "tor_enabled": "TOR_ENABLED",
+            "auth_enabled": "AUTH_ENABLED",
+            "auth_username": "AUTH_USERNAME",
+            "auth_password_hash": "AUTH_PASSWORD_HASH",
+            "secret_key": "SECRET_KEY",
         }
         for attr, env_key in key_map.items():
             val = getattr(self, attr, None)

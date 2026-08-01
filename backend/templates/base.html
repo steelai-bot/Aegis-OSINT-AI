@@ -148,6 +148,11 @@
                         <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                         New Target
                     </a>
+                    {% if auth_enabled %}
+                    <a href="/logout" title="Sign out" class="px-3 py-1.5 bg-card border border-border text-muted hover:text-foreground text-xs rounded-md transition-colors flex items-center gap-1.5">
+                        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                    </a>
+                    {% endif %}
                 </div>
             </header>
 
