@@ -3,7 +3,67 @@
 {% block title %}Settings & Providers - Aegis OSINT AI{% endblock %}
 
 {% block content %}
-<div class="p-8 max-w-7xl mx-auto space-y-6" x-data="{ activeSection: 'providers' }">
+<div class="p-8 max-w-7xl mx-auto space-y-6" x-data="{
+    activeSection: 'providers',
+    oauth: { status: null, flow: null, polling: false, message: '', error: '' },
+    async loadOauthStatus() {
+        try {
+            const resp = await fetch('/api/oauth/status');
+            if (resp.ok) {
+                const body = await resp.json();
+                this.oauth.status = body.data.github;
+            }
+        } catch (e) { console.error('OAuth status failed:', e); }
+    },
+    async startGithubOAuth() {
+        this.oauth.error = '';
+        this.oauth.message = '';
+        try {
+            const resp = await fetch('/api/oauth/github/start', { method: 'POST' });
+            const body = await resp.json();
+            if (!resp.ok) {
+                this.oauth.error = (body.errors || ['Failed to start GitHub OAuth']).join(', ');
+                return;
+            }
+            this.oauth.flow = body.data;
+            this.oauth.polling = true;
+            this.pollGithubOAuth(body.data.interval || 5);
+        } catch (e) {
+            this.oauth.error = 'Network error: ' + e.message;
+        }
+    },
+    async pollGithubOAuth(intervalSec) {
+        await new Promise(r => setTimeout(r, intervalSec * 1000));
+        if (!this.oauth.polling) return;
+        try {
+            const resp = await fetch('/api/oauth/github/poll', { method: 'POST' });
+            const body = await resp.json();
+            const data = body.data || {};
+            if (data.status === 'complete') {
+                this.oauth.polling = false;
+                this.oauth.flow = null;
+                this.oauth.message = data.message || 'GitHub connected.';
+                this.loadOauthStatus();
+            } else if (data.status === 'pending') {
+                this.pollGithubOAuth(intervalSec);
+            } else if (data.status === 'slow_down') {
+                this.pollGithubOAuth(data.interval || intervalSec + 5);
+            } else {
+                this.oauth.polling = false;
+                this.oauth.flow = null;
+                this.oauth.error = data.error || 'OAuth flow ended without a token.';
+            }
+        } catch (e) {
+            this.oauth.polling = false;
+            this.oauth.error = 'Network error: ' + e.message;
+        }
+    },
+    cancelGithubOAuth() {
+        this.oauth.polling = false;
+        this.oauth.flow = null;
+    }
+}"
+x-init="loadOauthStatus()">
     <!-- Header -->
     <div>
         <h2 class="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
@@ -22,6 +82,12 @@
                     class="w-full text-left px-4 py-3 rounded-lg text-sm transition-all flex items-center gap-3">
                 <i data-lucide="key" class="w-4 h-4"></i>
                 AI & OSINT Providers
+            </button>
+            <button @click="activeSection = 'oauth'"
+                    :class="activeSection === 'oauth' ? 'bg-primary/20 text-primary border border-primary/40 font-semibold' : 'text-muted hover:bg-background hover:text-foreground'"
+                    class="w-full text-left px-4 py-3 rounded-lg text-sm transition-all flex items-center gap-3">
+                <i data-lucide="shield-check" class="w-4 h-4"></i>
+                OAuth Connections
             </button>
             <button @click="activeSection = 'general'"
                     :class="activeSection === 'general' ? 'bg-primary/20 text-primary border border-primary/40 font-semibold' : 'text-muted hover:bg-background hover:text-foreground'"
@@ -54,6 +120,59 @@
                         </svg>
                         Decrypting provider vault...
                     </div>
+                </div>
+            </div>
+
+            <!-- OAuth Connections Section -->
+            <div x-show="activeSection === 'oauth'" x-cloak class="space-y-6">
+                <div class="pb-4 border-b border-border">
+                    <h3 class="text-xl font-semibold text-foreground">OAuth Connections</h3>
+                    <p class="text-sm text-muted">Connect accounts via OAuth where providers allow it.
+                        Most OSINT providers are API-key only - GitHub supports a secure Device Flow.</p>
+                </div>
+
+                <!-- GitHub card -->
+                <div class="p-5 bg-background border border-border rounded-lg space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="github" class="w-6 h-6 text-foreground"></i>
+                            <div>
+                                <span class="font-medium text-foreground block">GitHub</span>
+                                <span class="text-xs text-muted">Device Flow (RFC 8628) - no client secret required</span>
+                            </div>
+                        </div>
+                        <span x-show="oauth.status && oauth.status.connected"
+                            class="text-xs font-mono text-success bg-success/10 px-2.5 py-1 rounded">CONNECTED</span>
+                        <span x-show="!oauth.status || !oauth.status.connected"
+                            class="text-xs font-mono text-muted bg-muted/10 px-2.5 py-1 rounded">NOT CONNECTED</span>
+                    </div>
+
+                    <div x-show="oauth.status && !oauth.status.oauth_configured" class="text-xs text-warning bg-warning/10 border border-warning/30 rounded-lg p-3">
+                        GITHUB_OAUTH_CLIENT_ID is not configured. Create a GitHub OAuth App
+                        (Developer settings &rarr; OAuth Apps &rarr; enable <strong>Device Flow</strong>)
+                        and set its Client ID in <code class="font-mono">.env</code>.
+                    </div>
+
+                    <div x-show="oauth.flow" class="text-sm bg-primary/10 border border-primary/30 rounded-lg p-4 space-y-2">
+                        <p class="text-foreground">1. Open:
+                            <a :href="oauth.flow?.verification_uri" target="_blank" class="text-primary underline font-mono" x-text="oauth.flow?.verification_uri"></a>
+                        </p>
+                        <p class="text-foreground">2. Enter code:
+                            <span class="font-mono text-lg font-bold tracking-widest text-primary" x-text="oauth.flow?.user_code"></span>
+                        </p>
+                        <p class="text-xs text-muted" x-show="oauth.polling">Waiting for authorization... (polling)</p>
+                        <button @click="cancelGithubOAuth" class="text-xs text-muted underline">Cancel</button>
+                    </div>
+
+                    <div x-show="oauth.message" class="text-xs text-success bg-success/10 border border-success/30 rounded-lg p-3" x-text="oauth.message"></div>
+                    <div x-show="oauth.error" class="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3" x-text="oauth.error"></div>
+
+                    <button @click="startGithubOAuth"
+                        :disabled="oauth.polling || (oauth.status && !oauth.status.oauth_configured)"
+                        class="px-4 py-2 bg-primary text-background text-sm font-semibold rounded-lg hover:bg-primary-dark transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
+                        <i data-lucide="link" class="w-4 h-4"></i>
+                        <span x-text="oauth.polling ? 'Waiting for GitHub...' : 'Connect with GitHub'"></span>
+                    </button>
                 </div>
             </div>
 

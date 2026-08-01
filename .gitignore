@@ -37,6 +37,9 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 
+# OAuth token store (secrets)
+data/oauth_tokens.json
+
 # Node (project-local dependencies)
 node_modules/
 pnpm-lock.yaml

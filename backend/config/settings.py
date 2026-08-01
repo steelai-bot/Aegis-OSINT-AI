@@ -38,6 +38,7 @@ class AegisSettings(BaseSettings):
 
     # API Keys for OSINT plugins
     github_token: str | None = None
+    github_oauth_client_id: str | None = None
     shodan_api_key: str | None = None
     securitytrails_api_key: str | None = None
     virustotal_api_key: str | None = None
@@ -166,6 +167,7 @@ PORT=8000
             "groq_api_key": "GROQ_API_KEY",
             "mistral_api_key": "MISTRAL_API_KEY",
             "github_token": "GITHUB_TOKEN",
+            "github_oauth_client_id": "GITHUB_OAUTH_CLIENT_ID",
             "shodan_api_key": "SHODAN_API_KEY",
             "securitytrails_api_key": "SECURITYTRAILS_API_KEY",
             "virustotal_api_key": "VIRUSTOTAL_API_KEY",

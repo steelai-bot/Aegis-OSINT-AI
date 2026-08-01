@@ -21,12 +21,16 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from backend.config.settings import get_settings, settings
+from backend.oauth_manager import OAuthManager
 from backend.provider_manager import ProviderManager
 
 logger = logging.getLogger(__name__)
 
 # Initialize provider manager (non-async init)
 provider_manager = ProviderManager()
+
+# OAuth device-flow manager (GitHub etc.)
+oauth_manager = OAuthManager()
 
 # Database path from settings
 DATABASE_PATH = settings.database_path
@@ -533,6 +537,75 @@ async def disconnect_provider(provider: str):
         return format_response({"message": f"{provider} disconnected successfully."})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# --- OAUTH ENDPOINTS (GitHub Device Flow, RFC 8628) ---
+
+
+def _github_oauth_client_id() -> str | None:
+    return os.getenv("GITHUB_OAUTH_CLIENT_ID") or settings.github_oauth_client_id
+
+
+@app.get("/api/oauth/status")
+async def oauth_status():
+    """OAuth capability + connection state for supported providers."""
+    return format_response(
+        {
+            "github": {
+                "oauth_configured": bool(_github_oauth_client_id()),
+                "connected": bool(os.getenv("GITHUB_TOKEN")),
+                "flow": "device",
+                "note": (
+                    "Set GITHUB_OAUTH_CLIENT_ID (GitHub OAuth App with Device Flow enabled) "
+                    "to connect without a manual PAT."
+                ),
+            }
+        }
+    )
+
+
+@app.post("/api/oauth/github/start")
+async def oauth_github_start():
+    """Start a GitHub device flow. Returns the user code + verification URL."""
+    from backend.oauth_manager import OAuthError
+
+    client_id = _github_oauth_client_id()
+    if not client_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "GITHUB_OAUTH_CLIENT_ID is not configured. Create a GitHub OAuth App "
+                "(Settings > Developer settings > OAuth Apps, enable Device Flow) and "
+                "set its Client ID in .env."
+            ),
+        )
+    try:
+        session = await oauth_manager.github_start(client_id)
+    except OAuthError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    return format_response(session)
+
+
+@app.post("/api/oauth/github/poll")
+async def oauth_github_poll():
+    """Single poll for device-flow completion.
+
+    On completion the token is persisted (data/oauth_tokens.json) and mirrored
+    into .env as GITHUB_TOKEN via ProviderManager. The raw token is never
+    returned to the client.
+    """
+    client_id = _github_oauth_client_id()
+    if not client_id:
+        raise HTTPException(status_code=400, detail="GITHUB_OAUTH_CLIENT_ID is not configured.")
+
+    result = await oauth_manager.github_poll(client_id)
+    if result.get("status") == "complete":
+        token = result.pop("access_token", None)
+        result.pop("token_type", None)
+        if token:
+            provider_manager.configure_provider("github", {"api_key": token})
+        result["message"] = "GitHub connected - token saved as GITHUB_TOKEN."
+    return format_response(result)
 
 
 # Settings endpoints using Pydantic settings
