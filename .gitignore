@@ -36,3 +36,13 @@ target/
 data/*.db
 data/*.db-shm
 data/*.db-wal
+
+# Node (project-local dependencies)
+node_modules/
+pnpm-lock.yaml
+
+# Accidental nested clone (removed gitlink - guard against re-adding)
+Aegis-OSINT-AI/
+
+# Agent tooling (local only)
+.agents/
