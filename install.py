@@ -1,11 +1,13 @@
-"""
-Aegis OSINT AI - Unified Cross-Platform Installer
+"""Aegis OSINT AI - unified cross-platform installer.
+
 Usage:
     python install.py              # Setup only
     python install.py --run        # Setup + run server
-    python install.py --update     # Update from git + reinstall deps
-    python install.py --dev        # Setup with dev dependencies (pytest, ruff, mypy)
+    python install.py --update     # Pull latest code + reinstall dependencies
+    python install.py --dev        # Setup with development dependencies
 """
+
+from __future__ import annotations
 
 import argparse
 import os
@@ -15,222 +17,269 @@ import subprocess
 import sys
 from pathlib import Path
 
-
-def color(text: str, code: str) -> str:
-    try:
-        import colorama
-        colorama.init()
-        codes = {"green": "\033[92m", "cyan": "\033[96m", "yellow": "\033[93m", "red": "\033[91m", "bold": "\033[1m", "reset": "\033[0m"}
-        return f"{codes.get(code, '')}{text}{codes.get('reset', '')}"
-    except ImportError:
-        return text
-
-
-def step(num: int, total: int, msg: str):
-    print(f"\n{color(f'[{num}/{total}]', 'cyan')} {msg}")
-
-
-def ok(msg: str = "Done"):
-    print(f"  {color('✓', 'green')} {msg}")
-
-
-def warn(msg: str):
-    print(f"  {color('!', 'yellow')} {msg}")
-
-
-def fail(msg: str):
-    print(f"  {color('✗', 'red')} {msg}")
-    sys.exit(1)
-
-
-def run(cmd: list, cwd: str = None, capture: bool = True) -> subprocess.CompletedProcess:
-    try:
-        return subprocess.run(cmd, cwd=cwd, capture_output=capture, text=True, shell=platform.system() == "Windows")
-    except FileNotFoundError:
-        fail(f"Command not found: {cmd[0]}")
-
+PROJECT_ROOT = Path(__file__).resolve().parent
+VENV_DIR = PROJECT_ROOT / ".venv"
+REQUIREMENTS = PROJECT_ROOT / "requirements.txt"
+DEV_REQUIREMENTS = PROJECT_ROOT / "requirements-dev.txt"
+PACKAGE_LOCK = PROJECT_ROOT / "package-lock.json"
 
 STEPS_SETUP = 9
 STEPS_UPDATE = 6
 
+CORE_MODULES = (
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "pydantic_settings",
+    "jinja2",
+    "aiosqlite",
+    "reportlab",
+)
 
-def check_python():
+
+def color(text: str, code: str) -> str:
+    codes = {
+        "green": "\033[92m",
+        "cyan": "\033[96m",
+        "yellow": "\033[93m",
+        "red": "\033[91m",
+        "bold": "\033[1m",
+        "reset": "\033[0m",
+    }
+    if not sys.stdout.isatty():
+        return text
+    return f"{codes.get(code, '')}{text}{codes['reset']}"
+
+
+def step(num: int, total: int, msg: str) -> None:
+    print(f"\n{color(f'[{num}/{total}]', 'cyan')} {msg}")
+
+
+def ok(msg: str = "Done") -> None:
+    print(f"  {color('✓', 'green')} {msg}")
+
+
+def warn(msg: str) -> None:
+    print(f"  {color('!', 'yellow')} {msg}")
+
+
+def fail(msg: str) -> None:
+    print(f"  {color('✗', 'red')} {msg}")
+    sys.exit(1)
+
+
+def run(cmd: list[str], cwd: Path | None = None, capture: bool = True) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            cmd,
+            cwd=str(cwd or PROJECT_ROOT),
+            capture_output=capture,
+            text=True,
+            shell=False,
+            check=False,
+        )
+    except FileNotFoundError:
+        fail(f"Command not found: {cmd[0]}")
+
+
+def venv_python() -> str:
+    if platform.system() == "Windows":
+        return str(VENV_DIR / "Scripts" / "python.exe")
+    return str(VENV_DIR / "bin" / "python")
+
+
+def check_python() -> None:
     step(1, STEPS_SETUP, "Checking Python...")
-    v = sys.version_info
-    if v.major < 3 or (v.major == 3 and v.minor < 10):
-        fail(f"Python 3.10+ required, found {v.major}.{v.minor}.{v.micro}")
-    ok(f"Python {v.major}.{v.minor}.{v.micro}")
+    version = sys.version_info
+    if version.major < 3 or (version.major == 3 and version.minor < 12):
+        fail(
+            "Python 3.12+ is required. "
+            f"Found {version.major}.{version.minor}.{version.micro}."
+        )
+    ok(f"Python {version.major}.{version.minor}.{version.micro}")
 
 
-def create_venv():
+def create_venv() -> None:
     step(2, STEPS_SETUP, "Creating virtual environment...")
-    venv_path = Path(".venv")
-    if venv_path.exists():
+    if VENV_DIR.exists():
         warn("Virtual environment already exists.")
         return
-    result = run([sys.executable, "-m", "venv", ".venv"])
+
+    result = run([sys.executable, "-m", "venv", str(VENV_DIR)])
     if result.returncode != 0:
-        fail("Failed to create virtual environment.")
-    ok("Virtual environment created.")
+        fail(f"Failed to create virtual environment:\n{result.stderr}")
+    ok("Virtual environment created in .venv.")
 
 
-def get_pip() -> str:
-    if platform.system() == "Windows":
-        return str(Path(".venv") / "Scripts" / "pip.exe")
-    return str(Path(".venv") / "bin" / "pip")
-
-
-def get_python() -> str:
-    if platform.system() == "Windows":
-        return str(Path(".venv") / "Scripts" / "python.exe")
-    return str(Path(".venv") / "bin" / "python")
-
-
-def upgrade_pip():
+def upgrade_pip() -> None:
     step(3, STEPS_SETUP, "Upgrading pip...")
-    result = run([get_pip(), "install", "--upgrade", "pip"])
+    result = run([venv_python(), "-m", "pip", "install", "--upgrade", "pip"])
     if result.returncode != 0:
         warn("Pip upgrade failed (non-fatal).")
-    else:
-        ok("Pip upgraded.")
+        if result.stderr:
+            warn(result.stderr.strip())
+        return
+    ok("Pip upgraded.")
 
 
-def install_deps(dev: bool = False):
+def install_deps(dev: bool = False, upgrade: bool = False) -> None:
     step(4, STEPS_SETUP, "Installing Python dependencies...")
-    result = run([get_pip(), "install", "-r", "requirements.txt"])
+    if not REQUIREMENTS.exists():
+        fail("requirements.txt not found.")
+
+    cmd = [venv_python(), "-m", "pip", "install", "-r", str(REQUIREMENTS)]
+    if upgrade:
+        cmd.append("--upgrade")
+    result = run(cmd)
     if result.returncode != 0:
-        fail(f"Failed to install dependencies:\n{result.stderr}")
-    ok("Dependencies installed.")
+        fail(f"Failed to install runtime dependencies:\n{result.stderr}")
+    ok("Runtime dependencies installed.")
+
     if dev:
-        dev_pkgs = ["pytest", "pytest-asyncio", "respx", "mypy", "ruff"]
-        step(4, STEPS_SETUP, "Installing dev dependencies...")
-        result = run([get_pip(), "install"] + dev_pkgs)
-        if result.returncode == 0:
-            ok("Dev dependencies installed.")
-        else:
-            warn("Dev dependency install had issues (non-fatal).")
+        if not DEV_REQUIREMENTS.exists():
+            warn("requirements-dev.txt not found - skipping dev dependencies.")
+            return
+        result = run([venv_python(), "-m", "pip", "install", "-r", str(DEV_REQUIREMENTS)])
+        if result.returncode != 0:
+            fail(f"Failed to install dev dependencies:\n{result.stderr}")
+        ok("Dev dependencies installed.")
 
 
-def create_dirs():
-    step(5, STEPS_SETUP, "Creating directories...")
-    for d in ["data", "reports"]:
-        Path(d).mkdir(exist_ok=True)
-    ok("Directories created.")
+def create_dirs() -> None:
+    step(5, STEPS_SETUP, "Creating runtime directories...")
+    for directory in ("data", "reports", "data/reports"):
+        (PROJECT_ROOT / directory).mkdir(parents=True, exist_ok=True)
+    ok("Runtime directories ready.")
 
 
-def build_css():
+def build_css() -> None:
     step(6, STEPS_SETUP, "Building Tailwind CSS...")
     if shutil.which("npm") is None:
-        warn("npm not found - skipping Tailwind build (UI will be unstyled).")
+        warn("npm not found - skipping Tailwind build. Commit-generated CSS will be used if present.")
         return
-    result = run(["npm", "install"])
+
+    install_cmd = ["npm", "ci"] if PACKAGE_LOCK.exists() else ["npm", "install"]
+    result = run(install_cmd)
+    if result.returncode != 0 and install_cmd == ["npm", "ci"]:
+        warn("npm ci failed - retrying with npm install.")
+        result = run(["npm", "install"])
     if result.returncode != 0:
-        warn("npm install failed (non-fatal).")
+        warn("npm dependency install failed (non-fatal).")
+        if result.stderr:
+            warn(result.stderr.strip())
         return
+
     result = run(["npm", "run", "build:css"])
-    if result.returncode == 0:
-        ok("Tailwind CSS built.")
-    else:
+    if result.returncode != 0:
         warn("Tailwind build failed (non-fatal).")
+        if result.stderr:
+            warn(result.stderr.strip())
+        return
+    ok("Tailwind CSS built.")
 
 
-def setup_env():
+def setup_env() -> None:
     step(7, STEPS_SETUP, "Setting up configuration...")
-    env_path = Path(".env")
-    example_path = Path("config") / ".env.example"
+    env_path = PROJECT_ROOT / ".env"
+    example_path = PROJECT_ROOT / "config" / ".env.example"
     if env_path.exists():
         warn(".env already exists.")
         return
+
     if example_path.exists():
         shutil.copy(str(example_path), str(env_path))
         ok("Created .env from config/.env.example.")
-    else:
-        env_path.write_text("# Aegis OSINT AI Configuration\n", encoding="utf-8")
-        warn("No config/.env.example found - created empty .env.")
+        return
+
+    env_path.write_text("# Aegis OSINT AI Configuration\n", encoding="utf-8")
+    warn("No config/.env.example found - created minimal .env.")
 
 
-def init_database():
+def init_database() -> None:
     step(8, STEPS_SETUP, "Initializing database...")
-    sys.path.insert(0, os.getcwd())
+    sys.path.insert(0, str(PROJECT_ROOT))
     try:
         from backend.main import init_db
+
         init_db()
         ok("Database initialized.")
-    except Exception as e:
-        warn(f"Database init skipped ({e}). Will be created on first run.")
+    except Exception as exc:  # pragma: no cover - defensive installer path
+        warn(f"Database init skipped ({exc}). It will be created on first run.")
 
 
-def verify():
+def verify() -> None:
     step(9, STEPS_SETUP, "Verifying installation...")
-    result = run([get_python(), "-c", "import fastapi; import sqlalchemy; print('OK')"])
-    if result.returncode == 0:
-        ok("Core modules verified.")
-    else:
+    imports = "; ".join(f"import {module}" for module in CORE_MODULES)
+    result = run([venv_python(), "-c", f"{imports}; print('OK')"])
+    if result.returncode != 0:
         fail(f"Verification failed:\n{result.stderr}")
+    ok("Core modules verified.")
 
 
-def run_server():
+def run_server() -> None:
     print(f"\n{color('Starting Aegis OSINT AI...', 'bold')}")
-    os.chdir(Path(__file__).parent)
-    result = run([get_python(), "-m", "backend.main"], capture=False)
+    result = run([venv_python(), "-m", "backend.main"], capture=False)
     if result.returncode != 0:
         fail("Server exited with error.")
 
 
-def do_update():
+def setup(dev: bool = False, upgrade: bool = False) -> None:
+    print(f"\n{color('========================================', 'bold')}")
+    print(f"{color('  Aegis OSINT AI - Setup', 'bold')}")
+    print(f"{color('========================================', 'bold')}")
+
+    check_python()
+    create_venv()
+    upgrade_pip()
+    install_deps(dev=dev, upgrade=upgrade)
+    create_dirs()
+    build_css()
+    setup_env()
+    init_database()
+    verify()
+
+
+def do_update(dev: bool = False) -> None:
     print(f"\n{color('========================================', 'bold')}")
     print(f"{color('  Aegis OSINT AI - Update', 'bold')}")
     print(f"{color('========================================', 'bold')}")
 
-    # 1. Backup .env
     step(1, STEPS_UPDATE, "Backing up configuration...")
-    env_path = Path(".env")
-    backup_path = Path(".env.backup")
+    env_path = PROJECT_ROOT / ".env"
+    backup_path = PROJECT_ROOT / ".env.backup"
     if env_path.exists():
         shutil.copy(str(env_path), str(backup_path))
         ok("Configuration backed up to .env.backup.")
     else:
         warn("No .env to backup.")
 
-    # 2. Git pull
     step(2, STEPS_UPDATE, "Pulling latest changes...")
-    result = run(["git", "pull"])
-    if result.returncode == 0:
-        ok("Updated from repository.")
-    else:
-        warn("Git pull failed (not a git repo or no changes).")
-
-    # 3. Update deps
-    step(3, STEPS_UPDATE, "Updating Python dependencies...")
-    result = run([get_pip(), "install", "-r", "requirements.txt", "--upgrade"])
-    if result.returncode == 0:
-        ok("Dependencies updated.")
-    else:
-        warn("Some dependencies may not have updated.")
-
-    # 4. Rebuild Tailwind CSS
-    step(4, STEPS_UPDATE, "Rebuilding Tailwind CSS...")
-    if shutil.which("npm") is not None:
-        result = run(["npm", "install"])
+    if (PROJECT_ROOT / ".git").exists() and shutil.which("git") is not None:
+        result = run(["git", "pull", "--ff-only"])
         if result.returncode == 0:
-            result = run(["npm", "run", "build:css"])
-            if result.returncode == 0:
-                ok("Tailwind CSS rebuilt.")
-            else:
-                warn("Tailwind build failed (non-fatal).")
+            ok("Updated from repository.")
         else:
-            warn("npm install failed (non-fatal).")
+            warn("Git pull failed or local changes require manual resolution.")
+            if result.stderr:
+                warn(result.stderr.strip())
     else:
-        warn("npm not found - skipping Tailwind build.")
+        warn("Not a git checkout or git is unavailable - skipping pull.")
 
-    # 5. Check DB
+    step(3, STEPS_UPDATE, "Updating Python dependencies...")
+    if not VENV_DIR.exists():
+        warn(".venv not found - creating it first.")
+        create_venv()
+    install_deps(dev=dev, upgrade=True)
+
+    step(4, STEPS_UPDATE, "Rebuilding Tailwind CSS...")
+    build_css()
+
     step(5, STEPS_UPDATE, "Checking database...")
-    if Path("data/aegis.db").exists():
+    if (PROJECT_ROOT / "data" / "aegis.db").exists():
         ok("Database exists.")
     else:
         warn("Database will be created on next run.")
 
-    # 6. Restore .env
     step(6, STEPS_UPDATE, "Restoring configuration...")
     if backup_path.exists():
         shutil.move(str(backup_path), str(env_path))
@@ -241,40 +290,28 @@ def do_update():
     print(f"\n{color('Update complete!', 'green')} Run: python install.py --run")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Aegis OSINT AI - Unified Installer")
-    parser.add_argument("--run", action="store_true", help="Setup + start server")
-    parser.add_argument("--update", action="store_true", help="Update from git + reinstall deps")
-    parser.add_argument("--dev", action="store_true", help="Include dev dependencies")
+    parser.add_argument("--run", action="store_true", help="Setup + start the server")
+    parser.add_argument("--update", action="store_true", help="Update from git + reinstall dependencies")
+    parser.add_argument("--dev", action="store_true", help="Install development dependencies")
     args = parser.parse_args()
 
+    os.chdir(PROJECT_ROOT)
+
     if args.update:
-        do_update()
+        do_update(dev=args.dev)
         return
 
-    print(f"\n{color('========================================', 'bold')}")
-    print(f"{color('  Aegis OSINT AI - Setup', 'bold')}")
-    print(f"{color('========================================', 'bold')}")
-
-    check_python()
-    create_venv()
-    upgrade_pip()
-    install_deps(dev=args.dev)
-    create_dirs()
-    build_css()
-    setup_env()
-    init_database()
-    verify()
+    setup(dev=args.dev)
 
     print(f"\n{color('========================================', 'bold')}")
     print(f"{color('  Installation Complete!', 'green')}")
     print(f"{color('========================================', 'bold')}")
-    print()
-    print("  Next steps:")
+    print("\n  Next steps:")
     print(f"   1. Edit {color('.env', 'yellow')} and add your API keys")
     print(f"   2. Run: {color('python install.py --run', 'cyan')}")
     print(f"   3. Open: {color('http://localhost:8000', 'cyan')}")
-    print()
 
     if args.run:
         run_server()
