@@ -39,6 +39,16 @@
                 <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
                 Export JSON
             </button>
+            <a href="/api/report/{{ target_id }}?format=csv"
+               class="px-3.5 py-2 bg-card border border-border text-foreground font-semibold rounded-lg hover:bg-card/80 transition-colors text-xs flex items-center gap-1.5 shadow-sm">
+                <i data-lucide="file-down" class="w-3.5 h-3.5"></i>
+                Download CSV
+            </a>
+            <a href="/api/report/{{ target_id }}?format=pdf"
+               class="px-3.5 py-2 bg-card border border-border text-foreground font-semibold rounded-lg hover:bg-card/80 transition-colors text-xs flex items-center gap-1.5 shadow-sm">
+                <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                Download PDF
+            </a>
             <a href="/investigations" class="px-4 py-2 bg-card border border-border rounded-lg hover:bg-card/80 transition-colors text-sm font-medium flex items-center gap-2">
                 <i data-lucide="arrow-left" class="w-4 h-4"></i>
                 Back to Investigations

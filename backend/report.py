@@ -1,8 +1,10 @@
 """
 Report Generation Module
-Handles HTML, JSON, and Markdown report generation with a modular section-based architecture.
+Handles HTML, JSON, Markdown, CSV, and PDF report generation with a modular section-based architecture.
 """
 
+import csv
+import io
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,7 +42,7 @@ class ReportGenerator:
         entities: list[dict[str, Any]] | None = None,
         relationships: list[dict[str, Any]] | None = None,
         timeline: list[dict[str, Any]] | None = None,
-    ) -> str:
+    ) -> str | bytes:
         """
         Assemble the report by calling each section generator.
         """
@@ -60,6 +62,10 @@ class ReportGenerator:
             return self._assemble_markdown(target, report_data, risk)
         elif format == "html":
             return self._assemble_html(target, report_data, risk)
+        elif format == "csv":
+            return self._assemble_csv(target, findings, entities, timeline)
+        elif format == "pdf":
+            return self._assemble_pdf(target, report_data, risk, findings, entities, timeline)
         else:
             raise ValueError(f"Unsupported format: {format}")
 
@@ -253,6 +259,277 @@ class ReportGenerator:
 
         html.append("</body></html>")
         return "\n".join(html)
+
+    def _assemble_csv(
+        self,
+        target: dict[str, Any],
+        findings: list[dict[str, Any]],
+        entities: list[dict[str, Any]] | None = None,
+        timeline: list[dict[str, Any]] | None = None,
+    ) -> str:
+        """Generate a CSV report with findings, entities, and timeline sections."""
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # --- Target info ---
+        writer.writerow(["TARGET INFORMATION"])
+        writer.writerow(["Query", target.get("query", "")])
+        writer.writerow(["Type", target.get("target_type", "")])
+        writer.writerow(["Status", target.get("status", "")])
+        writer.writerow(["Created", target.get("created_at", "")])
+        writer.writerow([])
+
+        # --- Findings ---
+        writer.writerow(["FINDINGS"])
+        writer.writerow(["ID", "Source", "Category", "Severity", "Confidence", "Data", "Created"])
+        for f in findings:
+            data_str = json.dumps(f.get("data", {}), default=str) if f.get("data") else ""
+            writer.writerow(
+                [
+                    f.get("id", ""),
+                    f.get("source", ""),
+                    f.get("category", ""),
+                    f.get("severity", ""),
+                    f.get("confidence", ""),
+                    data_str,
+                    f.get("created_at", ""),
+                ]
+            )
+        writer.writerow([])
+
+        # --- Entities ---
+        if entities:
+            writer.writerow(["ENTITIES"])
+            writer.writerow(["ID", "Type", "Value", "Confidence", "First Seen"])
+            for e in entities:
+                writer.writerow(
+                    [
+                        e.get("id", ""),
+                        e.get("type", e.get("entity_type", "")),
+                        e.get("value", ""),
+                        e.get("confidence", ""),
+                        e.get("first_seen", ""),
+                    ]
+                )
+            writer.writerow([])
+
+        # --- Timeline ---
+        if timeline:
+            writer.writerow(["TIMELINE"])
+            writer.writerow(["ID", "Type", "Plugin", "Severity", "Description", "Timestamp"])
+            for t in timeline:
+                writer.writerow(
+                    [
+                        t.get("id", ""),
+                        t.get("event_type", t.get("type", "")),
+                        t.get("plugin", ""),
+                        t.get("severity", ""),
+                        t.get("description", ""),
+                        t.get("timestamp", ""),
+                    ]
+                )
+
+        return output.getvalue()
+
+    def _assemble_pdf(
+        self,
+        target: dict[str, Any],
+        report_data: dict[str, Any],
+        risk: dict[str, Any],
+        findings: list[dict[str, Any]],
+        entities: list[dict[str, Any]] | None = None,
+        timeline: list[dict[str, Any]] | None = None,
+    ) -> bytes:
+        """Generate a professional PDF report using reportlab."""
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.platypus import (
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+        )
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=A4,
+            leftMargin=20 * mm,
+            rightMargin=20 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+        )
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            "CustomTitle", parent=styles["Title"], fontSize=20, textColor=colors.HexColor("#0d1322")
+        )
+        heading_style = ParagraphStyle(
+            "CustomHeading",
+            parent=styles["Heading2"],
+            fontSize=14,
+            textColor=colors.HexColor("#06b6d4"),
+        )
+        body_style = ParagraphStyle("CustomBody", parent=styles["Normal"], fontSize=10, leading=14)
+        small_style = ParagraphStyle(
+            "Small", parent=styles["Normal"], fontSize=8, textColor=colors.grey
+        )
+
+        story: list = []
+
+        # --- Title ---
+        story.append(Paragraph("Aegis OSINT Report", title_style))
+        story.append(Spacer(1, 6 * mm))
+        story.append(Paragraph(f"Target: {target.get('query', 'N/A')}", body_style))
+        story.append(Paragraph(f"Type: {target.get('target_type', 'N/A')}", body_style))
+        story.append(Paragraph(f"Status: {target.get('status', 'N/A')}", body_style))
+        story.append(
+            Paragraph(f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}", small_style)
+        )
+        story.append(Spacer(1, 8 * mm))
+
+        # --- Executive Summary ---
+        exec_s = report_data["executive"]
+        story.append(Paragraph("Executive Summary", heading_style))
+        story.append(Spacer(1, 3 * mm))
+        story.append(Paragraph(f"<b>Status:</b> {exec_s['status']}", body_style))
+        story.append(
+            Paragraph(
+                f"<b>Risk Grade:</b> {exec_s['risk_grade']} ({exec_s['risk_score']}/100)",
+                body_style,
+            )
+        )
+        story.append(Paragraph(f"<b>Critical Findings:</b> {exec_s['critical_count']}", body_style))
+        story.append(Paragraph(exec_s["summary_text"], body_style))
+        story.append(Spacer(1, 8 * mm))
+
+        # --- Key Findings Table ---
+        story.append(Paragraph("Key Findings", heading_style))
+        story.append(Spacer(1, 3 * mm))
+
+        finding_rows = [["Source", "Category", "Severity", "Confidence"]]
+        for f in report_data["key_findings"]:
+            conf = f.get("confidence", 0)
+            conf_str = f"{conf:.0%}" if isinstance(conf, (int, float)) else str(conf)
+            finding_rows.append(
+                [
+                    str(f.get("source", ""))[:40],
+                    str(f.get("category", ""))[:30],
+                    str(f.get("severity", "")),
+                    conf_str,
+                ]
+            )
+
+        findings_table = Table(finding_rows, colWidths=[50 * mm, 45 * mm, 30 * mm, 30 * mm])
+        findings_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0d1322")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#1f293d")),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [colors.white, colors.HexColor("#f8fafc")],
+                    ),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ]
+            )
+        )
+        story.append(findings_table)
+        story.append(Spacer(1, 8 * mm))
+
+        # --- Entities Table ---
+        if entities:
+            story.append(Paragraph("Discovered Entities", heading_style))
+            story.append(Spacer(1, 3 * mm))
+            entity_rows = [["Type", "Value", "Confidence"]]
+            for e in entities[:20]:
+                conf = e.get("confidence", 0)
+                conf_str = f"{conf:.0%}" if isinstance(conf, (int, float)) else str(conf)
+                entity_rows.append(
+                    [
+                        str(e.get("type", e.get("entity_type", "")))[:20],
+                        str(e.get("value", ""))[:50],
+                        conf_str,
+                    ]
+                )
+            entities_table = Table(entity_rows, colWidths=[35 * mm, 80 * mm, 30 * mm])
+            entities_table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0d1322")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("FONTSIZE", (0, 0), (-1, -1), 8),
+                        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#1f293d")),
+                        (
+                            "ROWBACKGROUNDS",
+                            (0, 1),
+                            (-1, -1),
+                            [colors.white, colors.HexColor("#f8fafc")],
+                        ),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ]
+                )
+            )
+            story.append(entities_table)
+            story.append(Spacer(1, 8 * mm))
+
+        # --- Timeline ---
+        if timeline:
+            story.append(Paragraph("Investigation Timeline", heading_style))
+            story.append(Spacer(1, 3 * mm))
+            tl_rows = [["Timestamp", "Plugin", "Description"]]
+            for t in timeline[:30]:
+                tl_rows.append(
+                    [
+                        str(t.get("timestamp", ""))[:20],
+                        str(t.get("plugin", ""))[:20],
+                        str(t.get("description", ""))[:60],
+                    ]
+                )
+            tl_table = Table(tl_rows, colWidths=[35 * mm, 35 * mm, 80 * mm])
+            tl_table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0d1322")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                        ("FONTSIZE", (0, 0), (-1, -1), 8),
+                        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#1f293d")),
+                        (
+                            "ROWBACKGROUNDS",
+                            (0, 1),
+                            (-1, -1),
+                            [colors.white, colors.HexColor("#f8fafc")],
+                        ),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ]
+                )
+            )
+            story.append(tl_table)
+            story.append(Spacer(1, 8 * mm))
+
+        # --- Recommendations ---
+        story.append(Paragraph("Recommendations", heading_style))
+        story.append(Spacer(1, 3 * mm))
+        for rec in report_data["recommendations"]:
+            story.append(Paragraph(f"&bull; {rec}", body_style))
+        story.append(Spacer(1, 8 * mm))
+
+        # --- Footer ---
+        story.append(
+            Paragraph("Aegis OSINT AI v1.0.0 | Automated plugin-based OSINT framework", small_style)
+        )
+
+        doc.build(story)
+        pdf_bytes = buf.getvalue()
+        buf.close()
+        return pdf_bytes
 
     # --- Helpers ---
 

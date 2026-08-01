@@ -1,4 +1,10 @@
 {
+  "scripts": {
+    "build:css": "tailwindcss -i backend/static/css/input.css -o backend/static/css/tailwind.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  },
   "dependencies": {
     "@playwright/test": "^1.61.1",
     "vm2": "^3.11.5"

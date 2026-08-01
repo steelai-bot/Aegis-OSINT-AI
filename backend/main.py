@@ -18,7 +18,7 @@ from typing import Any
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -1439,6 +1439,68 @@ async def create_report(payload: ReportRequest):
             "format": payload.format,
             "content": report_content,
         }
+    )
+
+
+@app.get("/api/report/{target_id}")
+async def download_report(target_id: int, format: str = "csv"):
+    """Download a report as CSV or PDF (direct file download)."""
+    from backend.report import ReportGenerator
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, query, target_type, status, created_at FROM targets WHERE id = ?",
+            (target_id,),
+        )
+        target_row = cursor.fetchone()
+        cursor.execute(
+            "SELECT id, target_id, source, category, severity, confidence, data, created_at FROM findings WHERE target_id = ?",
+            (target_id,),
+        )
+        finding_rows = cursor.fetchall()
+
+    if not target_row:
+        raise HTTPException(status_code=404, detail="Target not found")
+
+    target = {
+        "id": target_row[0],
+        "query": target_row[1],
+        "target_type": target_row[2],
+        "status": target_row[3],
+        "created_at": target_row[4],
+    }
+    findings = [
+        {
+            "id": r[0],
+            "target_id": r[1],
+            "source": r[2],
+            "category": r[3],
+            "severity": r[4],
+            "confidence": r[5],
+            "data": json.loads(r[6]) if r[6] else {},
+            "created_at": r[7],
+        }
+        for r in finding_rows
+    ]
+
+    storage = app.state.storage
+    entities = [e.model_dump() for e in await storage.get_entities_for_target(target_id)]
+    timeline = [t.model_dump() for t in await storage.get_timeline(target_id)]
+
+    generator = ReportGenerator()
+    content = generator.generate(format, target, findings, entities, timeline=timeline)
+
+    if format == "pdf":
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="aegis_report_{target_id}.pdf"'},
+        )
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="aegis_report_{target_id}.csv"'},
     )
 
 

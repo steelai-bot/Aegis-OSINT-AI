@@ -50,8 +50,8 @@ def run(cmd: list, cwd: str = None, capture: bool = True) -> subprocess.Complete
         fail(f"Command not found: {cmd[0]}")
 
 
-STEPS_SETUP = 8
-STEPS_UPDATE = 5
+STEPS_SETUP = 9
+STEPS_UPDATE = 6
 
 
 def check_python():
@@ -118,8 +118,24 @@ def create_dirs():
     ok("Directories created.")
 
 
+def build_css():
+    step(6, STEPS_SETUP, "Building Tailwind CSS...")
+    if shutil.which("npm") is None:
+        warn("npm not found - skipping Tailwind build (UI will be unstyled).")
+        return
+    result = run(["npm", "install"])
+    if result.returncode != 0:
+        warn("npm install failed (non-fatal).")
+        return
+    result = run(["npm", "run", "build:css"])
+    if result.returncode == 0:
+        ok("Tailwind CSS built.")
+    else:
+        warn("Tailwind build failed (non-fatal).")
+
+
 def setup_env():
-    step(6, STEPS_SETUP, "Setting up configuration...")
+    step(7, STEPS_SETUP, "Setting up configuration...")
     env_path = Path(".env")
     example_path = Path("config") / ".env.example"
     if env_path.exists():
@@ -130,11 +146,11 @@ def setup_env():
         ok("Created .env from config/.env.example.")
     else:
         env_path.write_text("# Aegis OSINT AI Configuration\n", encoding="utf-8")
-        warn("No config/.env.example found — created empty .env.")
+        warn("No config/.env.example found - created empty .env.")
 
 
 def init_database():
-    step(7, STEPS_SETUP, "Initializing database...")
+    step(8, STEPS_SETUP, "Initializing database...")
     sys.path.insert(0, os.getcwd())
     try:
         from backend.main import init_db
@@ -145,7 +161,7 @@ def init_database():
 
 
 def verify():
-    step(8, STEPS_SETUP, "Verifying installation...")
+    step(9, STEPS_SETUP, "Verifying installation...")
     result = run([get_python(), "-c", "import fastapi; import sqlalchemy; print('OK')"])
     if result.returncode == 0:
         ok("Core modules verified.")
@@ -192,15 +208,30 @@ def do_update():
     else:
         warn("Some dependencies may not have updated.")
 
-    # 4. Check DB
-    step(4, STEPS_UPDATE, "Checking database...")
+    # 4. Rebuild Tailwind CSS
+    step(4, STEPS_UPDATE, "Rebuilding Tailwind CSS...")
+    if shutil.which("npm") is not None:
+        result = run(["npm", "install"])
+        if result.returncode == 0:
+            result = run(["npm", "run", "build:css"])
+            if result.returncode == 0:
+                ok("Tailwind CSS rebuilt.")
+            else:
+                warn("Tailwind build failed (non-fatal).")
+        else:
+            warn("npm install failed (non-fatal).")
+    else:
+        warn("npm not found - skipping Tailwind build.")
+
+    # 5. Check DB
+    step(5, STEPS_UPDATE, "Checking database...")
     if Path("data/aegis.db").exists():
         ok("Database exists.")
     else:
         warn("Database will be created on next run.")
 
-    # 5. Restore .env
-    step(5, STEPS_UPDATE, "Restoring configuration...")
+    # 6. Restore .env
+    step(6, STEPS_UPDATE, "Restoring configuration...")
     if backup_path.exists():
         shutil.move(str(backup_path), str(env_path))
         ok("Configuration restored.")
@@ -230,6 +261,7 @@ def main():
     upgrade_pip()
     install_deps(dev=args.dev)
     create_dirs()
+    build_css()
     setup_env()
     init_database()
     verify()

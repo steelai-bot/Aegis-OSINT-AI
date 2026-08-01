@@ -10,34 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        background: '#090d16',
-                        sidebar: '#0d1322',
-                        card: '#111827',
-                        border: '#1f293d',
-                        primary: '#06b6d4',
-                        'primary-dark': '#0891b2',
-                        success: '#10b981',
-                        warning: '#f59e0b',
-                        danger: '#ef4444',
-                        muted: '#94a3b8',
-                        foreground: '#f1f5f9'
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace']
-                    }
-                }
-            }
-        }
-    </script>
+    <!-- Tailwind CSS (local build via npm run build:css) -->
+    <link rel="stylesheet" href="/static/css/tailwind.css">
 
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@2.0.0"></script>
