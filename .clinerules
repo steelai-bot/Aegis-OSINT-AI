@@ -1,0 +1,25 @@
+# Project Rules — Aegis OSINT AI
+
+# Global shared configuration lives in D:\Vault and applies to every project.
+# The global rules are ALREADY loaded automatically via the Cline global
+# rules junction (Documents\Cline\Rules -> D:\Vault\Rules). This file only adds
+# project-specific context.
+
+Shared resources (use them, never duplicate them into the project):
+- Rules:     D:\Vault\Rules\       (core.md, security.md, coding.md, architecture.md, debugging.md)
+- Skills:    D:\Vault\Skills\      (go.md, python.md, node.md, rust.md, java.md, devops.md, webapp.md, security.md, reverse-engineering.md)
+- MCPs:      D:\Vault\MCPs\        (version-pinned MCP servers)
+- Prompts:   D:\Vault\Prompts\
+- Templates: D:\Vault\Templates\
+
+Hard requirements (from D:\Vault\Rules\core.md):
+- NEVER install, clone, download, or cache anything on C: or in AppData.
+- Caches/temp: D:\stany\AgentData (npm-cache, pnpm-store, model-cache, temp).
+- Project dependencies (.venv, node_modules) stay local to the project.
+- New shared tools/MCP servers go to D:\Vault, version-pinned.
+
+# --- Project-specific rules ---
+
+# Project: Aegis OSINT AI
+# Stack: FastAPI (Python 3.12+), Jinja2, Tailwind, Alpine.js, SQLite
+# Notes: See AGENTS.md for architecture, commands, and plugin system details.

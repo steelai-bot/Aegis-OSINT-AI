@@ -154,3 +154,16 @@ React frontend was replaced with Jinja2 templates in `backend/templates/` styled
 - **Lifespan handler** (`main.py:90`) initializes DB and discovers plugins
 - **Settings from `.env`** - use `from backend.config.settings import settings`
 - **Python 3.12+** required (typing features, union syntax)
+
+## Vault Rule — Shared Config Lives in D:\Vault (Disk Space)
+
+**C: drive / AppData have very little free space. NEVER install, clone, download, or cache anything on C:.**
+
+Shared knowledge, tools, and configuration for ALL projects live in `D:\Vault` (see `D:\Vault\README.md`):
+
+- Rules/Skills/MCPs/Prompts/Templates/Hooks/Workflows → `D:\Vault\` (junctioned into `Documents\Cline\` for Cline).
+- MCP servers → version-pinned in `D:\Vault\MCPs\` (`github.com\<org>\<repo>` for clones, `npm\` for npm packages). Never project-local copies.
+- Caches/temp → `D:\stany\AgentData` (`npm-cache`, `pnpm-store`, `model-cache`, `temp`) — already configured; never reset to C: defaults.
+- Project dependencies stay project-local: Python venvs in `.venv` (never global pip installs), project `node_modules` in the project.
+- Shell working dir resets to the workspace root between commands and `cd /d` may not stick - use `pnpm -C <dir>`, `npm --prefix <dir>`, or absolute paths instead.
+- When moving node projects across drives, delete `node_modules` first and reinstall at the destination (symlinks/hardlinks break across drives).
