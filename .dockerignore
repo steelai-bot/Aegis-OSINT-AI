@@ -1,0 +1,49 @@
+# Secrets & local env - never ship in the image
+.env*
+!.env.example
+
+# VCS & CI metadata
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Python caches & build artifacts
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Runtime data (SQLite DB, reports) - created at container runtime
+data/
+reports/
+
+# Tests & dev tooling (not needed at runtime)
+tests/
+requirements-dev.txt
+.pre-commit-config.yaml
+mypy.ini
+
+# Removed stale snapshot - guard against resurrection
+aegis_upgraded/
+
+# Agent/tooling dirs
+.agents/
+.clinerules
+
+# Node (not used by the backend image)
+node_modules/
+
+# Docs & planning files (keep image lean)
+*.md
+!README.md
