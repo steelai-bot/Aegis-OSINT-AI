@@ -1,12 +1,21 @@
 version: 2
 updates:
+  # All pip updates arrive as ONE grouped PR per week (runtime + dev separately)
   - package-ecosystem: pip
     directory: "/"
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
     groups:
+      runtime-dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "pytest*"
+          - "respx"
+          - "ruff"
+          - "mypy"
       dev-dependencies:
         patterns:
           - "pytest*"
@@ -14,15 +23,26 @@ updates:
           - "ruff"
           - "mypy"
 
+  # All GitHub Actions updates arrive as ONE grouped PR per week
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns:
+          - "*"
 
+  # Docker base image: patch/minor only - major Python bumps need a
+  # conscious decision (CI tests 3.12, runtime must match).
   - package-ecosystem: docker
     directory: "/"
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: "python"
+        update-types:
+          - "version-update:semver-major"
